@@ -2,8 +2,8 @@ name: Import R3.2 source archive
 
 on:
   push:
-    paths:
-      - "omnirouter-r3.2-usage-accounting.zip"
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          archive="omnirouter-r3.2-usage-accounting.zip"
+          archive="OmniRouter-R3.2-Source.zip"
           test -f "$archive"
           rm -rf /tmp/omnirouter-import
           mkdir -p /tmp/omnirouter-import
