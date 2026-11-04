@@ -1,0 +1,80 @@
+name: Import R3.2 source archive
+
+on:
+  push:
+    paths:
+      - "omnirouter-r3.2-usage-accounting.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: omnirouter-r32-import
+  cancel-in-progress: false
+
+jobs:
+  import-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+
+      - name: Import source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="omnirouter-r3.2-usage-accounting.zip"
+          test -f "$archive"
+          rm -rf /tmp/omnirouter-import
+          mkdir -p /tmp/omnirouter-import
+          unzip -q "$archive" -d /tmp/omnirouter-import
+          source_dir="/tmp/omnirouter-import/omnirouter-r3/omnirouter"
+          test -f "$source_dir/go.mod"
+          test -f "$source_dir/.github/workflows/ci.yml"
+          cp -a "$source_dir/." .
+          rm -f "$archive"
+          rm -f .github/workflows/bootstrap-r32.yml
+          test -f go.mod
+          test -f .github/workflows/ci.yml
+
+      - name: Resolve and lock Go dependencies
+        run: |
+          go mod tidy
+          go mod verify
+          test -s go.sum
+
+      - name: Format check
+        run: test -z "$(gofmt -l $(find . -name '*.go' -type f))"
+
+      - name: Unit and integration tests
+        run: go test ./...
+
+      - name: Race tests
+        run: go test -race ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./cmd/omnirouter
+
+      - name: Commit imported source and go.sum
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Import OmniRouter R3.2 source and lock dependencies"
+            git push origin HEAD:main
+          fi
