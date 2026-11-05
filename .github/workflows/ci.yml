@@ -124,8 +124,8 @@ jobs:
 
       - name: Build and verify version command
         run: |
-          go build -o /tmp/omnirouter ./cmd/omnirouter
-          /tmp/omnirouter --version | grep -F "OmniRouter dev"
+          go build -ldflags="-s -w -X omnirouter/internal/version.Version=ci -X omnirouter/internal/version.Commit=ci-test" -o /tmp/omnirouter ./cmd/omnirouter
+          /tmp/omnirouter --version | grep -F "OmniRouter ci (commit ci-test)"
 
   cross-build:
     needs: frontend
