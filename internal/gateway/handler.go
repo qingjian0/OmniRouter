@@ -164,7 +164,8 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 	}
 	var upstream provider.Provider
 	if h.selector != nil {
-		upstream, err = h.selectProviderFor(r.Context(), request.Model, []string{"responses"})
+		requirements := append(requiredCapabilities(body), "responses")
+		upstream, err = h.selectProviderFor(r.Context(), request.Model, requirements)
 	} else {
 		var ok bool
 		upstream, ok = h.registry.ResolveModel(request.Model)
@@ -795,6 +796,12 @@ func requiredCapabilities(body []byte) []string {
 					}
 				case "tool_choice":
 					found["tools"] = true
+				case "reasoning_effort":
+					if level, ok := child.(string); ok && level != "" && level != "none" { found["reasoning"] = true }
+				case "thinking":
+					if settings, ok := child.(map[string]any); ok && settings["type"] == "enabled" { found["reasoning"] = true }
+				case "reasoning":
+					if settings, ok := child.(map[string]any); ok && settings["effort"] != nil && settings["effort"] != "none" { found["reasoning"] = true }
 				case "response_format":
 					if child != nil {
 						found["json"] = true
@@ -820,7 +827,7 @@ func requiredCapabilities(body []byte) []string {
 	}
 	walk(value)
 	out := make([]string, 0, len(found))
-	for _, capability := range []string{"streaming", "tools", "json", "vision"} {
+	for _, capability := range []string{"streaming", "tools", "json", "vision", "reasoning"} {
 		if found[capability] {
 			out = append(out, capability)
 		}
