@@ -1,9 +1,11 @@
 package adapter
 
 import (
+	"context"
 	"testing"
 
 	"omnirouter/internal/provider/deepseek"
+	"omnirouter/internal/provider/deepseekweb"
 )
 
 func TestNewDeepSeekUsesOfficialDefaults(t *testing.T) {
@@ -16,6 +18,29 @@ func TestNewDeepSeekUsesOfficialDefaults(t *testing.T) {
 	}
 	if DefaultBaseURL(KindDeepSeek) != deepseek.DefaultBaseURL {
 		t.Fatalf("unexpected DeepSeek default URL: %q", DefaultBaseURL(KindDeepSeek))
+	}
+}
+
+func TestNewDeepSeekWebCreatesInertRegistrationProvider(t *testing.T) {
+	upstream, err := New(Config{Kind: KindDeepSeekWeb, ID: "ds-web"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upstream.ID() != "ds-web" || upstream.Name() != "ds-web" {
+		t.Fatalf("unexpected provider identity: %q %q", upstream.ID(), upstream.Name())
+	}
+	models, err := upstream.ListModels(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 0 {
+		t.Fatalf("registration shell must not advertise routable models: %+v", models)
+	}
+	if DefaultBaseURL(KindDeepSeekWeb) != deepseekweb.DefaultOrigin {
+		t.Fatalf("unexpected DeepSeek Web origin: %q", DefaultBaseURL(KindDeepSeekWeb))
+	}
+	if err := upstream.HealthCheck(context.Background()); err == nil {
+		t.Fatal("inert registration shell must not claim a healthy upstream session")
 	}
 }
 
