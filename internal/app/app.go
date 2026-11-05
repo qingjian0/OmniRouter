@@ -6,17 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"net/http"
 	"time"
 
 	"omnirouter/internal/account"
+	"omnirouter/internal/adapter"
 	"omnirouter/internal/apikey"
 	"omnirouter/internal/config"
 	"omnirouter/internal/credential"
 	"omnirouter/internal/gateway"
 	domainmodel "omnirouter/internal/model"
 	"omnirouter/internal/provider"
-	openai "omnirouter/internal/provider/openai"
 	"omnirouter/internal/scheduler"
 	"omnirouter/internal/security"
 	"omnirouter/internal/session"
@@ -89,7 +90,10 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		if providerName == "" {
 			providerName = providerConfig.ID
 		}
-		providerRecord := provider.ProviderConfig{ID: providerConfig.ID, Name: providerName, Kind: "openai-compatible", BaseURL: providerConfig.BaseURL, Enabled: true, Priority: providerConfig.Priority, Weight: providerConfig.Weight}
+		kind := adapter.NormalizeKind(providerConfig.Kind)
+		baseURL := providerConfig.BaseURL
+		if strings.TrimSpace(baseURL) == "" { baseURL = adapter.DefaultBaseURL(kind) }
+		providerRecord := provider.ProviderConfig{ID: providerConfig.ID, Name: providerName, Kind: kind, BaseURL: baseURL, Enabled: true, Priority: providerConfig.Priority, Weight: providerConfig.Weight}
 		if err := providerRepo.Upsert(dbCtx, providerRecord); err != nil {
 			return nil, fmt.Errorf("persist provider %q metadata: %w", providerConfig.ID, err)
 		}
@@ -118,7 +122,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 				return nil, fmt.Errorf("bind provider credential %q: %w", providerConfig.ID, err)
 			}
 		}
-		upstream, err := openai.New(openai.Config{ID: providerConfig.ID, Name: providerConfig.Name, BaseURL: providerConfig.BaseURL, APIKey: providerConfig.APIKey, Models: providerConfig.Models, ModelCapabilities: providerConfig.ModelCapabilities, ModelContextLimits: providerConfig.ModelContextLimits})
+		upstream, err := adapter.New(adapter.Config{Kind: kind, ID: providerConfig.ID, Name: providerName, BaseURL: baseURL, APIKey: providerConfig.APIKey, Models: providerConfig.Models, ModelCapabilities: providerConfig.ModelCapabilities, ModelContextLimits: providerConfig.ModelContextLimits})
 		if err != nil {
 			return nil, err
 		}
@@ -201,7 +205,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 			}
 			contextLimits[m.ID] = m.ContextLimit
 		}
-		upstream, buildErr := openai.New(openai.Config{ID: record.ID, Name: record.Name, BaseURL: record.BaseURL, APIKey: apiKey, Models: modelIDs, ModelCapabilities: capabilities, ModelContextLimits: contextLimits})
+		upstream, buildErr := adapter.New(adapter.Config{Kind: record.Kind, ID: record.ID, Name: record.Name, BaseURL: record.BaseURL, APIKey: apiKey, Models: modelIDs, ModelCapabilities: capabilities, ModelContextLimits: contextLimits})
 		if buildErr != nil {
 			return nil, fmt.Errorf("restore provider %q adapter: %w", record.ID, buildErr)
 		}
