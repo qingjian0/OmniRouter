@@ -138,7 +138,7 @@ func (h *Handler) models(w http.ResponseWriter, r *http.Request) {
 	}
 	data := make([]map[string]any, 0, len(items))
 	for _, model := range items {
-		data = append(data, map[string]any{"id": model.ID, "object": "model", "owned_by": model.Provider, "capabilities": model.Capabilities, "context_limit": model.ContextLimit})
+		data = append(data, map[string]any{"id": model.ID, "object": "model", "owned_by": model.Provider, "name": model.Name, "capabilities": model.Capabilities, "context_limit": model.ContextLimit, "max_output_tokens": model.MaxOutputTokens, "input_modalities": model.InputModalities, "output_modalities": model.OutputModalities, "reasoning_effort": model.ReasoningEffort, "api_capabilities": model.APICapabilities})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"object": "list", "data": data})
 }
