@@ -9,8 +9,8 @@ one category must not be represented as passing another.
 - [x] `main` remains the stable branch.
 - [x] Create `dev` from the current `main` baseline.
 - [x] Create `feature/v1-release-readiness` from `dev`.
-- [ ] Merge only reviewed, CI-green V1 changes into `dev`, then promote the
-      accepted release candidate to `main`.
+- [x] Merge the first reviewed, CI-green release-readiness change into `dev` (PR #1).
+- [ ] Promote the accepted release candidate to `main` only after all remaining V1 gates pass.
 - [ ] Record the exact release commit SHA and tag it `v1.0.0`.
 
 ## Existing verified baseline (2026-11-05)
