@@ -60,11 +60,10 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
 
 ## Build and packaging
 
-- [x] Linux amd64 and arm64 cross-builds passed in CI run 41958521186.
-- [x] Windows amd64 cross-build passed in CI run 41958521186.
-- [x] macOS amd64 and arm64 cross-builds passed in CI run 41958521186.
-- [ ] SHA-256 checksums generated for all release assets.
+- [x] Linux amd64/arm64, Windows amd64, and macOS amd64/arm64 binaries and archives all built successfully in CI run 41959344425.
+- [x] Release workflow is configured to generate SHA-256 checksums for every release asset; an actual tagged release is still pending.
 - [x] Fresh-install and upgrade instructions drafted in `docs/INSTALL.md`; fresh-machine execution remains pending.
+- [x] Release archives include the binary, README, installation guide, and secret-free environment template; archive creation is tested in CI run 41959344425.
 - [ ] Database backup/restore procedure documented and tested.
 - [ ] Release notes list supported protocol subsets and known limitations.
 - [x] Android/Termux runtime smoke script and device procedure are provided in `scripts/termux-smoke.sh` and `docs/ANDROID-TERMUX-ACCEPTANCE.md`.
@@ -76,7 +75,7 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
 
 ## Publication
 
-- [ ] Final CI is green on the exact release commit.
+- [ ] Final CI is green on the exact release commit; current development CI is green but no release candidate has been cut.
 - [ ] No open P0/P1 defects.
 - [ ] Promote the approved release candidate to `main`.
 - [ ] Create annotated tag `v1.0.0`.
