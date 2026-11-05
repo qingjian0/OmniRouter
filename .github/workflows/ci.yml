@@ -15,11 +15,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
+  frontend:
+    name: Build Vue admin assets
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install frontend dependencies and build
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Upload embedded admin assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnirouter-admin-static
+          path: internal/admin/static/
+          if-no-files-found: error
+          retention-days: 1
+
+  validate:
+    needs: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download embedded admin assets
+        uses: actions/download-artifact@v4
+        with:
+          name: omnirouter-admin-static
+          path: internal/admin/static/
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -71,6 +104,7 @@ jobs:
         run: go build -o /tmp/omnirouter ./cmd/omnirouter
 
   cross-build:
+    needs: frontend
     name: Cross-build and package ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ubuntu-latest
     strategy:
@@ -95,6 +129,12 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Download embedded admin assets
+        uses: actions/download-artifact@v4
+        with:
+          name: omnirouter-admin-static
+          path: internal/admin/static/
 
       - name: Set up Go
         uses: actions/setup-go@v5
