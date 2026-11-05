@@ -143,6 +143,7 @@ Windows users can run these scripts under Git Bash or WSL; the prebuilt Windows 
 
 - OpenAI-compatible: `GET /v1/models`, `POST /v1/chat/completions`
 - Native Responses API (DeepSeek adapter): `POST /v1/responses`
+- Anthropic Messages (native DeepSeek adapter or protocol-translation fallback): `POST /v1/messages`
 - Anthropic Messages subset: `POST /v1/messages`
 - Gemini subset: `POST /v1beta/models/{model}:generateContent` and
   `streamGenerateContent`
