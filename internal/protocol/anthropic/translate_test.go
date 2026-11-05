@@ -70,7 +70,6 @@ func TestStreamTranslatorEmitsTerminalMessageEvents(t *testing.T) {
 	}
 }
 
-
 func TestImageAndToolTranslation(t *testing.T) {
 	request := []byte(`{"model":"claude-test","max_tokens":64,"messages":[{"role":"user","content":[{"type":"text","text":"Inspect this image"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}}]}],"tools":[{"name":"lookup","description":"Look up a record","input_schema":{"type":"object","properties":{"id":{"type":"string"}}}}]}`)
 	translated, _, _, err := ToOpenAI(request)
