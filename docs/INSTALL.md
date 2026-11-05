@@ -126,7 +126,7 @@ trusted TLS reverse proxy and firewall allow-listing.
 The release archives include these optional Bash scripts:
 
 - `backup-sqlite.sh` and `restore-sqlite.sh`: consistent SQLite snapshot, checksum, integrity verification, and restore. See [DATABASE-BACKUP-RESTORE.md](DATABASE-BACKUP-RESTORE.md). Requires the `sqlite3` CLI.
-- `provider-smoke.sh`: tests one configured OpenAI-compatible upstream using non-streaming and SSE requests.
+- `provider-smoke.sh`: tests OpenAI, Anthropic Messages, and Gemini text routes in non-streaming and SSE modes through one configured OpenAI-compatible upstream.
 - `termux-smoke.sh`: minimum loopback, SQLite, and graceful-shutdown check to run directly on a Termux device.
 
 Windows users can run these scripts under Git Bash or WSL; the prebuilt Windows binary itself does not require Bash.
