@@ -280,6 +280,8 @@ func (a *App) Run(ctx context.Context) error {
 
 func domainModelFromProvider(item provider.Model, providerID string) domainmodel.Model {
 	displayName := item.Name
-	if strings.TrimSpace(displayName) == "" { displayName = item.ID }
+	if strings.TrimSpace(displayName) == "" {
+		displayName = item.ID
+	}
 	return domainmodel.Model{ID: item.ID, ProviderID: providerID, DisplayName: displayName, ContextLimit: item.ContextLimit, Enabled: true}
 }
