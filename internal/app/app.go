@@ -83,7 +83,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		return nil, err
 	}
 	registry := provider.NewRegistry()
-	router := scheduler.New(20 * time.Second)
+	router := scheduler.NewAdaptive(20 * time.Second)
 	candidates := make(map[string][]scheduler.Candidate)
 	for _, providerConfig := range cfg.Providers {
 		providerName := providerConfig.Name
