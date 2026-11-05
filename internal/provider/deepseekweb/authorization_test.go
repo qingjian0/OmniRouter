@@ -79,7 +79,7 @@ func TestRedactHeaderName(t *testing.T) {
 func TestSafeFailure(t *testing.T) {
 	tests := []struct {
 		status int
-		want error
+		want   error
 	}{
 		{http.StatusUnauthorized, ErrSessionExpired},
 		{http.StatusForbidden, ErrPolicyBlocked},
