@@ -19,9 +19,9 @@
 - 有界内存 HTTP 观测：请求 ID、状态码、延迟、在途数、状态分布、近似 P95 与最近请求列表。
 - OpenAI-compatible 上游 HTTP transport：连接、TLS 握手、响应头阶段超时；不设置总请求超时以保留长连接 SSE。
 
-**尚未完成的 V1 能力：** 凭据加密密钥持久化/轮换、音频/视频转换、完整模型能力目录、Token 用量与成本统计、持久化请求/调度日志、完整管理后台、更多 Provider 适配器。Provider/Account/Session/Credential/Model/API Key 的 SQLite 源码接线已完成，但仍等待驱动依赖获取后的集中构建与运行验证。当前管理页是状态与 Provider 元数据页，不是完整控制台。
+**仍未完成的能力：** 凭据加密密钥轮换/托管、音频/视频转换、完整模型能力自动发现、完整管理后台、更多原生 Provider 适配器，以及跨平台与 Android 实机验证。持久化请求历史、Provider/Model 归因、上游 Token 用量统计、SQLite 聚合报告和相关管理 API 已实现；R3.2 的真实 SQLite 集成测试已在 GitHub Actions 中执行通过。当前管理页仍是轻量状态与 Provider 元数据页，不是完整控制台。
 
-按当前执行约定，先完成第一版功能，再集中开展构建、测试、跨平台验证和 CI 加固；目前不宣称已通过构建或测试。
+**验证状态（2026-11-05）：** GitHub Actions `OmniRouter CI` Run [41954487103](https://github.com/qingjian0/OmniRouter/actions/runs/41954487103) 已完整通过 Go 1.23 依赖校验、格式检查、`go test ./...`（含真实 `modernc.org/sqlite` 驱动集成测试）、`go test -race ./...`、`go vet ./...` 和可执行文件构建。该结果不代表已完成真实上游 Provider 联调、跨平台构建或 Android 实机验证。
 
 ## 运行
 
