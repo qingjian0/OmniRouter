@@ -10,6 +10,10 @@ for value in "${DB}" "${DEST}"; do
     exit 2
   fi
 done
+if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+  echo "sha256sum or shasum is required." >&2
+  exit 2
+fi
 if [[ ! -f "${DB}" ]]; then
   echo "Database file not found: ${DB}" >&2
   exit 2
