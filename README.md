@@ -70,6 +70,12 @@ export OMNI_PROVIDERS='[
 
 生产环境请通过安全的环境变量注入机制提供密钥，不要把真实密钥提交到配置文件或仓库。请备份并长期保留 `OMNI_CREDENTIAL_ENCRYPTION_KEY`；更换该密钥会使既有密文无法解密。Provider 和 Credential 也可通过管理控制台写入受保护的持久化存储。
 
+### Provider adapters
+
+- DeepSeek official API: dedicated `kind: deepseek` adapter, official model discovery, current V4 model metadata, thinking/reasoning field pass-through, and SSE handling. See [DeepSeek adapter guide](docs/DEEPSEEK-ADAPTER.md).
+- Generic OpenAI-compatible endpoints remain available as `kind: openai-compatible`.
+- DeepSeek consumer-web login/session support is a separate future adapter and is not part of the official API adapter.
+
 ### API
 
 - `GET /healthz`
