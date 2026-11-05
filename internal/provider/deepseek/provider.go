@@ -1,8 +1,6 @@
 package deepseek
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -129,13 +127,12 @@ func (p *Provider) DiscoverModels(ctx context.Context) ([]provider.Model, error)
 		if id == "" { return nil, fmt.Errorf("DeepSeek model catalogue contains an empty model ID") }
 		if _, ok := seen[id]; ok { continue }
 		seen[id] = struct{}{}
-		caps := []string{"chat", "streaming"}
-		if supportsToolCalls(item.APICapabilities) { caps = append(caps, "tools") }
+		caps := []string{"chat", "streaming", "tools"}
 		if contains(item.InputModalities, "image") { caps = append(caps, "vision") }
 		if item.Effort != nil && len(item.Effort.SupportedLevels) > 0 { caps = append(caps, "reasoning") }
 		if _, ok := item.APICapabilities["anthropic_messages"]; ok { caps = append(caps, "anthropic_messages") }
 		if _, ok := item.APICapabilities["openai_responses"]; ok { caps = append(caps, "responses") }
-		out = append(out, provider.Model{ID:id, Provider:p.id, Capabilities:caps, ContextLimit:item.ContextWindow})
+		out = append(out, provider.Model{ID:id, Name:item.Name, Provider:p.id, Capabilities:caps, ContextLimit:item.ContextWindow})
 	}
 	return out, nil
 }
@@ -156,12 +153,14 @@ func (p *Provider) authorize(req *http.Request) {
 }
 
 func modelDefaults(providerID, id string) provider.Model {
-	m := provider.Model{ID:id, Provider:providerID, Capabilities:[]string{"chat","streaming","tools","reasoning"}}
+	m := provider.Model{ID:id, Name:id, Provider:providerID, Capabilities:[]string{"chat","streaming","tools","reasoning"}}
 	switch id {
 	case "deepseek-flash":
+		m.Name = "DeepSeek V4.1 Flash"
 		m.Capabilities = append(m.Capabilities, "vision", "responses")
 		m.ContextLimit = 1048576
 	case "deepseek-v4-pro":
+		m.Name = "DeepSeek V4 Pro"
 		m.Capabilities = append(m.Capabilities, "responses")
 		m.ContextLimit = 1048576
 	}
@@ -169,17 +168,6 @@ func modelDefaults(providerID, id string) provider.Model {
 }
 func defaultModels(providerID string) []provider.Model {
 	return []provider.Model{modelDefaults(providerID,"deepseek-flash"), modelDefaults(providerID,"deepseek-v4-pro")}
-}
-func supportsToolCalls(raw map[string]json.RawMessage) bool {
-	for key, value := range raw {
-		if strings.Contains(strings.ToLower(key), "chat") || strings.Contains(strings.ToLower(key), "tool") {
-			var object map[string]json.RawMessage
-			if json.Unmarshal(value, &object) == nil {
-				for field := range object { if strings.Contains(strings.ToLower(field), "tool") { return true } }
-			}
-		}
-	}
-	return false
 }
 func contains(values []string, wanted string) bool {
 	for _, value := range values { if strings.EqualFold(value,wanted) { return true } }
@@ -194,7 +182,3 @@ func cloneModels(values []provider.Model) []provider.Model {
 	return out
 }
 
-// Keep bufio imported in this package's compile-time API boundary documentation:
-// the delegated OpenAI-compatible adapter owns SSE framing and [DONE] validation.
-var _ = bufio.ErrInvalidUnreadByte
-var _ = bytes.MinRead
