@@ -109,6 +109,7 @@ func NewHandlerWithFullRepositories(registry *provider.Registry, apiKey string, 
 	h.mux.Handle("DELETE /admin/api-keys/{id}", h.protect(http.HandlerFunc(h.deleteAPIKey)))
 	h.mux.Handle("POST /admin/providers", h.protect(http.HandlerFunc(h.createProvider)))
 	h.mux.Handle("PATCH /admin/providers/{id}/policy", h.protect(http.HandlerFunc(h.setProviderPolicy)))
+	h.mux.Handle("POST /admin/providers/{id}/models/refresh", h.protect(http.HandlerFunc(h.refreshProviderModels)))
 	h.mux.Handle("DELETE /admin/providers/{id}", h.protect(http.HandlerFunc(h.deleteProvider)))
 	h.mux.Handle("GET /admin/stats", h.protect(http.HandlerFunc(h.adminStats)))
 	h.mux.Handle("GET /admin/requests", h.protect(http.HandlerFunc(h.adminRequests)))
@@ -1437,6 +1438,58 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		manager.AddOrReplaceProvider(upstream, input.Models, input.Priority, input.Weight, enabled)
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": upstream.ID(), "name": upstream.Name(), "kind": kind, "models": input.Models, "model_capabilities": input.ModelCapabilities, "model_context_limits": input.ModelContextLimits, "enabled": enabled, "persisted": h.providerRepo != nil, "credentials_persisted": h.providerRepo != nil && (input.APIKey == "" || (h.credentials != nil && h.credentials.Persistent()))})
+}
+
+func (h *Handler) refreshProviderModels(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider id is required")
+		return
+	}
+	upstream, ok := h.registry.Get(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "provider not found")
+		return
+	}
+	discoverer, ok := upstream.(interface {
+		DiscoverModels(context.Context) ([]provider.Model, error)
+	})
+	if !ok {
+		writeError(w, http.StatusBadRequest, "unsupported_operation", "this Provider adapter does not support remote model discovery")
+		return
+	}
+	models, err := discoverer.DiscoverModels(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "provider_discovery_failed", "could not refresh the upstream model catalogue")
+		return
+	}
+	priority, weight, enabled := 100, uint32(1), true
+	if h.providerRepo != nil {
+		record, getErr := h.providerRepo.Get(r.Context(), id)
+		if getErr != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "could not load provider policy")
+			return
+		}
+		priority, weight, enabled = normalizedPriority(record.Priority), normalizedWeight(record.Weight), record.Enabled
+	}
+	if h.modelRepo != nil {
+		for _, item := range models {
+			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: id, DisplayName: modelDisplayName(item), ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
+				writeError(w, http.StatusInternalServerError, "storage_error", "could not persist discovered model")
+				return
+			}
+			if err := h.modelRepo.SetCapabilities(r.Context(), item.ID, id, item.Capabilities); err != nil {
+				writeError(w, http.StatusInternalServerError, "storage_error", "could not persist discovered model capabilities")
+				return
+			}
+		}
+	}
+	if manager, ok := h.selector.(interface {
+		AddOrReplaceProviderModels(provider.Provider, []provider.Model, int, uint32, bool)
+	}); ok {
+		manager.AddOrReplaceProviderModels(upstream, models, priority, weight, enabled)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"provider_id": id, "data": models, "count": len(models), "persisted": h.modelRepo != nil})
 }
 
 func modelDisplayName(item provider.Model) string {
