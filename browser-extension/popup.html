@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OmniRouter DeepSeek Connector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>DeepSeek Web Connector</h1>
+    <p class="notice">Only the active chat.deepseek.com tab is read, and only after you press Connect. Your password, page content, and browsing history are never collected.</p>
+    <label for="gateway">Local OmniRouter address</label>
+    <input id="gateway" type="url" value="http://127.0.0.1:8080" autocomplete="url">
+    <label for="nonce">One-time pairing code</label>
+    <input id="nonce" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="64-character code">
+    <button id="connect" type="button">Connect this DeepSeek tab</button>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
