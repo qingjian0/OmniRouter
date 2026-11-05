@@ -103,6 +103,7 @@ func NewHandlerWithDeepSeekWeb(registry *provider.Registry, apiKey string, selec
 	h.mux.Handle("POST /v1beta/models/", h.protect(http.HandlerFunc(h.geminiGenerateContent)))
 	h.mux.Handle("GET /admin/providers", h.protect(http.HandlerFunc(h.adminProviders)))
 	h.mux.Handle("POST /admin/deepseek-web/pairings", h.protect(http.HandlerFunc(h.createDeepSeekWebPairing)))
+	h.mux.Handle("POST /admin/deepseek-web/accounts/{id}/revoke", h.protect(http.HandlerFunc(h.revokeDeepSeekWebAccount)))
 	h.mux.HandleFunc("OPTIONS /internal/deepseek-web/pairings", h.deepSeekWebPairingPreflight)
 	h.mux.HandleFunc("POST /internal/deepseek-web/pairings", h.submitDeepSeekWebPairing)
 	h.mux.Handle("GET /admin/accounts", h.protect(http.HandlerFunc(h.adminAccounts)))
