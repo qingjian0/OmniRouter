@@ -32,8 +32,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
-          test -s ../internal/admin/static/dist/dist/index.html
-          test -n "$(find ../internal/admin/static/dist/dist/assets -type f -print -quit)"
+          test -s ../internal/admin/static/dist/index.html
+          test -n "$(find ../internal/admin/static/dist/assets -type f -print -quit)"
 
       - name: Upload embedded admin assets
         uses: actions/upload-artifact@v4
