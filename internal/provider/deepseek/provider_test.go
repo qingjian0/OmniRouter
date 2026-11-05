@@ -26,7 +26,7 @@ func TestDiscoverModelsMapsOfficialMetadata(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 	if len(models) != 2 { t.Fatalf("models = %d, want 2",len(models)) }
 	flash := models[0]
-	if flash.ID != "deepseek-flash" || flash.Name != "DeepSeek V4.1 Flash" || flash.ContextLimit != 1048576 {
+	if flash.ID != "deepseek-flash" || flash.Name != "DeepSeek V4.1 Flash" || flash.ContextLimit != 1048576 || flash.MaxOutputTokens != 393216 || len(flash.InputModalities) != 2 || len(flash.ReasoningEffort) != 3 {
 		t.Fatalf("unexpected Flash metadata: %#v",flash)
 	}
 	for _, capability := range []string{"chat","streaming","tools","vision","reasoning","anthropic_messages","responses"} {
