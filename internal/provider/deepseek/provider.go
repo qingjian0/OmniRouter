@@ -199,6 +199,132 @@ func (p *Provider) Stream(ctx context.Context, req *provider.Request, emit func(
 	return p.chat.Stream(ctx, req, emit)
 }
 
+
+func (p *Provider) GenerateResponses(ctx context.Context, req *provider.Request) (*provider.Response, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is required")
+	}
+	body, err := p.doResponses(ctx, req.Input)
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+	data, err := io.ReadAll(io.LimitReader(body, 32<<20))
+	if err != nil {
+		return nil, err
+	}
+	return &provider.Response{Model: req.Model, Output: data}, nil
+}
+
+func (p *Provider) StreamResponses(ctx context.Context, req *provider.Request, emit func(provider.Event) error) error {
+	if req == nil {
+		return fmt.Errorf("request is required")
+	}
+	body, err := p.doResponses(ctx, req.Input)
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 64*1024), 4<<20)
+	var lines []string
+	terminal := false
+	flush := func() error {
+		if len(lines) == 0 {
+			return nil
+		}
+		frame := strings.Join(lines, "\n") + "\n\n"
+		eventType := ""
+		var dataLines []string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "event:") {
+				eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			}
+			if strings.HasPrefix(line, "data:") {
+				dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+			}
+		}
+		lines = lines[:0]
+		data := strings.Join(dataLines, "\n")
+		if eventType == "" && data != "" {
+			var envelope struct { Type string `json:"type"` }
+			_ = json.Unmarshal([]byte(data), &envelope)
+			eventType = envelope.Type
+		}
+		switch eventType {
+		case "response.completed":
+			terminal = true
+			return emit(provider.Event{Data: []byte(frame), Done: true, ExplicitDone: true})
+		case "response.incomplete", "response.failed":
+			terminal = true
+			if err := emit(provider.Event{Data: []byte(frame), Done: true, ExplicitDone: false}); err != nil {
+				return err
+			}
+			return fmt.Errorf("DeepSeek Responses API terminated with %s", eventType)
+		default:
+			return emit(provider.Event{Data: []byte(frame)})
+		}
+	}
+	for scanner.Scan() {
+		line := strings.TrimRight(scanner.Text(), "\r")
+		if line == "" {
+			if err := flush(); err != nil {
+				return err
+			}
+			if terminal {
+				return nil
+			}
+			continue
+		}
+		lines = append(lines, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+	if !terminal {
+		return fmt.Errorf("DeepSeek Responses stream ended without a terminal response event")
+	}
+	return nil
+}
+
+func (p *Provider) doResponses(ctx context.Context, input []byte) (io.ReadCloser, error) {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(input, &payload); err != nil {
+		return nil, fmt.Errorf("invalid Responses API payload: %w", err)
+	}
+	if _, ok := payload["model"]; !ok {
+		return nil, fmt.Errorf("model is required")
+	}
+	if _, ok := payload["stream"]; !ok {
+		payload["stream"] = json.RawMessage("false")
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/responses", bytes.NewReader(encoded))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	p.authorize(req)
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		return nil, fmt.Errorf("DeepSeek Responses API returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
+	}
+	return resp.Body, nil
+}
+
 func (p *Provider) HealthCheck(ctx context.Context) error {
 	_, err := p.DiscoverModels(ctx)
 	return err
