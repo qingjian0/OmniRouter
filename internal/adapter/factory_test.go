@@ -42,6 +42,9 @@ func TestNewDeepSeekWebCreatesInertRegistrationProvider(t *testing.T) {
 	if _, err := New(Config{Kind: KindDeepSeekWeb, ID: "ds-web", APIKey: "unexpected"}); err == nil {
 		t.Fatal("DeepSeek Web registration shell must reject API keys")
 	}
+	if _, err := New(Config{Kind: KindDeepSeekWeb, ID: "ds-web", BaseURL: "https://example.invalid"}); err == nil {
+		t.Fatal("DeepSeek Web registration shell must reject custom upstream origins")
+	}
 	if err := upstream.HealthCheck(context.Background()); err == nil {
 		t.Fatal("inert registration shell must not claim a healthy upstream session")
 	}
