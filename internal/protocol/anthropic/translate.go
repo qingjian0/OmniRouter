@@ -9,6 +9,26 @@ import (
 	"strings"
 )
 
+type requestMetadata struct {
+	Model  string `json:"model"`
+	Stream bool   `json:"stream"`
+}
+
+// RequestMetadata extracts the routing fields without translating content
+// blocks. Native Anthropic adapters can therefore accept blocks the fallback
+// OpenAI translator does not implement.
+func RequestMetadata(data []byte) (string, bool, error) {
+	var request requestMetadata
+	if err := json.Unmarshal(data, &request); err != nil {
+		return "", false, fmt.Errorf("decode Anthropic Messages request: %w", err)
+	}
+	request.Model = strings.TrimSpace(request.Model)
+	if request.Model == "" {
+		return "", false, fmt.Errorf("Anthropic model is required")
+	}
+	return request.Model, request.Stream, nil
+}
+
 type messageRequest struct {
 	Model       string          `json:"model"`
 	System      json.RawMessage `json:"system,omitempty"`

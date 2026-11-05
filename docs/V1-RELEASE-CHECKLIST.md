@@ -47,6 +47,21 @@ one category must not be represented as passing another.
 
 ## Provider acceptance
 
+- [x] Dedicated DeepSeek official API adapter added with current model discovery,
+      context/output limits, modalities, reasoning-effort metadata, request-field
+      pass-through, SSE framing, persisted adapter kind, and restart restoration.
+      Implementation guide: `docs/DEEPSEEK-ADAPTER.md`.
+- [ ] DeepSeek real-key acceptance: model discovery, non-streaming, SSE, thinking
+      mode, tool calls, usage, timeout/cancellation, and error mapping.
+- [x] Native DeepSeek Responses API ingress and semantic SSE terminal handling
+      are implemented at `/v1/responses`.
+- [x] Native DeepSeek Anthropic Messages ingress at `/v1/messages` forwards to
+      `/anthropic/v1/messages` and uses the native `message_stop` SSE terminal.
+- [ ] Real-key acceptance for Responses API non-streaming, streaming, completion,
+      incomplete, failed, and cancellation paths.
+- [ ] Real-key acceptance for native Anthropic Messages non-streaming, streaming,
+      thinking, tool calls, image input, usage, and `message_stop` handling.
+
 - [x] An opt-in live smoke script is provided at `scripts/provider-smoke.sh`; it tests
       OpenAI, Anthropic Messages, and Gemini text routes in non-streaming and SSE
       modes through one OpenAI-compatible upstream. Real-provider execution remains pending.

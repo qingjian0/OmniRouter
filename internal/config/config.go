@@ -18,6 +18,7 @@ type Config struct {
 }
 
 type ProviderConfig struct {
+	Kind               string              `json:"kind"`
 	ID                 string              `json:"id"`
 	Name               string              `json:"name"`
 	BaseURL            string              `json:"base_url"`
@@ -105,9 +106,17 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("OMNI_PROVIDERS: %w", err)
 		}
 	} else {
-		cfg.Provider.ID = env("OMNI_PROVIDER_ID", "openai-compatible")
-		cfg.Provider.Name = env("OMNI_PROVIDER_NAME", "OpenAI-compatible")
-		cfg.Provider.BaseURL = os.Getenv("OMNI_PROVIDER_BASE_URL")
+		cfg.Provider.Kind = env("OMNI_PROVIDER_KIND", "openai-compatible")
+		defaultID, defaultName := "openai-compatible", "OpenAI-compatible"
+		if strings.EqualFold(cfg.Provider.Kind, "deepseek") {
+			defaultID, defaultName = "deepseek", "DeepSeek"
+		}
+		cfg.Provider.ID = env("OMNI_PROVIDER_ID", defaultID)
+		cfg.Provider.Name = env("OMNI_PROVIDER_NAME", defaultName)
+		cfg.Provider.BaseURL = strings.TrimSpace(os.Getenv("OMNI_PROVIDER_BASE_URL"))
+		if cfg.Provider.BaseURL == "" && strings.EqualFold(cfg.Provider.Kind, "deepseek") {
+			cfg.Provider.BaseURL = "https://api.deepseek.com"
+		}
 		cfg.Provider.APIKey = os.Getenv("OMNI_PROVIDER_API_KEY")
 		if model := strings.TrimSpace(os.Getenv("OMNI_PROVIDER_MODELS")); model != "" {
 			for _, item := range strings.Split(model, ",") {

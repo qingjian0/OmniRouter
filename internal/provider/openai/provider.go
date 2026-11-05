@@ -76,7 +76,7 @@ func (p *Provider) Name() string {
 func (p *Provider) ListModels(ctx context.Context) ([]provider.Model, error) {
 	out := make([]provider.Model, 0, len(p.models))
 	for _, id := range p.models {
-		out = append(out, provider.Model{ID: id, Provider: p.id, Capabilities: append([]string(nil), p.modelCapabilities[id]...), ContextLimit: p.modelContextLimits[id]})
+		out = append(out, provider.Model{ID: id, Name: id, Provider: p.id, Capabilities: append([]string(nil), p.modelCapabilities[id]...), ContextLimit: p.modelContextLimits[id]})
 	}
 	return out, nil
 }

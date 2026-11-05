@@ -7,11 +7,18 @@ import (
 )
 
 type Model struct {
-	ID           string   `json:"id"`
-	Provider     string   `json:"provider"`
-	Capabilities []string `json:"capabilities,omitempty"`
-	ContextLimit int      `json:"context_limit,omitempty"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name,omitempty"`
+	Provider         string   `json:"provider"`
+	Capabilities     []string `json:"capabilities,omitempty"`
+	ContextLimit     int      `json:"context_limit,omitempty"`
+	MaxOutputTokens  int      `json:"max_output_tokens,omitempty"`
+	InputModalities  []string `json:"input_modalities,omitempty"`
+	OutputModalities []string `json:"output_modalities,omitempty"`
+	ReasoningEffort  []string `json:"reasoning_effort,omitempty"`
+	APICapabilities  []string `json:"api_capabilities,omitempty"`
 }
+
 type Request struct {
 	Model  string
 	Input  []byte
@@ -44,4 +51,18 @@ func BindingIDs(providerID string) (accountID, credentialID string) {
 	sum := sha256.Sum256([]byte(providerID))
 	suffix := hex.EncodeToString(sum[:12])
 	return "provider_account_" + suffix, "provider_credential_" + suffix
+}
+
+// ResponsesProvider is an optional capability for adapters that implement the
+// OpenAI Responses API natively. It is separate from Chat Completions support.
+type ResponsesProvider interface {
+	GenerateResponses(context.Context, *Request) (*Response, error)
+	StreamResponses(context.Context, *Request, func(Event) error) error
+}
+
+// AnthropicProvider is an optional native Messages API capability. Adapters
+// without it can continue to use the gateway's protocol translation layer.
+type AnthropicProvider interface {
+	GenerateAnthropic(context.Context, *Request) (*Response, error)
+	StreamAnthropic(context.Context, *Request, func(Event) error) error
 }

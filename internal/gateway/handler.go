@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"omnirouter/internal/account"
+	"omnirouter/internal/adapter"
 	"omnirouter/internal/admin"
 	"omnirouter/internal/apikey"
 	"omnirouter/internal/credential"
@@ -25,7 +26,6 @@ import (
 	"omnirouter/internal/protocol/anthropic"
 	"omnirouter/internal/protocol/gemini"
 	"omnirouter/internal/provider"
-	openai "omnirouter/internal/provider/openai"
 	"omnirouter/internal/session"
 	"omnirouter/internal/storage"
 	"omnirouter/internal/tokenusage"
@@ -83,6 +83,7 @@ func NewHandlerWithFullRepositories(registry *provider.Registry, apiKey string, 
 	h.mux.Handle("GET /", admin.Handler())
 	h.mux.Handle("GET /v1/models", h.protect(http.HandlerFunc(h.models)))
 	h.mux.Handle("POST /v1/chat/completions", h.protect(http.HandlerFunc(h.chatCompletions)))
+	h.mux.Handle("POST /v1/responses", h.protect(http.HandlerFunc(h.responses)))
 	h.mux.Handle("POST /v1/messages", h.protect(http.HandlerFunc(h.anthropicMessages)))
 	h.mux.Handle("POST /v1beta/models/", h.protect(http.HandlerFunc(h.geminiGenerateContent)))
 	h.mux.Handle("GET /admin/providers", h.protect(http.HandlerFunc(h.adminProviders)))
@@ -109,6 +110,7 @@ func NewHandlerWithFullRepositories(registry *provider.Registry, apiKey string, 
 	h.mux.Handle("DELETE /admin/api-keys/{id}", h.protect(http.HandlerFunc(h.deleteAPIKey)))
 	h.mux.Handle("POST /admin/providers", h.protect(http.HandlerFunc(h.createProvider)))
 	h.mux.Handle("PATCH /admin/providers/{id}/policy", h.protect(http.HandlerFunc(h.setProviderPolicy)))
+	h.mux.Handle("POST /admin/providers/{id}/models/refresh", h.protect(http.HandlerFunc(h.refreshProviderModels)))
 	h.mux.Handle("DELETE /admin/providers/{id}", h.protect(http.HandlerFunc(h.deleteProvider)))
 	h.mux.Handle("GET /admin/stats", h.protect(http.HandlerFunc(h.adminStats)))
 	h.mux.Handle("GET /admin/requests", h.protect(http.HandlerFunc(h.adminRequests)))
@@ -137,9 +139,111 @@ func (h *Handler) models(w http.ResponseWriter, r *http.Request) {
 	}
 	data := make([]map[string]any, 0, len(items))
 	for _, model := range items {
-		data = append(data, map[string]any{"id": model.ID, "object": "model", "owned_by": model.Provider, "capabilities": model.Capabilities, "context_limit": model.ContextLimit})
+		data = append(data, map[string]any{"id": model.ID, "object": "model", "owned_by": model.Provider, "name": model.Name, "capabilities": model.Capabilities, "context_limit": model.ContextLimit, "max_output_tokens": model.MaxOutputTokens, "input_modalities": model.InputModalities, "output_modalities": model.OutputModalities, "reasoning_effort": model.ReasoningEffort, "api_capabilities": model.APICapabilities})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"object": "list", "data": data})
+}
+
+func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, (8<<20)+1))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "could not read request body")
+		return
+	}
+	if len(body) > 8<<20 {
+		writeError(w, http.StatusRequestEntityTooLarge, "invalid_request_error", "request body exceeds 8 MiB")
+		return
+	}
+	var request struct {
+		Model  string `json:"model"`
+		Stream bool   `json:"stream"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil || strings.TrimSpace(request.Model) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "valid JSON with a model is required")
+		return
+	}
+	var upstream provider.Provider
+	if h.selector != nil {
+		requirements := append(requiredCapabilities(body), "responses")
+		upstream, err = h.selectProviderFor(r.Context(), request.Model, requirements)
+	} else {
+		var ok bool
+		upstream, ok = h.registry.ResolveModel(request.Model)
+		if !ok {
+			err = http.ErrNoLocation
+		}
+	}
+	if err != nil || upstream == nil {
+		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = request.Model })
+		setRequestError(r, "provider_unavailable")
+		writeError(w, http.StatusServiceUnavailable, "provider_unavailable", "no healthy provider declares native Responses API support for model "+request.Model)
+		return
+	}
+	responsesProvider, ok := upstream.(provider.ResponsesProvider)
+	if !ok {
+		writeError(w, http.StatusNotImplemented, "unsupported_operation", "selected provider does not implement the native Responses API")
+		return
+	}
+	setRequestRoute(r, upstream, request.Model)
+	input := &provider.Request{Model: request.Model, Input: body, Stream: request.Stream}
+	if !request.Stream {
+		result, callErr := responsesProvider.GenerateResponses(r.Context(), input)
+		if callErr != nil {
+			setRequestError(r, classifyRequestError(r, callErr, false))
+			if h.selector != nil {
+				h.selector.ReportFailure(upstream.ID())
+			}
+			writeError(w, http.StatusBadGateway, "upstream_error", "Responses API upstream request failed")
+			return
+		}
+		captureResponsesUsage(r, result.Output)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(result.Output)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "server_error", "streaming is not supported by this server")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	beginStreamRequest(r)
+	var usage *tokenusage.Usage
+	terminal := false
+	streamErr := responsesProvider.StreamResponses(r.Context(), input, func(event provider.Event) error {
+		if len(event.Data) > 0 {
+			usage = mergeResponsesStreamUsage(r, usage, event.Data, event.Done && event.ExplicitDone)
+			if _, writeErr := w.Write(event.Data); writeErr != nil {
+				return downstreamWriteError{err: writeErr}
+			}
+			flusher.Flush()
+		}
+		if event.Done {
+			terminal = event.ExplicitDone
+			if usage != nil {
+				usage.Final = event.ExplicitDone
+			}
+			storeRequestUsage(r, usage)
+		}
+		return nil
+	})
+	if streamErr != nil {
+		storeRequestUsage(r, usage)
+		setRequestError(r, classifyRequestError(r, streamErr, true))
+		if h.selector != nil {
+			h.selector.ReportFailure(upstream.ID())
+		}
+	} else if !terminal {
+		storeRequestUsage(r, usage)
+		setRequestError(r, "stream_incomplete")
+	} else {
+		completeStreamRequest(r)
+	}
 }
 
 func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -254,6 +358,39 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusRequestEntityTooLarge, "invalid_request_error", "request body exceeds 8 MiB")
 		return
 	}
+	model, stream, err := anthropic.RequestMetadata(body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return
+	}
+	nativeRequirements := append(requiredCapabilities(body), "anthropic_messages")
+	if stream {
+		nativeRequirements = append(nativeRequirements, "streaming")
+	}
+	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements); nativeErr == nil {
+		if nativeAnthropic, ok := native.(provider.AnthropicProvider); ok {
+			setRequestRoute(r, native, model)
+			if stream {
+				h.streamNativeAnthropic(w, r, nativeAnthropic, native, model, body)
+				return
+			}
+			response, callErr := nativeAnthropic.GenerateAnthropic(r.Context(), &provider.Request{Model: model, Input: body})
+			if callErr != nil {
+				setRequestError(r, classifyRequestError(r, callErr, false))
+				if h.selector != nil {
+					h.selector.ReportFailure(native.ID())
+				}
+				writeError(w, http.StatusBadGateway, "upstream_error", "native Anthropic upstream request failed")
+				return
+			}
+			captureAnthropicUsage(r, response.Output)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(response.Output)
+			return
+		}
+	}
+
 	openAIRequest, model, stream, err := anthropic.ToOpenAI(body)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
@@ -400,6 +537,68 @@ func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Pro
 		lastErr = fmt.Errorf("no alternate healthy provider is available")
 	}
 	return nil, current, lastErr
+}
+
+func captureAnthropicUsage(r *http.Request, raw []byte) {
+	usage, err := tokenusage.ParseAnthropic(raw, true)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return
+	}
+	storeRequestUsage(r, usage)
+}
+
+func mergeAnthropicStreamUsage(r *http.Request, current *tokenusage.Usage, raw []byte, final bool) *tokenusage.Usage {
+	usage, err := tokenusage.ParseAnthropic(eventData(raw), final)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return current
+	}
+	return tokenusage.Merge(current, usage)
+}
+
+func (h *Handler) streamNativeAnthropic(w http.ResponseWriter, r *http.Request, native provider.AnthropicProvider, upstream provider.Provider, model string, body []byte) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "server_error", "streaming is not supported by this server")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	beginStreamRequest(r)
+	var usage *tokenusage.Usage
+	terminal := false
+	err := native.StreamAnthropic(r.Context(), &provider.Request{Model: model, Input: body, Stream: true}, func(event provider.Event) error {
+		if len(event.Data) > 0 {
+			usage = mergeAnthropicStreamUsage(r, usage, event.Data, event.Done && event.ExplicitDone)
+			if _, writeErr := w.Write(event.Data); writeErr != nil {
+				return downstreamWriteError{err: writeErr}
+			}
+			flusher.Flush()
+		}
+		if event.Done {
+			terminal = event.ExplicitDone
+			if usage != nil {
+				usage.Final = event.ExplicitDone
+			}
+			storeRequestUsage(r, usage)
+		}
+		return nil
+	})
+	if err != nil {
+		storeRequestUsage(r, usage)
+		setRequestError(r, classifyRequestError(r, err, true))
+		if h.selector != nil {
+			h.selector.ReportFailure(upstream.ID())
+		}
+	} else if !terminal {
+		storeRequestUsage(r, usage)
+		setRequestError(r, "stream_incomplete")
+	} else {
+		completeStreamRequest(r)
+	}
 }
 
 func (h *Handler) streamAnthropic(w http.ResponseWriter, r *http.Request, p provider.Provider, model string, payload []byte) {
@@ -623,6 +822,25 @@ func storeRequestUsage(r *http.Request, usage *tokenusage.Usage) {
 	})
 }
 
+func mergeResponsesStreamUsage(r *http.Request, current *tokenusage.Usage, raw []byte, final bool) *tokenusage.Usage {
+	data := eventData(raw)
+	next, err := tokenusage.ParseResponses(data, final)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return current
+	}
+	return tokenusage.Merge(current, next)
+}
+
+func captureResponsesUsage(r *http.Request, raw []byte) {
+	usage, err := tokenusage.ParseResponses(raw, true)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return
+	}
+	storeRequestUsage(r, usage)
+}
+
 func captureResponseUsage(r *http.Request, raw []byte) {
 	usage, err := tokenusage.ParseOpenAI(raw, true)
 	if err != nil {
@@ -673,6 +891,18 @@ func requiredCapabilities(body []byte) []string {
 					}
 				case "tool_choice":
 					found["tools"] = true
+				case "reasoning_effort":
+					if level, ok := child.(string); ok && level != "" && level != "none" {
+						found["reasoning"] = true
+					}
+				case "thinking":
+					if settings, ok := child.(map[string]any); ok && settings["type"] == "enabled" {
+						found["reasoning"] = true
+					}
+				case "reasoning":
+					if settings, ok := child.(map[string]any); ok && settings["effort"] != nil && settings["effort"] != "none" {
+						found["reasoning"] = true
+					}
 				case "response_format":
 					if child != nil {
 						found["json"] = true
@@ -698,7 +928,7 @@ func requiredCapabilities(body []byte) []string {
 	}
 	walk(value)
 	out := make([]string, 0, len(found))
-	for _, capability := range []string{"streaming", "tools", "json", "vision"} {
+	for _, capability := range []string{"streaming", "tools", "json", "vision", "reasoning"} {
 		if found[capability] {
 			out = append(out, capability)
 		}
@@ -1300,10 +1530,11 @@ func (h *Handler) adminProviders(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"data": items, "persisted": false})
 }
 
-// createProvider installs an OpenAI-compatible provider and persists its metadata.
+// createProvider installs a typed upstream adapter and persists its metadata.
 // Upstream secrets are stored only through the encrypted credential vault.
 func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	var input struct {
+		Kind               string              `json:"kind"`
 		ID                 string              `json:"id"`
 		Name               string              `json:"name"`
 		BaseURL            string              `json:"base_url"`
@@ -1319,11 +1550,15 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid provider JSON")
 		return
 	}
-	if strings.TrimSpace(input.ID) == "" || strings.TrimSpace(input.BaseURL) == "" || len(input.Models) == 0 {
-		writeError(w, http.StatusBadRequest, "invalid_request_error", "id, base_url and at least one model are required")
+	kind := adapter.NormalizeKind(input.Kind)
+	if strings.TrimSpace(input.BaseURL) == "" {
+		input.BaseURL = adapter.DefaultBaseURL(kind)
+	}
+	if strings.TrimSpace(input.ID) == "" || strings.TrimSpace(input.BaseURL) == "" || (len(input.Models) == 0 && kind != adapter.KindDeepSeek) {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "id and base_url are required; models are required except for DeepSeek model discovery")
 		return
 	}
-	upstream, err := openai.New(openai.Config{ID: input.ID, Name: input.Name, BaseURL: input.BaseURL, APIKey: input.APIKey, Models: input.Models, ModelCapabilities: input.ModelCapabilities, ModelContextLimits: input.ModelContextLimits})
+	upstream, err := adapter.New(adapter.Config{Kind: kind, ID: input.ID, Name: input.Name, BaseURL: input.BaseURL, APIKey: input.APIKey, Models: input.Models, ModelCapabilities: input.ModelCapabilities, ModelContextLimits: input.ModelContextLimits})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
@@ -1343,7 +1578,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusServiceUnavailable, "credential_persistence_required", "configure persistent credential encryption before storing provider API keys")
 			return
 		}
-		record := provider.ProviderConfig{ID: input.ID, Name: providerName, Kind: "openai-compatible", BaseURL: input.BaseURL, Enabled: enabled, Priority: input.Priority, Weight: input.Weight}
+		record := provider.ProviderConfig{ID: input.ID, Name: providerName, Kind: kind, BaseURL: input.BaseURL, Enabled: enabled, Priority: input.Priority, Weight: input.Weight}
 		if err := h.providerRepo.Upsert(r.Context(), record); err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "could not persist provider metadata")
 			return
@@ -1397,7 +1632,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusConflict, "credential_error", "stored provider credential is unavailable")
 				return
 			}
-			upstream, err = openai.New(openai.Config{ID: input.ID, Name: providerName, BaseURL: input.BaseURL, APIKey: string(secret), Models: input.Models, ModelCapabilities: input.ModelCapabilities, ModelContextLimits: input.ModelContextLimits})
+			upstream, err = adapter.New(adapter.Config{Kind: kind, ID: input.ID, Name: providerName, BaseURL: input.BaseURL, APIKey: string(secret), Models: input.Models, ModelCapabilities: input.ModelCapabilities, ModelContextLimits: input.ModelContextLimits})
 			for i := range secret {
 				secret[i] = 0
 			}
@@ -1408,9 +1643,13 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	models, _ := upstream.ListModels(r.Context())
+	modelIDs := make([]string, 0, len(models))
+	for _, item := range models {
+		modelIDs = append(modelIDs, item.ID)
+	}
 	if h.modelRepo != nil {
 		for _, item := range models {
-			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: input.ID, DisplayName: item.ID, ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
+			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: input.ID, DisplayName: modelDisplayName(item), ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
 				writeError(w, http.StatusInternalServerError, "storage_error", "could not persist provider model")
 				return
 			}
@@ -1433,7 +1672,83 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	}); ok {
 		manager.AddOrReplaceProvider(upstream, input.Models, input.Priority, input.Weight, enabled)
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": upstream.ID(), "name": upstream.Name(), "models": input.Models, "model_capabilities": input.ModelCapabilities, "model_context_limits": input.ModelContextLimits, "enabled": enabled, "persisted": h.providerRepo != nil, "credentials_persisted": h.providerRepo != nil && (input.APIKey == "" || (h.credentials != nil && h.credentials.Persistent()))})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": upstream.ID(), "name": upstream.Name(), "kind": kind, "models": modelIDs, "model_capabilities": input.ModelCapabilities, "model_context_limits": input.ModelContextLimits, "enabled": enabled, "persisted": h.providerRepo != nil, "credentials_persisted": h.providerRepo != nil && (input.APIKey == "" || (h.credentials != nil && h.credentials.Persistent()))})
+}
+
+func (h *Handler) refreshProviderModels(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider id is required")
+		return
+	}
+	upstream, ok := h.registry.Get(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "provider not found")
+		return
+	}
+	discoverer, ok := upstream.(interface {
+		DiscoverModels(context.Context) ([]provider.Model, error)
+	})
+	if !ok {
+		writeError(w, http.StatusBadRequest, "unsupported_operation", "this Provider adapter does not support remote model discovery")
+		return
+	}
+	models, err := discoverer.DiscoverModels(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "provider_discovery_failed", "could not refresh the upstream model catalogue")
+		return
+	}
+	priority, weight, enabled := 100, uint32(1), true
+	if h.providerRepo != nil {
+		record, getErr := h.providerRepo.Get(r.Context(), id)
+		if getErr != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "could not load provider policy")
+			return
+		}
+		priority, weight, enabled = normalizedPriority(record.Priority), normalizedWeight(record.Weight), record.Enabled
+	}
+	if h.modelRepo != nil {
+		existing, listErr := h.modelRepo.List(r.Context(), id)
+		if listErr != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "could not inspect existing provider models")
+			return
+		}
+		discovered := make(map[string]struct{}, len(models))
+		for _, item := range models {
+			discovered[item.ID] = struct{}{}
+		}
+		for _, item := range existing {
+			if _, ok := discovered[item.ID]; !ok {
+				if err := h.modelRepo.Delete(r.Context(), item.ID, id); err != nil {
+					writeError(w, http.StatusInternalServerError, "storage_error", "could not remove stale provider model")
+					return
+				}
+			}
+		}
+		for _, item := range models {
+			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: id, DisplayName: modelDisplayName(item), ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
+				writeError(w, http.StatusInternalServerError, "storage_error", "could not persist discovered model")
+				return
+			}
+			if err := h.modelRepo.SetCapabilities(r.Context(), item.ID, id, item.Capabilities); err != nil {
+				writeError(w, http.StatusInternalServerError, "storage_error", "could not persist discovered model capabilities")
+				return
+			}
+		}
+	}
+	if manager, ok := h.selector.(interface {
+		AddOrReplaceProviderModels(provider.Provider, []provider.Model, int, uint32, bool)
+	}); ok {
+		manager.AddOrReplaceProviderModels(upstream, models, priority, weight, enabled)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"provider_id": id, "data": models, "count": len(models), "persisted": h.modelRepo != nil})
+}
+
+func modelDisplayName(item provider.Model) string {
+	if name := strings.TrimSpace(item.Name); name != "" {
+		return name
+	}
+	return item.ID
 }
 
 func (h *Handler) setProviderPolicy(w http.ResponseWriter, r *http.Request) {

@@ -97,3 +97,20 @@ func TestParseAnthropicRejectsInt64TotalOverflow(t *testing.T) {
 		t.Fatal("expected overflowing token total to be rejected")
 	}
 }
+
+func TestParseResponsesUsageFromResponseAndStreamEvent(t *testing.T) {
+	response, err := ParseResponses([]byte(`{"usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20}}`), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response == nil || response.InputTokens == nil || *response.InputTokens != 12 || response.OutputTokens == nil || *response.OutputTokens != 8 || response.TotalTokens == nil || *response.TotalTokens != 20 || !response.Final {
+		t.Fatalf("unexpected Responses usage: %#v", response)
+	}
+	stream, err := ParseResponses([]byte(`{"type":"response.completed","response":{"usage":{"input_tokens":3,"output_tokens":4,"total_tokens":7}}}`), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stream == nil || stream.InputTokens == nil || *stream.InputTokens != 3 || stream.OutputTokens == nil || *stream.OutputTokens != 4 {
+		t.Fatalf("unexpected streamed Responses usage: %#v", stream)
+	}
+}

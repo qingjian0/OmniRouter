@@ -55,6 +55,15 @@ func (p *usageTestProvider) Generate(context.Context, *provider.Request) (*provi
 func (p *usageTestProvider) Stream(ctx context.Context, req *provider.Request, emit func(provider.Event) error) error {
 	return p.stream(ctx, req, emit)
 }
+
+func (p *usageTestProvider) GenerateResponses(context.Context, *provider.Request) (*provider.Response, error) {
+	return &provider.Response{Model: "model-test", Output: []byte(`{"id":"resp_1","status":"completed","usage":{"input_tokens":4,"output_tokens":6,"total_tokens":10}}`)}, nil
+}
+
+func (p *usageTestProvider) StreamResponses(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
+	return emit(provider.Event{Data: []byte("event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":3,\"total_tokens\":5}}}\n\n"), Done: true, ExplicitDone: true})
+}
+
 func (p *usageTestProvider) HealthCheck(context.Context) error { return nil }
 
 func newUsageTestHandler(p provider.Provider) (*Handler, http.Handler) {
@@ -209,5 +218,105 @@ func TestStreamingUsageParseFailureDoesNotPersistInvalidCounts(t *testing.T) {
 	}
 	if record.ErrorCode != "usage_parse_error" || record.LifecycleStatus != "completed" {
 		t.Fatalf("usage parse error should be visible without failing inference: %+v", record)
+	}
+}
+
+func TestGatewayResponsesAPIRecordsUsage(t *testing.T) {
+	p := &usageTestProvider{}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"model-test","input":"hello"}`))
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"status":"completed"`) {
+		t.Fatalf("unexpected body: %s", response.Body.String())
+	}
+}
+
+func TestGatewayResponsesStreamingPreservesSemanticTerminal(t *testing.T) {
+	p := &usageTestProvider{}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"model-test","input":"hello","stream":true}`))
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "event: response.completed") {
+		t.Fatalf("semantic terminal event was not forwarded: %s", response.Body.String())
+	}
+}
+
+func TestRequiredCapabilitiesIncludesDeepSeekReasoningMode(t *testing.T) {
+	got := requiredCapabilities([]byte(`{"model":"deepseek-flash","thinking":{"type":"enabled"},"reasoning_effort":"high","stream":true}`))
+	found := map[string]bool{}
+	for _, capability := range got {
+		found[capability] = true
+	}
+	for _, capability := range []string{"reasoning", "streaming"} {
+		if !found[capability] {
+			t.Errorf("missing required capability %q in %v", capability, got)
+		}
+	}
+}
+
+type nativeAnthropicTestProvider struct {
+	*usageTestProvider
+}
+
+func (p *nativeAnthropicTestProvider) GenerateAnthropic(context.Context, *provider.Request) (*provider.Response, error) {
+	return &provider.Response{Model: "model-test", Output: []byte(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"native"}],"usage":{"input_tokens":3,"output_tokens":4}}`)}, nil
+}
+
+func (p *nativeAnthropicTestProvider) StreamAnthropic(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
+	if err := emit(provider.Event{Data: []byte("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":2}}}\n\n")}); err != nil {
+		return err
+	}
+	return emit(provider.Event{Data: []byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"), Done: true, ExplicitDone: true})
+}
+
+func TestGatewayUsesNativeAnthropicProviderWhenAvailable(t *testing.T) {
+	p := &nativeAnthropicTestProvider{usageTestProvider: &usageTestProvider{}}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"model-test","max_tokens":32,"messages":[{"role":"user","content":"hello"}]}`))
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"text":"native"`) {
+		t.Fatalf("native Anthropic response was not forwarded: %s", response.Body.String())
+	}
+}
+
+func TestGatewayStreamsNativeAnthropicEvents(t *testing.T) {
+	p := &nativeAnthropicTestProvider{usageTestProvider: &usageTestProvider{}}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"model-test","max_tokens":32,"stream":true,"messages":[{"role":"user","content":"hello"}]}`))
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "event: message_stop") {
+		t.Fatalf("native message_stop was not forwarded: %s", response.Body.String())
 	}
 }
