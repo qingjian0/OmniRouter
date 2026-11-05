@@ -21,8 +21,10 @@ type Model struct {
 	ProviderID   string       `json:"provider_id"`
 	DisplayName  string       `json:"display_name,omitempty"`
 	Capabilities []Capability `json:"capabilities,omitempty"`
-	ContextLimit int          `json:"context_limit,omitempty"`
-	Enabled      bool         `json:"enabled"`
+	ContextLimit            int       `json:"context_limit,omitempty"`
+	InputCostPerMillionUSD  *float64  `json:"input_cost_per_million_usd,omitempty"`
+	OutputCostPerMillionUSD *float64  `json:"output_cost_per_million_usd,omitempty"`
+	Enabled                 bool         `json:"enabled"`
 	UpdatedAt    time.Time    `json:"updated_at"`
 }
 
