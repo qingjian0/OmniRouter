@@ -216,3 +216,38 @@ func (h *Handler) setDeepSeekWebPairingCORS(w http.ResponseWriter, origin string
 	w.Header().Set("Access-Control-Allow-Origin", origin)
 	w.Header().Add("Vary", "Origin")
 }
+
+func (h *Handler) revokeDeepSeekWebAccount(w http.ResponseWriter, r *http.Request) {
+	if h.apiKey == "" {
+		writeError(w, http.StatusServiceUnavailable, "admin_auth_required", "set OMNI_GATEWAY_API_KEY before revoking DeepSeek web sessions")
+		return
+	}
+	if h.deepSeekWebAuthorization == nil || h.accountRepo == nil || h.providerRepo == nil {
+		writeError(w, http.StatusServiceUnavailable, "storage_unavailable", "persistent DeepSeek web authorization is not configured")
+		return
+	}
+	accountID := strings.TrimSpace(r.PathValue("id"))
+	if accountID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "account ID is required")
+		return
+	}
+	owner, err := h.accountRepo.Get(r.Context(), accountID)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "not_found", "account not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "could not load account metadata")
+		return
+	}
+	providerRecord, err := h.providerRepo.Get(r.Context(), owner.ProviderID)
+	if err != nil || !strings.EqualFold(strings.TrimSpace(providerRecord.Kind), deepseekweb.ProviderKind) {
+		writeError(w, http.StatusBadRequest, "invalid_account", "account is not linked to a DeepSeek web provider")
+		return
+	}
+	if err := h.deepSeekWebAuthorization.Revoke(r.Context(), accountID); err != nil {
+		writeError(w, http.StatusInternalServerError, "revoke_failed", "could not revoke all DeepSeek web credentials and sessions")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"account_id": accountID, "status": "revoked"})
+}
