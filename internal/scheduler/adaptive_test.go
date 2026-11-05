@@ -143,3 +143,33 @@ func TestReliabilityPriorRemainsNinetyFivePercent(t *testing.T) {
 		t.Fatalf("one-failure reliability = %v, want 0.76", got)
 	}
 }
+
+func TestSetModelPricingUpdatesRuntimeAndKeepsExplicitZero(t *testing.T) {
+	s := NewAdaptive(time.Minute)
+	p := adaptiveTestProvider{id: "p"}
+	s.Replace("m", []Candidate{{Provider: p, Enabled: true, Weight: 1}})
+	if !s.SetModelPricing("m", "p", 0, 0) {
+		t.Fatal("expected runtime pricing update")
+	}
+	candidate := s.candidates["m"][0]
+	if !candidate.PricingKnown || candidate.InputCostPerMillionUSD != 0 || candidate.OutputCostPerMillionUSD != 0 {
+		t.Fatalf("explicit zero pricing was not retained: %+v", candidate)
+	}
+	if cost, known := estimatedCost(candidate, normalizeProfile(AdaptiveProfile{})); !known || cost != 0 {
+		t.Fatalf("explicit zero price should be known and free: cost=%v known=%v", cost, known)
+	}
+}
+
+func TestModelRefreshPreservesConfiguredPricing(t *testing.T) {
+	s := NewAdaptive(time.Minute)
+	p := adaptiveTestProvider{id: "p"}
+	s.Replace("m", []Candidate{{
+		Provider: p, Enabled: true, Weight: 1,
+		InputCostPerMillionUSD: 0.25, OutputCostPerMillionUSD: 0.5, PricingKnown: true,
+	}})
+	s.AddOrReplaceProviderModels(p, []provider.Model{{ID: "m", Capabilities: []string{"chat"}}}, 100, 1, true)
+	candidate := s.candidates["m"][0]
+	if !candidate.PricingKnown || candidate.InputCostPerMillionUSD != 0.25 || candidate.OutputCostPerMillionUSD != 0.5 {
+		t.Fatalf("model refresh lost operator pricing: %+v", candidate)
+	}
+}
