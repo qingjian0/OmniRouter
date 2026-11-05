@@ -182,13 +182,6 @@ func (s *AdaptiveScheduler) ReportOutcome(providerID string, latency time.Durati
 	s.metrics[providerID] = stat
 	s.metricsMu.Unlock()
 
-	if success {
-		s.mu.Lock()
-		s.health[providerID] = healthRecord{checked: time.Now(), healthy: true}
-		s.mu.Unlock()
-	} else {
-		s.Scheduler.ReportFailure(providerID)
-	}
 }
 
 type objectiveWeight struct { cost, latency, reliability, priority, weight float64 }
