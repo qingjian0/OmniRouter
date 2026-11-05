@@ -119,7 +119,7 @@ func TestDeepSeekWebPairingSubmissionPersistsAndConsumesTicket(t *testing.T) {
 	}
 
 	replay := httptest.NewRecorder()
-	replayRequest := httptest.NewRequest(http.MethodPost, "/internal/deepseek-web/pairings/"+ticket.Nonce, strings.NewReader(body))
+	replayRequest := httptest.NewRequest(http.MethodPost, "/internal/deepseek-web/pairings", strings.NewReader(body))
 	replayRequest.RemoteAddr = "127.0.0.1:43122"
 	replayRequest.Header.Set("Origin", testDeepSeekExtensionOrigin)
 	replayRequest.Header.Set("Content-Type", "application/json")
@@ -143,7 +143,7 @@ func TestDeepSeekWebPairingRejectsNonLoopbackAndForeignOrigin(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request := httptest.NewRequest(http.MethodPost, "/internal/deepseek-web/pairings/"+ticket.Nonce, strings.NewReader("{}"))
+			request := httptest.NewRequest(http.MethodPost, "/internal/deepseek-web/pairings", strings.NewReader("{}"))
 			request.RemoteAddr = test.remote
 			request.Header.Set("Origin", test.origin)
 			request.Header.Set("Content-Type", "application/json")
