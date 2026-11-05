@@ -1,6 +1,8 @@
 package deepseek
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
