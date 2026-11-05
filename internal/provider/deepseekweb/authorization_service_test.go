@@ -127,3 +127,64 @@ func TestAuthorizationServicePersistsRestoresAndRevokes(t *testing.T) {
 		}
 	}
 }
+
+func TestAuthorizationServiceRollsBackPartialPersistence(t *testing.T) {
+	ctx := context.Background()
+	runtime, err := storage.OpenSQLiteRuntime(ctx, filepath.Join(t.TempDir(), "rollback.db"), storage.SQLiteOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+
+	encryptor, err := security.NewEncryptor(base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentialRepo, err := credential.NewRepository(runtime.Store().DB(), encryptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vault, err := credential.NewPersistentVault(encryptor, credentialRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	providerRepo, err := providerrepo.NewRepository(runtime.Store().DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := providerRepo.Upsert(ctx, providerrepo.ProviderConfig{
+		ID: "deepseek-web", Name: "DeepSeek Web", Kind: ProviderKind,
+		BaseURL: DefaultOrigin, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	accountRepo, err := account.NewRepository(runtime.Store().DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionRepo, err := session.NewRepository(runtime.Store().DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewAuthorizationService(accountRepo, sessionRepo, vault)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runtime.Store().DB().ExecContext(ctx, `CREATE TRIGGER reject_test_session BEFORE INSERT ON sessions BEGIN SELECT RAISE(ABORT, 'injected session persistence failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Authorize(ctx, "deepseek-web", "rollback test", validInput(), nil); err == nil {
+		t.Fatal("expected injected session persistence failure")
+	}
+
+	for _, table := range []string{"accounts", "credentials", "sessions"} {
+		var count int
+		if err := runtime.Store().DB().QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
+			t.Fatalf("count %s after rollback: %v", table, err)
+		}
+		if count != 0 {
+			t.Fatalf("partial authorization left %d rows in %s", count, table)
+		}
+	}
+}
