@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	ProviderKind    = "deepseek-web"
-	DefaultOrigin   = "https://chat.deepseek.com"
-	MaxTokenBytes   = 16 << 10
-	MaxCookieBytes  = 32 << 10
+	ProviderKind   = "deepseek-web"
+	DefaultOrigin  = "https://chat.deepseek.com"
+	MaxTokenBytes  = 16 << 10
+	MaxCookieBytes = 32 << 10
 	MaxCookieCount  = 64
 )
 
