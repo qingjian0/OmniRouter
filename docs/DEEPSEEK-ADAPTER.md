@@ -60,10 +60,10 @@ Equivalent `OMNI_PROVIDERS` entry:
 - OpenAI Chat Completions request and response transport.
 - Native OpenAI Responses API ingress at `POST /v1/responses`, forwarded to DeepSeek `/responses` with semantic SSE terminal-event handling.
 - Native Anthropic Messages ingress at `POST /v1/messages`, forwarded to DeepSeek `/anthropic/v1/messages` with `message_stop` terminal-event handling.
-- Non-streaming and SSE forwarding with explicit `data: [DONE]` validation.
+- Non-streaming and SSE forwarding with protocol-specific terminal validation: Chat Completions `[DONE]`, Responses `response.completed`, and Anthropic `message_stop`.
 - DeepSeek `thinking` and `reasoning_effort` request fields pass through
   unchanged; `reasoning_content` response and stream deltas are not rewritten.
-- Function tool declarations/calls pass through the OpenAI-compatible transport.
+- Function tool declarations/calls pass through both the OpenAI-compatible and native Anthropic transports.
 - Authenticated model catalogue discovery and model metadata mapping.
 - Provider kind persistence and adapter restoration after restart.
 - Admin model refresh at `POST /admin/providers/{id}/models/refresh`; this
@@ -102,6 +102,7 @@ The repository includes `scripts/deepseek-smoke.sh` and the manual GitHub Action
 workflow `.github/workflows/deepseek-live-smoke.yml`. Configure the repository
 secrets `OMNI_PROVIDER_API_KEY`, `OMNI_CREDENTIAL_ENCRYPTION_KEY`, and
 `OMNI_GATEWAY_API_KEY`, then dispatch the workflow with the model to test.
-It checks catalogue discovery, Chat Completions (including thinking), native
-Responses API, both SSE terminal formats, and usage endpoint availability.
+It checks catalogue discovery, Chat Completions (including thinking and forced
+tool calls), native Responses API, native Anthropic Messages, all three SSE
+terminal formats, and usage endpoint availability.
 No secret value is printed by the script.
