@@ -65,7 +65,7 @@ jobs:
         run: go build -o /tmp/omnirouter ./cmd/omnirouter
 
   cross-build:
-    name: Cross-build ${{ matrix.goos }}-${{ matrix.goarch }}
+    name: Cross-build and package ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -73,14 +73,19 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
+            ext: ""
           - goos: linux
             goarch: arm64
+            ext: ""
           - goos: windows
             goarch: amd64
+            ext: ".exe"
           - goos: darwin
             goarch: amd64
+            ext: ""
           - goos: darwin
             goarch: arm64
+            ext: ""
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -94,9 +99,26 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Cross-compile executable
+      - name: Build and package release candidate
+        shell: bash
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          EXT: ${{ matrix.ext }}
           CGO_ENABLED: "0"
-        run: go build -trimpath -o /tmp/omnirouter ./cmd/omnirouter
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          name="omnirouter-ci-${GOOS}-${GOARCH}"
+          go build -trimpath -o "dist/${name}${EXT}" ./cmd/omnirouter
+          cp README.md "dist/README.md"
+          cp docs/INSTALL.md "dist/INSTALL.md"
+          cp examples/omnirouter.env.example "dist/omnirouter.env.example"
+          if [ "${GOOS}" = "windows" ]; then
+            (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example)
+            archive="dist/${name}.zip"
+          else
+            archive="dist/${name}.tar.gz"
+            tar -C dist -czf "${archive}" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example
+          fi
+          test -s "${archive}"
