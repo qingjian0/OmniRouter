@@ -236,7 +236,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	}
 	server := &http.Server{
 		Addr:         cfg.HTTP.Address,
-		Handler:      gateway.NewHandlerWithFullRepositories(registry, cfg.GatewayAPIKey, router, vault, providerRepo, accountRepo, sessionRepo, modelRepo, apiKeyRepo, requestLogRepo),
+		Handler:      gateway.NewHandlerWithDeepSeekWeb(registry, cfg.GatewayAPIKey, router, vault, providerRepo, accountRepo, sessionRepo, modelRepo, apiKeyRepo, cfg.DeepSeekWebExtensionOrigin, requestLogRepo),
 		ReadTimeout:  cfg.HTTP.ReadTimeout,
 		WriteTimeout: cfg.HTTP.WriteTimeout,
 		IdleTimeout:  cfg.HTTP.IdleTimeout,
