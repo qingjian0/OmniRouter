@@ -100,7 +100,7 @@ func TestImageAndToolTranslation(t *testing.T) {
 		t.Fatalf("tool declaration was not preserved: %s", translated)
 	}
 
-	upstream := []byte(`{"id":"chatcmpl-tool","choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\\"id\\":\\"42\\"}"}}]},"finish_reason":"tool_calls"}]}`)
+	upstream := []byte(`{"id":"chatcmpl-tool","choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\"id\":\"42\"}"}}]},"finish_reason":"tool_calls"}]}`)
 	output, err := FromOpenAI(upstream, "claude-test")
 	if err != nil {
 		t.Fatalf("FromOpenAI tool response: %v", err)
