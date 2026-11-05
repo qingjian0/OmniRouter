@@ -37,7 +37,7 @@ const oneTimeSecret = ref("");
 const providerForm = reactive({
   id: "", name: "", base_url: "", api_key: "", models: "",
   priority: 100, weight: 1, enabled: true,
-  capabilities: "{}"
+  capabilities: ""
 });
 const accountForm = reactive({ provider_id: "", name: "" });
 const sessionForm = reactive({ account_id: "", status: "unknown", expires_at: "" });
@@ -136,7 +136,7 @@ async function createProvider() {
       weight: providerForm.weight,
       enabled: providerForm.enabled
     }, "Provider 已保存");
-    if (saved) Object.assign(providerForm, { id: "", name: "", base_url: "", api_key: "", models: "", priority: 100, weight: 1, enabled: true, capabilities: "{}" });
+    if (saved) Object.assign(providerForm, { id: "", name: "", base_url: "", api_key: "", models: "", priority: 100, weight: 1, enabled: true, capabilities: "" });
   } catch (e) {
     error.value = `Provider 能力 JSON 无效：${messageOf(e)}`;
   }
