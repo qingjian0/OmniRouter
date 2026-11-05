@@ -88,6 +88,14 @@ Pairing protocol:
 5. The extension clears transient values after the response. The admin UI
    receives status and non-secret metadata only.
 
+The authenticated admin endpoint is `POST /admin/deepseek-web/pairings`. The
+extension submits to `POST /internal/deepseek-web/pairings/{nonce}`. Submission
+requires the exact configured extension `Origin`, a loopback peer, JSON content
+type, and a single-use unexpired nonce. The JSON `token` field is base64-encoded
+so the Go boundary can decode it directly into a byte buffer; `cookies` contains
+only `{name,value,domain,path,secure}` entries. The nonce is consumed before
+payload parsing, so malformed attempts cannot be replayed.
+
 The extension must declare the narrowest possible host permissions and show
 the user an explicit consent action before reading session material. No
 password, MFA seed, browser profile, browsing history, or page content is
