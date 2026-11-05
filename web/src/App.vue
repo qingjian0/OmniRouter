@@ -358,7 +358,7 @@ onMounted(refresh);
           </article>
           <article class="panel"><div class="panel-title"><h2>会话列表</h2></div>
             <div class="table-wrap"><table><thead><tr><th>ID</th><th>账户</th><th>状态</th><th>过期时间</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="s in sessions" :key="s.id"><td>{{ s.id }}</td><td>{{ s.account_id }}</td><td><select :value="s.status" @change="setSessionStatus(s, ($event.target as HTMLSelectElement).value)"><option>unknown</option><option>active</option><option>error</option><option>expired</option><option>revoked</option></select></td><td>{{ shortTime(s.expires_at) }}</td><td><button class="danger" @click="removeSession(s)">删除</button></td></tr><tr v-if="!sessions.length"><td colspan="5" class="empty">暂无会话</td></tr></tbody>
+              <tbody><tr v-for="s in sessions" :key="s.id"><td>{{ s.id }}</td><td>{{ s.account_id }}</td><td><select :value="s.status" @change="setSessionStatus(s, eventValue($event))"><option>unknown</option><option>active</option><option>error</option><option>expired</option><option>revoked</option></select></td><td>{{ shortTime(s.expires_at) }}</td><td><button class="danger" @click="removeSession(s)">删除</button></td></tr><tr v-if="!sessions.length"><td colspan="5" class="empty">暂无会话</td></tr></tbody>
             </table></div>
           </article>
         </section>
@@ -376,7 +376,7 @@ onMounted(refresh);
           </article>
           <article class="panel"><div class="panel-title"><h2>凭据列表</h2></div>
             <div class="table-wrap"><table><thead><tr><th>ID</th><th>账户</th><th>类型</th><th>状态</th><th>版本</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="c in credentials" :key="c.id"><td>{{ c.id }}</td><td>{{ c.account_id }}</td><td>{{ c.kind }}</td><td><select :value="c.status" @change="setCredentialStatus(c, ($event.target as HTMLSelectElement).value)"><option>active</option><option>disabled</option><option>revoked</option><option>expired</option></select></td><td>{{ c.version }}</td><td><button class="danger" @click="removeCredential(c)">删除</button></td></tr><tr v-if="!credentials.length"><td colspan="6" class="empty">暂无凭据或凭据 Vault 尚未启用</td></tr></tbody>
+              <tbody><tr v-for="c in credentials" :key="c.id"><td>{{ c.id }}</td><td>{{ c.account_id }}</td><td>{{ c.kind }}</td><td><select :value="c.status" @change="setCredentialStatus(c, eventValue($event))"><option>active</option><option>disabled</option><option>revoked</option><option>expired</option></select></td><td>{{ c.version }}</td><td><button class="danger" @click="removeCredential(c)">删除</button></td></tr><tr v-if="!credentials.length"><td colspan="6" class="empty">暂无凭据或凭据 Vault 尚未启用</td></tr></tbody>
             </table></div>
           </article>
         </section>
