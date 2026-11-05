@@ -78,6 +78,7 @@ jobs:
 
       - name: Check smoke-test script syntax
         run: |
+          bash -n scripts/deepseek-smoke.sh
           bash -n scripts/provider-smoke.sh
           bash -n scripts/termux-smoke.sh
           bash -n scripts/backup-sqlite.sh
@@ -110,6 +111,9 @@ jobs:
           test -s examples/omnirouter.env.example
           test -s docs/ANDROID-TERMUX-ACCEPTANCE.md
           test -s docs/DATABASE-BACKUP-RESTORE.md
+          test -s docs/DEEPSEEK-ADAPTER.md
+          test -s scripts/deepseek-smoke.sh
+          test -s .github/workflows/deepseek-live-smoke.yml
           test -s .github/workflows/live-provider-smoke.yml
           test -s .github/workflows/release.yml
 
