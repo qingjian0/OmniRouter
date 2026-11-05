@@ -168,8 +168,9 @@ failure must not mark the official DeepSeek API provider unhealthy.
 
 ## 8. Admin UI
 
-The provider form must distinguish "DeepSeek 官方 API" from "DeepSeek 网页会话".
-For the web adapter show:
+The provider form distinguishes "DeepSeek 官方 API" from "DeepSeek 网页会话". The current increment adds the inert web-provider registration form and authenticated one-time pairing-code creation/copy flow. The pairing UI requires `OMNI_GATEWAY_API_KEY` and the exact extension-origin setting. It does not claim that inference is available. Account/session health, re-authentication, and revoke controls remain pending.
+
+For the completed web adapter show:
 
 - Browser authorization state and an explicit Open Login / Recheck action.
 - Account/session status and last validation time.
