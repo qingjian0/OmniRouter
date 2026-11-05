@@ -107,7 +107,7 @@ func TestImageAndFunctionCallTranslation(t *testing.T) {
 		t.Fatalf("function declaration was not preserved: %s", translated)
 	}
 
-	upstream := []byte(`{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\\"id\\":\\"42\\"}"}}]},"finish_reason":"tool_calls"}]}`)
+	upstream := []byte(`{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\"id\":\"42\"}"}}]},"finish_reason":"tool_calls"}]}`)
 	output, err := FromOpenAI(upstream)
 	if err != nil {
 		t.Fatalf("FromOpenAI function response: %v", err)
