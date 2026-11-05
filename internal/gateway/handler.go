@@ -1572,8 +1572,8 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(input.BaseURL) == "" {
 		input.BaseURL = adapter.DefaultBaseURL(kind)
 	}
-	if strings.TrimSpace(input.ID) == "" || strings.TrimSpace(input.BaseURL) == "" || (len(input.Models) == 0 && kind != adapter.KindDeepSeek) {
-		writeError(w, http.StatusBadRequest, "invalid_request_error", "id and base_url are required; models are required except for DeepSeek model discovery")
+	if strings.TrimSpace(input.ID) == "" || strings.TrimSpace(input.BaseURL) == "" || (len(input.Models) == 0 && kind != adapter.KindDeepSeek && kind != adapter.KindDeepSeekWeb) {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "id and base_url are required; models are required except for DeepSeek discovery or the inert DeepSeek Web registration shell")
 		return
 	}
 	upstream, err := adapter.New(adapter.Config{Kind: kind, ID: input.ID, Name: input.Name, BaseURL: input.BaseURL, APIKey: input.APIKey, Models: input.Models, ModelCapabilities: input.ModelCapabilities, ModelContextLimits: input.ModelContextLimits})
