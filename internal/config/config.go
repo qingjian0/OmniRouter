@@ -116,6 +116,16 @@ func Load() (Config, error) {
 				}
 			}
 		}
+		if raw := strings.TrimSpace(os.Getenv("OMNI_PROVIDER_MODEL_CAPABILITIES")); raw != "" {
+			if err := json.Unmarshal([]byte(raw), &cfg.Provider.ModelCapabilities); err != nil {
+				return Config{}, fmt.Errorf("OMNI_PROVIDER_MODEL_CAPABILITIES: %w", err)
+			}
+		}
+		if raw := strings.TrimSpace(os.Getenv("OMNI_PROVIDER_MODEL_CONTEXT_LIMITS")); raw != "" {
+			if err := json.Unmarshal([]byte(raw), &cfg.Provider.ModelContextLimits); err != nil {
+				return Config{}, fmt.Errorf("OMNI_PROVIDER_MODEL_CONTEXT_LIMITS: %w", err)
+			}
+		}
 		if cfg.Provider.BaseURL != "" {
 			cfg.Providers = append(cfg.Providers, cfg.Provider)
 		}
