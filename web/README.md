@@ -1,7 +1,7 @@
 # OmniRouter Admin UI
 
 The admin console is a Vue 3 + TypeScript single-page application. Vite writes
-production assets to `internal/admin/static/`, where the Go server embeds them
+production assets to `internal/admin/static/dist/`, where the Go server embeds them
 into the executable.
 
 ## Development
