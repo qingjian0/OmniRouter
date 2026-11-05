@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -9,9 +11,17 @@ import (
 
 	"omnirouter/internal/app"
 	"omnirouter/internal/config"
+	"omnirouter/internal/version"
 )
 
 func main() {
+	showVersion := flag.Bool("version", false, "print OmniRouter version and exit")
+	flag.Parse()
+	if *showVersion {
+		fmt.Printf("OmniRouter %s (commit %s)\n", version.Version, version.Commit)
+		return
+	}
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	cfg, err := config.Load()
 	if err != nil {
