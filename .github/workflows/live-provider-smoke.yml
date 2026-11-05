@@ -1,0 +1,77 @@
+name: Live Provider Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Configured upstream model ID to test"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  live-provider:
+    name: Live OpenAI-compatible Provider acceptance
+    runs-on: ubuntu-latest
+    env:
+      OMNI_ADDR: 127.0.0.1:8765
+      OMNI_DATABASE_PATH: ${{ runner.temp }}/omnirouter-live-smoke.db
+      OMNI_PROVIDER_ID: live-smoke
+      OMNI_PROVIDER_NAME: Live smoke Provider
+      OMNI_PROVIDER_BASE_URL: ${{ secrets.OMNI_PROVIDER_BASE_URL }}
+      OMNI_PROVIDER_API_KEY: ${{ secrets.OMNI_PROVIDER_API_KEY }}
+      OMNI_PROVIDER_MODELS: ${{ inputs.model }}
+      OMNI_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.OMNI_CREDENTIAL_ENCRYPTION_KEY }}
+      OMNI_GATEWAY_API_KEY: ${{ secrets.OMNI_GATEWAY_API_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+
+      - name: Verify required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${OMNI_PROVIDER_BASE_URL}" ]] || { echo "::error::Missing OMNI_PROVIDER_BASE_URL secret"; exit 1; }
+          [[ -n "${OMNI_PROVIDER_API_KEY}" ]] || { echo "::error::Missing OMNI_PROVIDER_API_KEY secret"; exit 1; }
+          [[ -n "${OMNI_CREDENTIAL_ENCRYPTION_KEY}" ]] || { echo "::error::Missing OMNI_CREDENTIAL_ENCRYPTION_KEY secret"; exit 1; }
+          [[ -n "${OMNI_GATEWAY_API_KEY}" ]] || { echo "::error::Missing OMNI_GATEWAY_API_KEY secret"; exit 1; }
+          [[ -n "${OMNI_PROVIDER_MODELS}" ]] || { echo "::error::A model input is required"; exit 1; }
+
+      - name: Build and exercise real upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod download
+          go build -trimpath -o "${RUNNER_TEMP}/omnirouter" ./cmd/omnirouter
+          "${RUNNER_TEMP}/omnirouter" >"${RUNNER_TEMP}/omnirouter-live-smoke.log" 2>&1 &
+          pid=$!
+          cleanup() {
+            if kill -0 "${pid}" 2>/dev/null; then
+              kill -TERM "${pid}" 2>/dev/null || true
+              wait "${pid}" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+          ready=0
+          for _ in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:8765/healthz >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "${pid}" 2>/dev/null; then
+              echo "::error::OmniRouter exited during startup; inspect the sanitized job outcome and configuration."
+              exit 1
+            fi
+            sleep 1
+          done
+          [[ "${ready}" -eq 1 ]] || { echo "::error::OmniRouter did not become healthy"; exit 1; }
+          OMNI_BASE_URL=http://127.0.0.1:8765 OMNI_SMOKE_MODEL="${OMNI_PROVIDER_MODELS}" \
+            OMNI_GATEWAY_API_KEY="${OMNI_GATEWAY_API_KEY}" bash scripts/provider-smoke.sh
