@@ -223,7 +223,7 @@ function removeModel(m: Row) {
     return mutate(`/admin/models/${encodeURIComponent(m.id)}?provider_id=${encodeURIComponent(m.provider_id)}`, "DELETE", undefined, "模型路由已删除");
   }
 }
-async function copySecret() {
+function eventValue(event: Event): string {\n  return event.target instanceof HTMLSelectElement ? event.target.value : \"\";\n}\nasync function copySecret() {
   try {
     await navigator.clipboard.writeText(oneTimeSecret.value);
     notice.value = "密钥已复制";
@@ -341,7 +341,7 @@ onMounted(refresh);
           </article>
           <article class="panel"><div class="panel-title"><h2>账户列表</h2></div>
             <div class="table-wrap"><table><thead><tr><th>名称 / ID</th><th>Provider</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="a in accounts" :key="a.id"><td><b>{{ a.name }}</b><small>{{ a.id }}</small></td><td>{{ a.provider_id }}</td><td><select :value="a.status" @change="setAccountStatus(a, ($event.target as HTMLSelectElement).value)"><option>active</option><option>disabled</option><option>error</option></select></td><td>{{ shortTime(a.created_at) }}</td><td><button class="danger" @click="removeAccount(a)">删除</button></td></tr><tr v-if="!accounts.length"><td colspan="5" class="empty">暂无账户</td></tr></tbody>
+              <tbody><tr v-for="a in accounts" :key="a.id"><td><b>{{ a.name }}</b><small>{{ a.id }}</small></td><td>{{ a.provider_id }}</td><td><select :value="a.status" @change="setAccountStatus(a, eventValue($event))"><option>active</option><option>disabled</option><option>error</option></select></td><td>{{ shortTime(a.created_at) }}</td><td><button class="danger" @click="removeAccount(a)">删除</button></td></tr><tr v-if="!accounts.length"><td colspan="5" class="empty">暂无账户</td></tr></tbody>
             </table></div>
           </article>
         </section>
