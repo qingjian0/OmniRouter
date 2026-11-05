@@ -17,7 +17,7 @@ const (
 	DefaultOrigin  = "https://chat.deepseek.com"
 	MaxTokenBytes  = 16 << 10
 	MaxCookieBytes = 32 << 10
-	MaxCookieCount  = 64
+	MaxCookieCount = 64
 )
 
 var (
