@@ -702,6 +702,7 @@ func (h *Handler) streamGemini(w http.ResponseWriter, r *http.Request, p provide
 	beginStreamRequest(r)
 	var usage *tokenusage.Usage
 	terminal := false
+	streamStarted := time.Now()
 	err := p.Stream(r.Context(), &provider.Request{Model: model, Input: payload, Stream: true}, func(event provider.Event) error {
 		if event.Done {
 			terminal = event.ExplicitDone
@@ -745,6 +746,7 @@ func (h *Handler) streamGemini(w http.ResponseWriter, r *http.Request, p provide
 		flusher.Flush()
 		return nil
 	})
+	h.reportProviderOutcome(p, time.Since(streamStarted), err == nil && terminal)
 	if err != nil {
 		storeRequestUsage(r, usage)
 		setRequestError(r, classifyRequestError(r, err, true))
