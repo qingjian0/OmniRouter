@@ -227,7 +227,12 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 				for _, cap := range m.Capabilities {
 					caps = append(caps, string(cap))
 				}
-				candidates[m.ID] = append(candidates[m.ID], scheduler.Candidate{Provider: upstream, Priority: priority, Weight: weight, Enabled: true, Capabilities: caps, ContextLimit: m.ContextLimit})
+				candidates[m.ID] = append(candidates[m.ID], scheduler.Candidate{
+					Provider: upstream, Priority: priority, Weight: weight, Enabled: true,
+					Capabilities: caps, ContextLimit: m.ContextLimit,
+					InputCostPerMillionUSD: modelPrice(m.InputCostPerMillionUSD),
+					OutputCostPerMillionUSD: modelPrice(m.OutputCostPerMillionUSD),
+				})
 			}
 		}
 	}
@@ -286,4 +291,11 @@ func domainModelFromProvider(item provider.Model, providerID string) domainmodel
 		displayName = item.ID
 	}
 	return domainmodel.Model{ID: item.ID, ProviderID: providerID, DisplayName: displayName, ContextLimit: item.ContextLimit, Enabled: true}
+}
+
+func modelPrice(value *float64) float64 {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
