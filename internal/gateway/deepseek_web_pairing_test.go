@@ -65,7 +65,10 @@ func newDeepSeekWebPairingTestHandler(t *testing.T) *Handler {
 		t.Fatal(err)
 	}
 	return &Handler{
+		credentials:                vault,
 		providerRepo:               providers,
+		accountRepo:                accounts,
+		sessionRepo:                sessions,
 		deepSeekWebPairings:        deepseekweb.NewPairingManager(),
 		deepSeekWebAuthorization:   authorization,
 		deepSeekWebExtensionOrigin: testDeepSeekExtensionOrigin,
