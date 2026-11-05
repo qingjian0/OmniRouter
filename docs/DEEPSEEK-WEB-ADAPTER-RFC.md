@@ -191,7 +191,7 @@ All state-changing actions require the existing admin gateway authentication.
 - [x] Add tests for malformed/foreign cookies, injection, duplicate cookies, missing session ID, input-buffer isolation, redaction header names, and typed upstream status mapping.
 - [x] Add SQLite integration coverage for authorize / encrypted restart restore / revoke.
 - [x] Execute repository-wide CI: run `41972102296` passed formatting, frontend build, `go test ./...`, race tests, `go vet ./...`, workflow checks, and cross-build/package jobs.
-- [ ] Add failure-injection coverage for partial persistence rollback.
+- [x] Add SQLite failure-injection coverage for partial persistence rollback; cleanup uses a detached bounded context so request cancellation cannot strand credentials.
 - [x] Add an inert `deepseek-web` registration shell so admins can create the provider and pair a session; it advertises zero models and rejects API keys/model lists, so it cannot receive inference traffic.
 - [ ] Replace the inert shell with the real runtime Provider only after the version-isolated browser transport and SSE interfaces are implemented.
 - Do not send upstream completion requests yet.
