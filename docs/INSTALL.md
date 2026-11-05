@@ -87,6 +87,7 @@ $env:OMNI_PROVIDER_NAME = "DeepSeek"
 $env:OMNI_PROVIDER_BASE_URL = "https://api.deepseek.com/v1"
 $env:OMNI_PROVIDER_API_KEY = "<provider-api-key>"
 $env:OMNI_PROVIDER_MODELS = "deepseek-chat,deepseek-reasoner"
+$env:OMNI_PROVIDER_MODEL_CAPABILITIES = '{"deepseek-chat":["chat","streaming","tools"],"deepseek-reasoner":["chat","streaming"]}'
 .\omnirouter.exe
 ```
 
@@ -107,7 +108,7 @@ curl http://127.0.0.1:8080/v1/models \
   -H "Authorization: Bearer $OMNI_GATEWAY_API_KEY"
 ```
 
-The gateway key protects `/v1/*` and `/admin/*` when configured. Health
+Model capabilities are explicit routing declarations. Declare `streaming` for every model that should receive SSE requests, and declare `tools`/`vision` only when the upstream model supports them. The gateway key protects `/v1/*` and `/admin/*` when configured. Health
 endpoints and the embedded admin page are intentionally separate. Do not
 expose the service directly to the public internet. For LAN access, use a
 trusted TLS reverse proxy and firewall allow-listing.
