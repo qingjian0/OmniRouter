@@ -16,6 +16,10 @@ import (
 // createDeepSeekWebPairing is an authenticated admin operation. The returned
 // nonce is a short-lived capability and must not be logged or persisted.
 func (h *Handler) createDeepSeekWebPairing(w http.ResponseWriter, r *http.Request) {
+	if h.apiKey == "" {
+		writeError(w, http.StatusServiceUnavailable, "admin_auth_required", "set OMNI_GATEWAY_API_KEY before creating DeepSeek web pairing tickets")
+		return
+	}
 	if h.deepSeekWebAuthorization == nil || h.providerRepo == nil || h.deepSeekWebPairings == nil {
 		writeError(w, http.StatusServiceUnavailable, "storage_unavailable", "persistent DeepSeek web authorization is not configured")
 		return
