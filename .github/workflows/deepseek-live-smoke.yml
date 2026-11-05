@@ -1,0 +1,103 @@
+name: DeepSeek Live Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "DeepSeek official model ID"
+        required: true
+        default: "deepseek-flash"
+        type: choice
+        options:
+          - deepseek-flash
+          - deepseek-v4-pro
+
+permissions:
+  contents: read
+
+jobs:
+  deepseek-live:
+    name: DeepSeek official API live smoke
+    runs-on: ubuntu-latest
+    env:
+      OMNI_ADDR: 127.0.0.1:8765
+      OMNI_DATABASE_PATH: ${{ runner.temp }}/omnirouter-deepseek.db
+      OMNI_PROVIDER_KIND: deepseek
+      OMNI_PROVIDER_ID: deepseek-live
+      OMNI_PROVIDER_NAME: DeepSeek Official API
+      OMNI_PROVIDER_BASE_URL: https://api.deepseek.com
+      OMNI_PROVIDER_API_KEY: ${{ secrets.OMNI_PROVIDER_API_KEY }}
+      OMNI_PROVIDER_MODELS: ${{ inputs.model }}
+      OMNI_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.OMNI_CREDENTIAL_ENCRYPTION_KEY }}
+      OMNI_GATEWAY_API_KEY: ${{ secrets.OMNI_GATEWAY_API_KEY }}
+      OMNI_BASE_URL: http://127.0.0.1:8765
+      OMNI_SMOKE_MODEL: ${{ inputs.model }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build embedded admin assets
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          test -s ../internal/admin/static/dist/index.html
+          test -n "$(find ../internal/admin/static/dist/assets -type f -print -quit)"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+
+      - name: Verify required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${OMNI_PROVIDER_API_KEY}" ]] || { echo "::error::Missing OMNI_PROVIDER_API_KEY secret"; exit 1; }
+          [[ -n "${OMNI_CREDENTIAL_ENCRYPTION_KEY}" ]] || { echo "::error::Missing OMNI_CREDENTIAL_ENCRYPTION_KEY secret"; exit 1; }
+          [[ -n "${OMNI_GATEWAY_API_KEY}" ]] || { echo "::error::Missing OMNI_GATEWAY_API_KEY secret"; exit 1; }
+
+      - name: Build and start OmniRouter
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod download
+          go build -trimpath -o "${RUNNER_TEMP}/omnirouter" ./cmd/omnirouter
+          "${RUNNER_TEMP}/omnirouter" >"${RUNNER_TEMP}/omnirouter-deepseek.log" 2>&1 &
+          pid=$!
+          cleanup() {
+            if kill -0 "${pid}" 2>/dev/null; then
+              kill -TERM "${pid}" 2>/dev/null || true
+              wait "${pid}" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+          ready=0
+          for _ in $(seq 1 45); do
+            if curl -fsS --max-time 2 http://127.0.0.1:8765/healthz >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "${pid}" 2>/dev/null; then
+              echo "::error::OmniRouter exited during DeepSeek startup"
+              exit 1
+            fi
+            sleep 1
+          done
+          [[ "${ready}" -eq 1 ]] || { echo "::error::OmniRouter did not become healthy"; exit 1; }
+          bash scripts/deepseek-smoke.sh
+
+      - name: Upload sanitized runtime log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-live-acceptance-log
+          path: ${{ runner.temp }}/omnirouter-deepseek.log
+          if-no-files-found: ignore
+          retention-days: 3
