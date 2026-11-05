@@ -59,6 +59,7 @@ Equivalent `OMNI_PROVIDERS` entry:
 
 - OpenAI Chat Completions request and response transport.
 - Native OpenAI Responses API ingress at `POST /v1/responses`, forwarded to DeepSeek `/responses` with semantic SSE terminal-event handling.
+- Native Anthropic Messages ingress at `POST /v1/messages`, forwarded to DeepSeek `/anthropic/v1/messages` with `message_stop` terminal-event handling.
 - Non-streaming and SSE forwarding with explicit `data: [DONE]` validation.
 - DeepSeek `thinking` and `reasoning_effort` request fields pass through
   unchanged; `reasoning_content` response and stream deltas are not rewritten.
@@ -76,8 +77,7 @@ usage analytics.
 
 ## Explicitly not claimed yet
 
-- Direct native Anthropic Messages upstream transport through the DeepSeek
-  `/anthropic` endpoint.
+
 - Consumer website login, browser sessions, or cookie-based access. Those belong
   to a separate web adapter and must not be conflated with the official API.
 - Live production acceptance. A valid key and a real upstream smoke run are
