@@ -72,7 +72,7 @@ func TestStreamTranslatorEmitsTerminalMessageEvents(t *testing.T) {
 
 
 func TestImageAndToolTranslation(t *testing.T) {
-	request := []byte(\`{"model":"claude-test","max_tokens":64,"messages":[{"role":"user","content":[{"type":"text","text":"Inspect this image"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}}]}],"tools":[{"name":"lookup","description":"Look up a record","input_schema":{"type":"object","properties":{"id":{"type":"string"}}}}]}\`)
+	request := []byte(`{"model":"claude-test","max_tokens":64,"messages":[{"role":"user","content":[{"type":"text","text":"Inspect this image"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}}]}],"tools":[{"name":"lookup","description":"Look up a record","input_schema":{"type":"object","properties":{"id":{"type":"string"}}}}]}`)
 	translated, _, _, err := ToOpenAI(request)
 	if err != nil {
 		t.Fatalf("ToOpenAI image/tool request: %v", err)
@@ -80,15 +80,15 @@ func TestImageAndToolTranslation(t *testing.T) {
 	var openAI struct {
 		Messages []struct {
 			Content []struct {
-				Type     string \`json:"type"\`
+				Type     string `json:"type"`
 				ImageURL struct {
-					URL string \`json:"url"\`
-				} \`json:"image_url"\`
-			} \`json:"content"\`
-		} \`json:"messages"\`
+					URL string `json:"url"`
+				} `json:"image_url"`
+			} `json:"content"`
+		} `json:"messages"`
 		Tools []struct {
-			Type string \`json:"type"\`
-		} \`json:"tools"\`
+			Type string `json:"type"`
+		} `json:"tools"`
 	}
 	if err := json.Unmarshal(translated, &openAI); err != nil {
 		t.Fatalf("decode OpenAI request: %v", err)
@@ -100,17 +100,17 @@ func TestImageAndToolTranslation(t *testing.T) {
 		t.Fatalf("tool declaration was not preserved: %s", translated)
 	}
 
-	upstream := []byte(\`{"id":"chatcmpl-tool","choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\\"id\\":\\"42\\"}"}}]},"finish_reason":"tool_calls"}]}\`)
+	upstream := []byte(`{"id":"chatcmpl-tool","choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\\"id\\":\\"42\\"}"}}]},"finish_reason":"tool_calls"}]}`)
 	output, err := FromOpenAI(upstream, "claude-test")
 	if err != nil {
 		t.Fatalf("FromOpenAI tool response: %v", err)
 	}
 	var response struct {
 		Content []struct {
-			Type string \`json:"type"\`
-			Name string \`json:"name"\`
-		} \`json:"content"\`
-		StopReason string \`json:"stop_reason"\`
+			Type string `json:"type"`
+			Name string `json:"name"`
+		} `json:"content"`
+		StopReason string `json:"stop_reason"`
 	}
 	if err := json.Unmarshal(output, &response); err != nil {
 		t.Fatalf("decode Anthropic tool response: %v", err)
