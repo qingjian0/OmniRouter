@@ -190,7 +190,8 @@ All state-changing actions require the existing admin gateway authentication.
 - [x] Add account-wide revoke semantics for credentials, sessions, and account state.
 - [x] Add tests for malformed/foreign cookies, injection, duplicate cookies, missing session ID, input-buffer isolation, redaction header names, and typed upstream status mapping.
 - [x] Add SQLite integration coverage for authorize / encrypted restart restore / revoke.
-- [ ] Execute the repository-wide CI suite and add failure-injection coverage for partial persistence rollback.
+- [x] Execute repository-wide CI: run `41972102296` passed formatting, frontend build, `go test ./...`, race tests, `go vet ./...`, workflow checks, and cross-build/package jobs.
+- [ ] Add failure-injection coverage for partial persistence rollback.
 - [x] Add an inert `deepseek-web` registration shell so admins can create the provider and pair a session; it advertises zero models and rejects API keys/model lists, so it cannot receive inference traffic.
 - [ ] Replace the inert shell with the real runtime Provider only after the version-isolated browser transport and SSE interfaces are implemented.
 - Do not send upstream completion requests yet.
@@ -200,9 +201,10 @@ All state-changing actions require the existing admin gateway authentication.
 - [x] Add exact-origin validators for the DeepSeek page and administrator-configured browser extension origin.
 - [x] Add loopback-peer validation for the future local pairing endpoint.
 - [x] Add tests for ticket replay, expiry, pending-ticket limits, origin spoofing, and non-loopback peers.
-- [ ] Implement the authenticated admin pairing endpoint and extension-origin allowlist configuration.
-- [ ] Build the browser extension with explicit active-tab consent and minimal session extraction.
-- [ ] Connect the pairing endpoint to the encrypted AuthorizationService.
+- [x] Implement the authenticated admin pairing endpoint and exact extension-origin allowlist configuration (`OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN`).
+- [x] Add Chromium Manifest V3 extension source with explicit active-tab consent and minimal session extraction.
+- [x] Connect the loopback-only pairing submission endpoint to the encrypted AuthorizationService.
+- [ ] Validate extension pairing in Chromium on Windows, Linux, and macOS; evaluate Android browser support separately.
 - [ ] Test extension pairing on Windows, Linux, and macOS; evaluate Android browser support separately.
 - No real account credentials in CI.
 
@@ -217,7 +219,8 @@ All state-changing actions require the existing admin gateway authentication.
 ### Slice D — gateway and admin
 - Chat Completions and Responses translation.
 - Per-account conversation lineage and serialized turns.
-- UI for browser login, session health, model refresh, revoke.
+- [x] UI for inert Provider registration, one-time pairing-code creation/copy, and account-wide revoke.
+- [ ] UI for browser login state, last session validation, session health, and model refresh.
 - Usage accounting marked estimated if upstream token usage is unavailable.
 
 ### Release acceptance
