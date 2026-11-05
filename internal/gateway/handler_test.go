@@ -245,3 +245,13 @@ func TestGatewayResponsesStreamingPreservesSemanticTerminal(t *testing.T) {
 	if response.Code != http.StatusOK { t.Fatalf("status=%d body=%s",response.Code,response.Body.String()) }
 	if !strings.Contains(response.Body.String(),"event: response.completed") { t.Fatalf("semantic terminal event was not forwarded: %s",response.Body.String()) }
 }
+
+
+func TestRequiredCapabilitiesIncludesDeepSeekReasoningMode(t *testing.T) {
+	got := requiredCapabilities([]byte(`{"model":"deepseek-flash","thinking":{"type":"enabled"},"reasoning_effort":"high","stream":true}`))
+	found := map[string]bool{}
+	for _, capability := range got { found[capability] = true }
+	for _, capability := range []string{"reasoning","streaming"} {
+		if !found[capability] { t.Errorf("missing required capability %q in %v",capability,got) }
+	}
+}
