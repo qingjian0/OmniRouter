@@ -186,11 +186,12 @@ jobs:
           cp docs/PROVIDER-ACCEPTANCE.md "dist/PROVIDER-ACCEPTANCE.md"
           cp docs/ANDROID-TERMUX-ACCEPTANCE.md "dist/ANDROID-TERMUX-ACCEPTANCE.md"
           cp docs/V1-RELEASE-CHECKLIST.md "dist/V1-RELEASE-CHECKLIST.md"
+          cp scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/termux-smoke.sh dist/
           if [ "${GOOS}" = "windows" ]; then
-            (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md)
+            (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md backup-sqlite.sh restore-sqlite.sh provider-smoke.sh termux-smoke.sh)
             archive="dist/${name}.zip"
           else
             archive="dist/${name}.tar.gz"
-            tar -C dist -czf "${archive}" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md
+            tar -C dist -czf "${archive}" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md backup-sqlite.sh restore-sqlite.sh provider-smoke.sh termux-smoke.sh
           fi
           test -s "${archive}"
