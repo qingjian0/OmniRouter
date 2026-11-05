@@ -34,8 +34,14 @@ func (h *Handler) createDeepSeekWebPairing(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "valid provider_id and account_name JSON are required")
 		return
 	}
-	if strings.TrimSpace(input.ProviderID) == "" || strings.TrimSpace(input.AccountName) == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider_id and account_name are required")
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "pairing request must contain exactly one JSON value")
+		return
+	}
+	if strings.TrimSpace(input.ProviderID) == "" || strings.TrimSpace(input.AccountName) == "" ||
+		len(input.ProviderID) > 128 || len(input.AccountName) > 80 {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider_id and account_name are required and must be within their length limits")
 		return
 	}
 	record, err := h.providerRepo.Get(r.Context(), strings.TrimSpace(input.ProviderID))
