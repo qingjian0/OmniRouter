@@ -227,7 +227,10 @@ function removeModel(m: Row) {
     return mutate(`/admin/models/${encodeURIComponent(m.id)}?provider_id=${encodeURIComponent(m.provider_id)}`, "DELETE", undefined, "模型路由已删除");
   }
 }
-function eventValue(event: Event): string {\n  return event.target instanceof HTMLSelectElement ? event.target.value : \"\";\n}\nasync function copySecret() {
+function eventValue(event: Event): string {
+  return event.target instanceof HTMLSelectElement ? event.target.value : "";
+}
+async function copySecret() {
   try {
     await navigator.clipboard.writeText(oneTimeSecret.value);
     notice.value = "密钥已复制";
