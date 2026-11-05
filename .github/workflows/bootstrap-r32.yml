@@ -1,9 +1,6 @@
 name: Import R3.2 source archive
 
 on:
-  push:
-    paths:
-      - ".github/workflows/bootstrap-r32.yml"
   workflow_dispatch:
 
 permissions:
@@ -33,7 +30,11 @@ jobs:
         run: |
           set -euo pipefail
           archive="OmniRouter-R3.2-Source.zip"
-          test -f "$archive"
+          if [[ ! -f "$archive" ]]; then
+            test -f go.mod
+            echo "Source already imported; skipping archive extraction."
+            exit 0
+          fi
           rm -rf /tmp/omnirouter-import
           mkdir -p /tmp/omnirouter-import
           unzip -q "$archive" -d /tmp/omnirouter-import
