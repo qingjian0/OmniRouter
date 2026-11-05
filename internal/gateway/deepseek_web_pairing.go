@@ -65,7 +65,7 @@ func (h *Handler) createDeepSeekWebPairing(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"nonce": ticket.Nonce, "expires_at": ticket.ExpiresAt,
-		"provider_id": strings.TrimSpace(input.ProviderID),
+		"provider_id":  strings.TrimSpace(input.ProviderID),
 		"account_name": strings.TrimSpace(input.AccountName),
 	})
 }
@@ -205,10 +205,10 @@ func (h *Handler) submitDeepSeekWebPairing(w http.ResponseWriter, r *http.Reques
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"provider_id": target.ProviderID,
-		"account_id": authorization.AccountID,
-		"session_id": authorization.SessionID,
-		"status": "stored",
-		"message": "authorization stored",
+		"account_id":  authorization.AccountID,
+		"session_id":  authorization.SessionID,
+		"status":      "stored",
+		"message":     "authorization stored",
 	})
 }
 
