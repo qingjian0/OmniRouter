@@ -6,3 +6,8 @@
 *.db-wal
 .env
 .DS_Store
+
+# Vue admin build output and local frontend dependencies
+web/node_modules/
+internal/admin/static/index.html
+internal/admin/static/assets/
