@@ -299,7 +299,7 @@ func estimatedCost(candidate Candidate, profile AdaptiveProfile) (float64, bool)
 		inputPrice < 0 || outputPrice < 0 {
 		return 0, false
 	}
-	if inputPrice == 0 && outputPrice == 0 {
+	if inputPrice == 0 && outputPrice == 0 && !candidate.PricingKnown {
 		return 0, false
 	}
 	input := float64(profile.EstimatedInputTokens) * inputPrice / 1_000_000
@@ -324,6 +324,7 @@ func (s *AdaptiveScheduler) SetModelPricing(modelID, providerID string, inputCos
 		if candidate.Provider != nil && candidate.Provider.ID() == providerID {
 			candidate.InputCostPerMillionUSD = inputCost
 			candidate.OutputCostPerMillionUSD = outputCost
+			candidate.PricingKnown = true
 			updated = true
 		}
 	}
