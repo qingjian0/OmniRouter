@@ -2021,9 +2021,9 @@ func (h *Handler) setModelPricing(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": r.PathValue("id"), "provider_id": input.ProviderID,
-		"input_cost_per_million_usd": *input.InputCostPerMillionUSD,
+		"input_cost_per_million_usd":  *input.InputCostPerMillionUSD,
 		"output_cost_per_million_usd": *input.OutputCostPerMillionUSD,
-		"runtime_updated": runtimeUpdated, "persisted": true,
+		"runtime_updated":             runtimeUpdated, "persisted": true,
 	})
 }
 
