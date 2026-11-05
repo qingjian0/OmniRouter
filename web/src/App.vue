@@ -33,6 +33,8 @@ const credentials = ref<Row[]>([]);
 const apiKeys = ref<Row[]>([]);
 const requests = ref<Row[]>([]);
 const oneTimeSecret = ref("");
+const pairingTicket = ref<Row | null>(null);
+const pairingProviders = computed(() => providers.value.filter((item) => item.kind === "deepseek-web"));
 
 const providerForm = reactive({
   kind: "openai-compatible", id: "", name: "", base_url: "", api_key: "", models: "",
@@ -40,6 +42,7 @@ const providerForm = reactive({
   capabilities: ""
 });
 const accountForm = reactive({ provider_id: "", name: "" });
+const pairingForm = reactive({ provider_id: "", account_name: "Personal DeepSeek Web" });
 const sessionForm = reactive({ account_id: "", status: "unknown", expires_at: "" });
 const credentialForm = reactive({ account_id: "", kind: "api_key", value: "", expires_at: "" });
 const apiKeyForm = reactive({ name: "" });
@@ -124,13 +127,20 @@ async function mutate(path: string, method: string, payload: unknown, success: s
 
 function applyProviderKindDefaults() {
   if (providerForm.kind === "deepseek") {
-    if (!providerForm.id || providerForm.id === "openai-compatible") providerForm.id = "deepseek";
-    if (!providerForm.name || providerForm.name === "OpenAI-compatible") providerForm.name = "DeepSeek";
-    if (!providerForm.base_url) providerForm.base_url = "https://api.deepseek.com";
+    if (!providerForm.id || ["openai-compatible", "deepseek-web"].includes(providerForm.id)) providerForm.id = "deepseek";
+    if (!providerForm.name || ["OpenAI-compatible", "DeepSeek Web"].includes(providerForm.name)) providerForm.name = "DeepSeek";
+    if (!providerForm.base_url || providerForm.base_url === "https://chat.deepseek.com") providerForm.base_url = "https://api.deepseek.com";
     if (!providerForm.models) providerForm.models = "deepseek-flash,deepseek-v4-pro";
     providerForm.capabilities = "";
+  } else if (providerForm.kind === "deepseek-web") {
+    if (!providerForm.id || ["openai-compatible", "deepseek"].includes(providerForm.id)) providerForm.id = "deepseek-web";
+    if (!providerForm.name || ["OpenAI-compatible", "DeepSeek"].includes(providerForm.name)) providerForm.name = "DeepSeek Web";
+    if (!providerForm.base_url || providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "https://chat.deepseek.com";
+    providerForm.models = "";
+    providerForm.api_key = "";
+    providerForm.capabilities = "";
   } else {
-    if (providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "";
+    if (["https://api.deepseek.com", "https://chat.deepseek.com"].includes(providerForm.base_url)) providerForm.base_url = "";
     if (providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "";
   }
 }
@@ -153,6 +163,29 @@ async function createProvider() {
     if (saved) Object.assign(providerForm, { kind: "openai-compatible", id: "", name: "", base_url: "", api_key: "", models: "", priority: 100, weight: 1, enabled: true, capabilities: "" });
   } catch (e) {
     error.value = `Provider 能力 JSON 无效：${messageOf(e)}`;
+  }
+}
+
+async function createDeepSeekWebPairing() {
+  error.value = "";
+  notice.value = "";
+  pairingTicket.value = null;
+  try {
+    const result = await api("/admin/deepseek-web/pairings", "POST", pairingForm);
+    pairingTicket.value = result;
+    notice.value = "一次性配对码已创建，有效期 2 分钟。";
+  } catch (e) {
+    error.value = messageOf(e);
+  }
+}
+
+async function copyPairingNonce() {
+  if (!pairingTicket.value?.nonce) return;
+  try {
+    await navigator.clipboard.writeText(pairingTicket.value.nonce);
+    notice.value = "配对码已复制；请在浏览器扩展中粘贴并立即使用。";
+  } catch {
+    error.value = "剪贴板不可用，请手动复制配对码。";
   }
 }
 
@@ -325,21 +358,37 @@ onMounted(refresh);
 
         <section v-else-if="activeTab === 'providers'" class="stack">
           <article class="panel">
-            <div class="panel-title"><h2>添加 Provider</h2><span class="muted">官方 API / OpenAI-compatible</span></div>
+            <div class="panel-title"><h2>添加 Provider</h2><span class="muted">官方 API / OpenAI-compatible / 网页会话</span></div>
             <form class="form-grid" @submit.prevent="createProvider">
-              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible</option><option value="deepseek">DeepSeek 官方 API</option></select></label>
+              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible</option><option value="deepseek">DeepSeek 官方 API</option><option value="deepseek-web">DeepSeek 网页会话（授权接入）</option></select></label>
               <label>ID<input v-model="providerForm.id" required placeholder="deepseek-primary" /></label>
               <label>名称<input v-model="providerForm.name" placeholder="DeepSeek Primary" /></label>
-              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : 'https://api.example.com/v1'" /></label>
-              <label class="wide">上游 API Key<input v-model="providerForm.api_key" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
-              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : 'model-a,model-b'" /></label>
+              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="!['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'deepseek-web' ? 'https://chat.deepseek.com' : 'https://api.example.com/v1'" /></label>
+              <label v-if="providerForm.kind !== 'deepseek-web'" class="wide">上游 API Key<input v-model="providerForm.api_key" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
+              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :required="providerForm.kind === 'openai-compatible'" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : providerForm.kind === 'deepseek-web' ? '授权和传输完成前不注册模型' : 'model-a,model-b'" /></label>
               <label>优先级<input v-model.number="providerForm.priority" type="number" min="0" /></label>
               <label>权重<input v-model.number="providerForm.weight" type="number" min="0" max="1000000" /></label>
-              <label v-if="providerForm.kind !== 'deepseek'" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
+              <label v-if="providerForm.kind === 'openai-compatible'" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
               <label class="check"><input v-model="providerForm.enabled" type="checkbox" />启用</label>
               <div class="form-actions"><button class="primary" type="submit">保存 Provider</button></div>
             </form>
-            <p class="hint">配置上游密钥前，必须设置 OMNI_CREDENTIAL_ENCRYPTION_KEY。列表不会返回密钥明文。</p>
+            <p class="hint">官方 API 密钥需要 OMNI_CREDENTIAL_ENCRYPTION_KEY。DeepSeek 网页会话目前只创建不可路由的 Provider 壳；完成浏览器授权后仍需实现并验证网页传输，暂不会出现在可用模型路由中。</p>
+          </article>
+          <article class="panel">
+            <div class="panel-title"><h2>DeepSeek 网页会话授权</h2><span class="muted">需要已创建的 deepseek-web Provider</span></div>
+            <form class="form-grid" @submit.prevent="createDeepSeekWebPairing">
+              <label>DeepSeek Web Provider<select v-model="pairingForm.provider_id" required><option value="" disabled>选择网页会话 Provider</option><option v-for="p in pairingProviders" :key="p.id" :value="p.id">{{ p.name || p.id }}</option></select></label>
+              <label>本地账户名称<input v-model="pairingForm.account_name" required maxlength="80" placeholder="Personal DeepSeek Web" /></label>
+              <div class="form-actions"><button class="primary" type="submit" :disabled="!pairingProviders.length">创建一次性配对码</button></div>
+            </form>
+            <div v-if="pairingTicket?.nonce" class="hint">
+              <strong>一次性配对码（2 分钟有效）</strong>
+              <code class="url">{{ pairingTicket.nonce }}</code>
+              <p>在已登录的 chat.deepseek.com 标签页打开扩展，粘贴配对码后主动点击“Connect this DeepSeek tab”。不要把配对码发送给他人。</p>
+              <button class="secondary" type="button" @click="copyPairingNonce">复制配对码</button>
+              <small>到期时间：{{ shortTime(pairingTicket.expires_at) }}</small>
+            </div>
+            <p v-if="!pairingProviders.length" class="hint">先添加一个 DeepSeek 网页会话 Provider。此流程不会读取密码或自动登录。</p>
           </article>
           <article class="panel">
             <div class="panel-title"><h2>Provider 列表</h2><span class="muted">{{ providers.length }} 项</span></div>
