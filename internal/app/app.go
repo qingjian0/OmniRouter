@@ -18,6 +18,7 @@ import (
 	"omnirouter/internal/gateway"
 	domainmodel "omnirouter/internal/model"
 	"omnirouter/internal/provider"
+	"omnirouter/internal/provider/deepseekweb"
 	"omnirouter/internal/scheduler"
 	"omnirouter/internal/security"
 	"omnirouter/internal/session"
@@ -97,6 +98,9 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		baseURL := providerConfig.BaseURL
 		if strings.TrimSpace(baseURL) == "" {
 			baseURL = adapter.DefaultBaseURL(kind)
+		}
+		if kind == adapter.KindDeepSeekWeb && strings.TrimRight(strings.TrimSpace(baseURL), "/") != deepseekweb.DefaultOrigin {
+			return nil, fmt.Errorf("provider %q: DeepSeek Web origin is fixed to %s", providerConfig.ID, deepseekweb.DefaultOrigin)
 		}
 		providerRecord := provider.ProviderConfig{ID: providerConfig.ID, Name: providerName, Kind: kind, BaseURL: baseURL, Enabled: true, Priority: providerConfig.Priority, Weight: providerConfig.Weight}
 		if err := providerRepo.Upsert(dbCtx, providerRecord); err != nil {
