@@ -55,6 +55,8 @@ jobs:
           test -s docs/INSTALL.md
           test -s examples/omnirouter.env.example
           test -s docs/ANDROID-TERMUX-ACCEPTANCE.md
+          test -s .github/workflows/live-provider-smoke.yml
+          test -s .github/workflows/release.yml
 
       - name: Unit and integration tests
         run: go test ./...
