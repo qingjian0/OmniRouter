@@ -2,6 +2,7 @@ package deepseekweb
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -21,9 +22,9 @@ type SSEFrame struct {
 	Data  string
 }
 
-// ParseSSE reads the standard SSE framing format and emits complete frames.
-// maxFrameBytes limits accumulated field data for one frame; values <= 0 use
-// the conservative default of 1 MiB. The reader is not closed by this function.
+// ParseSSE reads standard SSE framing and emits complete frames. maxFrameBytes
+// bounds both individual lines and accumulated fields for one frame; values
+// <= 0 use a conservative default of 1 MiB. The reader is not closed.
 func ParseSSE(r io.Reader, maxFrameBytes int, emit func(SSEFrame) error) error {
 	if r == nil {
 		return errors.New("deepseek web: nil SSE reader")
@@ -35,7 +36,7 @@ func ParseSSE(r io.Reader, maxFrameBytes int, emit func(SSEFrame) error) error {
 		maxFrameBytes = 1 << 20
 	}
 
-	reader := bufio.NewReader(r)
+	reader := bufio.NewReaderSize(r, 4096)
 	var frame SSEFrame
 	var data []string
 	frameBytes := 0
@@ -57,53 +58,74 @@ func ParseSSE(r io.Reader, maxFrameBytes int, emit func(SSEFrame) error) error {
 	}
 
 	for {
-		line, err := reader.ReadString('\n')
+		line, readErr := readSSELine(reader, maxFrameBytes)
 		if len(line) > 0 {
-			line = strings.TrimSuffix(line, "\n")
-			line = strings.TrimSuffix(line, "\r")
-			if line == "" {
-				if dispatchErr := dispatch(); dispatchErr != nil {
-					return dispatchErr
+			line = bytes.TrimSuffix(line, []byte("\n"))
+			line = bytes.TrimSuffix(line, []byte("\r"))
+			if len(line) == 0 {
+				if err := dispatch(); err != nil {
+					return err
 				}
-			} else if !strings.HasPrefix(line, ":") {
-				field, value, found := strings.Cut(line, ":")
+			} else if line[0] != ':' {
+				field, value, found := bytes.Cut(line, []byte(":"))
 				if !found {
-					value = ""
+					value = nil
 				} else {
-					value = strings.TrimPrefix(value, " ")
+					value = bytes.TrimPrefix(value, []byte(" "))
 				}
 				frameBytes += len(line)
 				if frameBytes > maxFrameBytes {
 					return ErrSSEFrameTooLarge
 				}
-				switch field {
+				switch string(field) {
 				case "event":
-					frame.Event = value
+					frame.Event = string(value)
 				case "id":
-					if !strings.ContainsRune(value, '\x00') {
-						frame.ID = value
+					if !bytes.ContainsRune(value, '\x00') {
+						frame.ID = string(value)
 					}
 				case "retry":
-					if n, parseErr := strconv.Atoi(value); parseErr == nil && n >= 0 {
+					if n, err := strconv.Atoi(string(value)); err == nil && n >= 0 {
 						frame.Retry = &n
 					}
 				case "data":
-					data = append(data, value)
+					data = append(data, string(value))
 				}
 			}
 		}
 
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				if dispatchErr := dispatch(); dispatchErr != nil {
-					return dispatchErr
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				if err := dispatch(); err != nil {
+					return err
 				}
 				return nil
 			}
-			if len(line) > 0 {
-				return fmt.Errorf("deepseek web: read SSE frame: %w", err)
+			if errors.Is(readErr, ErrSSEFrameTooLarge) {
+				return readErr
 			}
-			return fmt.Errorf("deepseek web: read SSE stream: %w", err)
+			return fmt.Errorf("deepseek web: read SSE stream: %w", readErr)
 		}
+	}
+}
+
+func readSSELine(reader *bufio.Reader, limit int) ([]byte, error) {
+	var line []byte
+	for {
+		part, err := reader.ReadSlice('\n')
+		if len(line)+len(part) > limit {
+			return nil, ErrSSEFrameTooLarge
+		}
+		line = append(line, part...)
+		if err == nil {
+			return line, nil
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		if errors.Is(err, io.EOF) {
+			return line, io.EOF
+		}
+		return line, err
 	}
 }
