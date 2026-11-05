@@ -15,9 +15,9 @@ import (
 // AdaptiveProfile describes the request's routing objective. Token counts are
 // estimates used only for relative cost ranking; they are not billing records.
 type AdaptiveProfile struct {
-	TaskType               string
-	EstimatedInputTokens   int64
-	EstimatedOutputTokens  int64
+	TaskType              string
+	EstimatedInputTokens  int64
+	EstimatedOutputTokens int64
 }
 
 type providerPerformance struct {
@@ -27,8 +27,7 @@ type providerPerformance struct {
 }
 
 // AdaptiveScheduler adds outcome-driven latency/reliability ranking and
-// optional operator-supplied model pricing to the existing health-aware router.
-// The embedded Scheduler retains its administration and circuit-breaker API.
+// optional model pricing to the existing health-aware router.
 type AdaptiveScheduler struct {
 	*Scheduler
 	metricsMu sync.RWMutex
@@ -78,8 +77,8 @@ func (s *AdaptiveScheduler) SelectAdaptive(ctx context.Context, modelID string, 
 		s.mu.Lock()
 		cursor = s.cursor[modelID]
 		if cursor == nil {
-			s.cursor[modelID] = &atomic.Uint64{}
-			cursor = s.cursor[modelID]
+			cursor = &atomic.Uint64{}
+			s.cursor[modelID] = cursor
 		}
 		s.mu.Unlock()
 	}
@@ -100,37 +99,62 @@ func (s *AdaptiveScheduler) SelectAdaptive(ctx context.Context, modelID string, 
 	for _, candidate := range eligible {
 		stat := stats[candidate.Provider.ID()]
 		if stat.latencyEMA > 0 {
-			if stat.latencyEMA < minLatency { minLatency = stat.latencyEMA }
-			if stat.latencyEMA > maxLatency { maxLatency = stat.latencyEMA }
+			if stat.latencyEMA < minLatency {
+				minLatency = stat.latencyEMA
+			}
+			if stat.latencyEMA > maxLatency {
+				maxLatency = stat.latencyEMA
+			}
 		}
 		cost, known := estimatedCost(candidate, profile)
 		if known {
 			hasPriced = true
-			if cost < minCost { minCost = cost }
-			if cost > maxCost { maxCost = cost }
+			if cost < minCost {
+				minCost = cost
+			}
+			if cost > maxCost {
+				maxCost = cost
+			}
 		}
-		if candidate.Priority < minPriority { minPriority = candidate.Priority }
-		if candidate.Priority > maxPriority { maxPriority = candidate.Priority }
-		if candidate.Weight > maxWeight { maxWeight = candidate.Weight }
+		if candidate.Priority < minPriority {
+			minPriority = candidate.Priority
+		}
+		if candidate.Priority > maxPriority {
+			maxPriority = candidate.Priority
+		}
+		if candidate.Weight > maxWeight {
+			maxWeight = candidate.Weight
+		}
 	}
 
 	weights := objectiveWeights(profile.TaskType)
-	type scored struct { candidate Candidate; score float64 }
+	type scored struct {
+		candidate Candidate
+		score     float64
+	}
 	ranked := make([]scored, 0, len(eligible))
 	best := -1.0
 	for _, candidate := range eligible {
 		stat := stats[candidate.Provider.ID()]
 		latencyScore := 0.5
 		if stat.latencyEMA > 0 {
-			if minLatency == maxLatency { latencyScore = 1 } else {
+			if minLatency == maxLatency {
+				latencyScore = 1
+			} else {
 				latencyScore = 1 - float64(stat.latencyEMA-minLatency)/float64(maxLatency-minLatency)
 			}
 		}
 		reliabilityScore := float64(stat.successes+4*95/100) / float64(stat.samples+4)
-		if stat.samples == 0 { reliabilityScore = 0.95 }
+		if stat.samples == 0 {
+			reliabilityScore = 0.95
+		}
 		costScore := 0.5
 		if cost, known := estimatedCost(candidate, profile); known && hasPriced {
-			if maxCost == minCost { costScore = 1 } else { costScore = 1 - (cost-minCost)/(maxCost-minCost) }
+			if maxCost == minCost {
+				costScore = 1
+			} else {
+				costScore = 1 - (cost-minCost)/(maxCost-minCost)
+			}
 		}
 		priorityScore := 0.5
 		if maxPriority != minPriority {
@@ -141,84 +165,134 @@ func (s *AdaptiveScheduler) SelectAdaptive(ctx context.Context, modelID string, 
 			weights.reliability*reliabilityScore + weights.priority*priorityScore +
 			weights.weight*weightScore
 		ranked = append(ranked, scored{candidate: candidate, score: score})
-		if score > best { best = score }
+		if score > best {
+			best = score
+		}
 	}
-	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].score > ranked[j].score })
+	sort.SliceStable(ranked, func(i, j int) bool {
+		return ranked[i].score > ranked[j].score
+	})
 
 	// Rotate among near-equal top candidates so a single provider does not
 	// monopolize traffic when measured scores are effectively tied.
 	tied := make([]Candidate, 0, len(ranked))
 	for _, item := range ranked {
-		if best-item.score > 0.015 { break }
+		if best-item.score > 0.015 {
+			break
+		}
 		tied = append(tied, item.candidate)
 	}
-	if len(tied) == 1 { return tied[0].Provider, nil }
+	if len(tied) == 1 {
+		return tied[0].Provider, nil
+	}
 	totalWeight := uint64(0)
-	for _, candidate := range tied { totalWeight += uint64(candidate.Weight) }
-	if totalWeight == 0 { return tied[0].Provider, nil }
-	ticket := cursor.Add(1)-1
+	for _, candidate := range tied {
+		totalWeight += uint64(candidate.Weight)
+	}
+	if totalWeight == 0 {
+		return tied[0].Provider, nil
+	}
+	ticket := cursor.Add(1) - 1
 	ticket %= totalWeight
 	for _, candidate := range tied {
-		if ticket < uint64(candidate.Weight) { return candidate.Provider, nil }
+		if ticket < uint64(candidate.Weight) {
+			return candidate.Provider, nil
+		}
 		ticket -= uint64(candidate.Weight)
 	}
 	return tied[0].Provider, nil
 }
 
-// ReportOutcome feeds real request results back into future routing decisions.
-// Request outcomes update the reliability and latency model. Circuit-breaker
+// ReportOutcome updates the reliability and latency model. Circuit-breaker
 // state remains owned by Scheduler.ReportFailure to avoid double-counting.
 func (s *AdaptiveScheduler) ReportOutcome(providerID string, latency time.Duration, success bool) {
-	if providerID == "" { return }
+	if providerID == "" {
+		return
+	}
 	s.metricsMu.Lock()
 	stat := s.metrics[providerID]
 	stat.samples++
-	if success { stat.successes++ }
+	if success {
+		stat.successes++
+	}
 	if latency > 0 {
-		if stat.latencyEMA == 0 { stat.latencyEMA = latency } else {
+		if stat.latencyEMA == 0 {
+			stat.latencyEMA = latency
+		} else {
 			stat.latencyEMA = time.Duration(0.2*float64(latency) + 0.8*float64(stat.latencyEMA))
 		}
 	}
 	s.metrics[providerID] = stat
 	s.metricsMu.Unlock()
-
 }
 
-type objectiveWeight struct { cost, latency, reliability, priority, weight float64 }
+type objectiveWeight struct {
+	cost        float64
+	latency     float64
+	reliability float64
+	priority    float64
+	weight      float64
+}
 
 func objectiveWeights(task string) objectiveWeight {
 	switch task {
 	case "economy":
-		return objectiveWeight{cost: .50, latency: .15, reliability: .20, priority: .10, weight: .05}
+		return objectiveWeight{cost: 0.50, latency: 0.15, reliability: 0.20, priority: 0.10, weight: 0.05}
 	case "speed":
-		return objectiveWeight{cost: .10, latency: .50, reliability: .25, priority: .10, weight: .05}
+		return objectiveWeight{cost: 0.10, latency: 0.50, reliability: 0.25, priority: 0.10, weight: 0.05}
 	case "reasoning":
-		return objectiveWeight{cost: .10, latency: .20, reliability: .40, priority: .25, weight: .05}
+		return objectiveWeight{cost: 0.10, latency: 0.20, reliability: 0.40, priority: 0.25, weight: 0.05}
 	case "vision", "tools":
-		return objectiveWeight{cost: .15, latency: .20, reliability: .35, priority: .25, weight: .05}
+		return objectiveWeight{cost: 0.15, latency: 0.20, reliability: 0.35, priority: 0.25, weight: 0.05}
 	default:
-		return objectiveWeight{cost: .25, latency: .25, reliability: .30, priority: .15, weight: .05}
+		return objectiveWeight{cost: 0.25, latency: 0.25, reliability: 0.30, priority: 0.15, weight: 0.05}
 	}
 }
 
 func classifyTask(required []string) string {
-	for _, item := range required { if item == "reasoning" { return "reasoning" } }
-	for _, item := range required { if item == "vision" { return "vision" } }
-	for _, item := range required { if item == "tools" { return "tools" } }
-	for _, item := range required { if item == "streaming" { return "speed" } }
+	for _, item := range required {
+		if item == "reasoning" {
+			return "reasoning"
+		}
+	}
+	for _, item := range required {
+		if item == "vision" {
+			return "vision"
+		}
+	}
+	for _, item := range required {
+		if item == "tools" {
+			return "tools"
+		}
+	}
+	for _, item := range required {
+		if item == "streaming" {
+			return "speed"
+		}
+	}
 	return "balanced"
 }
 
 func normalizeProfile(profile AdaptiveProfile) AdaptiveProfile {
-	if profile.TaskType == "" { profile.TaskType = "balanced" }
-	if profile.EstimatedInputTokens <= 0 { profile.EstimatedInputTokens = 1024 }
-	if profile.EstimatedOutputTokens <= 0 { profile.EstimatedOutputTokens = 512 }
+	if profile.TaskType == "" {
+		profile.TaskType = "balanced"
+	}
+	if profile.EstimatedInputTokens <= 0 {
+		profile.EstimatedInputTokens = 1024
+	}
+	if profile.EstimatedOutputTokens <= 0 {
+		profile.EstimatedOutputTokens = 512
+	}
 	return profile
 }
 
 func estimatedCost(candidate Candidate, profile AdaptiveProfile) (float64, bool) {
-	if candidate.InputCostPerMillionUSD < 0 || candidate.OutputCostPerMillionUSD < 0 { return 0, false }
-	if candidate.InputCostPerMillionUSD == 0 && candidate.OutputCostPerMillionUSD == 0 { return 0, false }
+	if candidate.InputCostPerMillionUSD < 0 || candidate.OutputCostPerMillionUSD < 0 {
+		return 0, false
+	}
+	if candidate.InputCostPerMillionUSD == 0 && candidate.OutputCostPerMillionUSD == 0 {
+		return 0, false
+	}
 	input := float64(profile.EstimatedInputTokens) * candidate.InputCostPerMillionUSD / 1_000_000
 	output := float64(profile.EstimatedOutputTokens) * candidate.OutputCostPerMillionUSD / 1_000_000
 	return input + output, true
