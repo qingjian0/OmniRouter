@@ -158,7 +158,8 @@ All state-changing actions require the existing admin gateway authentication.
 - [x] Add restart restoration that requires exactly one active token and one active cookie credential for the account.
 - [x] Add account-wide revoke semantics for credentials, sessions, and account state.
 - [x] Add tests for malformed/foreign cookies, injection, duplicate cookies, missing session ID, input-buffer isolation, redaction header names, and typed upstream status mapping.
-- [ ] Add SQLite integration tests for authorize / restart restore / revoke and failure rollback.
+- [x] Add SQLite integration coverage for authorize / encrypted restart restore / revoke.
+- [ ] Execute the repository-wide CI suite and add failure-injection coverage for partial persistence rollback.
 - [ ] Register `deepseek-web` as a runtime provider only after the browser authorization and transport interfaces are ready.
 - Do not send upstream completion requests yet.
 
