@@ -80,6 +80,25 @@ jobs:
         run: |
           bash -n scripts/provider-smoke.sh
           bash -n scripts/termux-smoke.sh
+          bash -n scripts/backup-sqlite.sh
+          bash -n scripts/restore-sqlite.sh
+
+      - name: Test SQLite backup and restore scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v sqlite3 >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y sqlite3
+          fi
+          tmp="$(mktemp -d "${RUNNER_TEMP}/omni backup.XXXXXX")"
+          trap 'rm -rf "${tmp}"' EXIT
+          sqlite3 "${tmp}/source.db" 'CREATE TABLE sample(value TEXT NOT NULL); INSERT INTO sample VALUES("backup-value");'
+          bash scripts/backup-sqlite.sh "${tmp}/source.db" "${tmp}/backup.db"
+          sqlite3 "${tmp}/restored.db" 'CREATE TABLE sample(value TEXT NOT NULL); INSERT INTO sample VALUES("old-value");'
+          bash scripts/restore-sqlite.sh "${tmp}/restored.db" "${tmp}/backup.db"
+          test "$(sqlite3 "${tmp}/restored.db" 'SELECT value FROM sample;')" = "backup-value"
+          test -n "$(find "${tmp}" -name 'restored.db.pre-restore.*' -print -quit)"
 
       - name: Check workflow YAML syntax
         run: |
@@ -90,6 +109,7 @@ jobs:
           test -s docs/INSTALL.md
           test -s examples/omnirouter.env.example
           test -s docs/ANDROID-TERMUX-ACCEPTANCE.md
+          test -s docs/DATABASE-BACKUP-RESTORE.md
           test -s .github/workflows/live-provider-smoke.yml
           test -s .github/workflows/release.yml
 
@@ -162,11 +182,15 @@ jobs:
           cp README.md "dist/README.md"
           cp docs/INSTALL.md "dist/INSTALL.md"
           cp examples/omnirouter.env.example "dist/omnirouter.env.example"
+          cp docs/DATABASE-BACKUP-RESTORE.md "dist/DATABASE-BACKUP-RESTORE.md"
+          cp docs/PROVIDER-ACCEPTANCE.md "dist/PROVIDER-ACCEPTANCE.md"
+          cp docs/ANDROID-TERMUX-ACCEPTANCE.md "dist/ANDROID-TERMUX-ACCEPTANCE.md"
+          cp docs/V1-RELEASE-CHECKLIST.md "dist/V1-RELEASE-CHECKLIST.md"
           if [ "${GOOS}" = "windows" ]; then
-            (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example)
+            (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md)
             archive="dist/${name}.zip"
           else
             archive="dist/${name}.tar.gz"
-            tar -C dist -czf "${archive}" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example
+            tar -C dist -czf "${archive}" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md
           fi
           test -s "${archive}"
