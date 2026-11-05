@@ -62,6 +62,7 @@ func TestAdaptiveSchedulerFailureEntersCooldown(t *testing.T) {
 	p := adaptiveTestProvider{id: "p"}
 	s.Replace("m", []Candidate{{Provider: p, Enabled: true, Weight: 1}})
 	s.ReportOutcome("p", 100*time.Millisecond, false)
+	s.ReportFailure("p")
 	if _, err := s.Select(context.Background(), "m"); err == nil {
 		t.Fatal("expected failed provider to be excluded during cooldown")
 	}
