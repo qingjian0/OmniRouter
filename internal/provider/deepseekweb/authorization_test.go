@@ -82,9 +82,10 @@ func TestSafeFailure(t *testing.T) {
 		want error
 	}{
 		{http.StatusUnauthorized, ErrSessionExpired},
-		{http.StatusForbidden, ErrSessionExpired},
+		{http.StatusForbidden, ErrPolicyBlocked},
 		{http.StatusTooManyRequests, ErrRateLimited},
 		{http.StatusServiceUnavailable, ErrUpstreamChanged},
+		{http.StatusNotFound, ErrUpstreamChanged},
 		{http.StatusBadRequest, nil},
 	}
 	for _, test := range tests {
