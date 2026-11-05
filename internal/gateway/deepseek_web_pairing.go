@@ -86,7 +86,7 @@ func (h *Handler) deepSeekWebPairingPreflight(w http.ResponseWriter, r *http.Req
 	}
 	if requestedHeaders := strings.TrimSpace(r.Header.Get("Access-Control-Request-Headers")); requestedHeaders != "" {
 		for _, header := range strings.Split(requestedHeaders, ",") {
-			if !strings.EqualFold(strings.TrimSpace(header), "content-type") {
+			if !strings.EqualFold(strings.TrimSpace(header), "content-type") && !strings.EqualFold(strings.TrimSpace(header), "x-omni-pairing-nonce") {
 				writeError(w, http.StatusForbidden, "preflight_rejected", "requested CORS header is not allowed")
 				return
 			}
@@ -94,7 +94,7 @@ func (h *Handler) deepSeekWebPairingPreflight(w http.ResponseWriter, r *http.Req
 	}
 	h.setDeepSeekWebPairingCORS(w, origin)
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Omni-Pairing-Nonce")
 	w.Header().Set("Access-Control-Max-Age", "120")
 	if strings.EqualFold(r.Header.Get("Access-Control-Request-Private-Network"), "true") {
 		w.Header().Set("Access-Control-Allow-Private-Network", "true")
@@ -119,7 +119,7 @@ func (h *Handler) submitDeepSeekWebPairing(w http.ResponseWriter, r *http.Reques
 	h.setDeepSeekWebPairingCORS(w, origin)
 	w.Header().Set("Cache-Control", "no-store")
 
-	nonce := strings.TrimSpace(r.PathValue("nonce"))
+	nonce := strings.TrimSpace(r.Header.Get("X-Omni-Pairing-Nonce"))
 	if len(nonce) != 64 {
 		writeError(w, http.StatusBadRequest, "invalid_pairing", "pairing ticket is invalid or expired")
 		return
