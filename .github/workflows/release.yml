@@ -112,7 +112,8 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           name="omnirouter-${VERSION}-${GOOS}-${GOARCH}"
-          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X omnirouter/internal/version.Version=${VERSION} -X omnirouter/internal/version.Commit=${GITHUB_SHA}" -o "dist/${name}${EXT}" ./cmd/omnirouter
+          COMMIT="$(git rev-parse HEAD)"
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X omnirouter/internal/version.Version=${VERSION} -X omnirouter/internal/version.Commit=${COMMIT}" -o "dist/${name}${EXT}" ./cmd/omnirouter
           cp README.md "dist/README.md"
           cp docs/INSTALL.md "dist/INSTALL.md"
           cp examples/omnirouter.env.example "dist/omnirouter.env.example"
