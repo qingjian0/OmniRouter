@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>OmniRouter</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#20242b;background:#f4f6f8}*{box-sizing:border-box}body{margin:0}.top{background:#17212f;color:#fff;padding:22px max(20px,calc((100% - 960px)/2))}.wrap{max-width:960px;margin:28px auto;padding:0 18px}.panel{background:#fff;border:1px solid #e2e7ed;border-radius:12px;padding:20px;margin:14px 0}.muted{color:#687385}.status{display:inline-block;padding:4px 9px;border-radius:20px;background:#e7f6ed;color:#17683a;font-size:13px}button{border:0;border-radius:8px;background:#263b55;color:#fff;padding:10px 14px;cursor:pointer}input{padding:10px;border:1px solid #cbd3dc;border-radius:8px;width:min(100%,360px)}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7f9;padding:12px;border-radius:8px}
+  </style>
+</head>
+<body>
+  <header class="top"><strong>OmniRouter</strong><div class="muted" style="color:#bdc8d5">统一 AI 接入与调度网关</div></header>
+  <main class="wrap">
+    <section class="panel"><h2>服务状态</h2><p><span class="status" id="health">检查中</span></p><button id="refresh">刷新状态</button></section>
+    <section class="panel"><h2>已注册 Provider</h2><p class="muted">此页面只展示已配置的 Provider 元数据，不读取或展示凭据。</p><label>Gateway API Key（如已启用）</label><p><input id="key" type="password" autocomplete="off" placeholder="Bearer Token"></p><button id="load">加载 Provider</button><pre id="providers">尚未加载</pre></section>
+  </main>
+<script>
+const key=()=>document.querySelector('#key').value;
+async function refresh(){try{const r=await fetch('/healthz');const d=await r.json();document.querySelector('#health').textContent=d.status==='ok'?'运行正常':'异常'}catch{document.querySelector('#health').textContent='无法连接'}}
+async function load(){const out=document.querySelector('#providers');try{const r=await fetch('/admin/providers',{headers:{Authorization:'Bearer '+key()}});const d=await r.json();out.textContent=JSON.stringify(d,null,2)}catch(e){out.textContent=String(e)}}
+document.querySelector('#refresh').addEventListener('click',refresh);document.querySelector('#load').addEventListener('click',load);refresh();
+</script>
+</body></html>
