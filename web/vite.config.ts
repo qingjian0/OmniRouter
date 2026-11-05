@@ -14,7 +14,7 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: "../internal/admin/static",
+    outDir: "../internal/admin/static/dist",
     emptyOutDir: true,
     sourcemap: false
   }
