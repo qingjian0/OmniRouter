@@ -229,3 +229,62 @@ func TestStreamResponsesRejectsIncompleteTerminalEvent(t *testing.T) {
 		t.Fatalf("expected incomplete terminal event to fail closed, event=%#v err=%v", terminal, err)
 	}
 }
+
+
+func TestGenerateAnthropicUsesOfficialMessagesEndpoint(t *testing.T) {
+	var received map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/anthropic/v1/messages" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-secret" || r.Header.Get("anthropic-version") != "2023-06-01" {
+			t.Fatalf("missing Anthropic authorization/version headers")
+		}
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatal(err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","model":"deepseek-flash","content":[{"type":"text","text":"hello"}],"stop_reason":"end_turn","usage":{"input_tokens":4,"output_tokens":6}}`))
+	}))
+	defer server.Close()
+	p, err := New(Config{ID:"deepseek",APIKey:"test-secret",BaseURL:server.URL,Client:server.Client()})
+	if err != nil { t.Fatal(err) }
+	input := []byte(`{"model":"deepseek-flash","max_tokens":64,"messages":[{"role":"user","content":[{"type":"text","text":"hello"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}}]}],"thinking":{"type":"enabled"}}`)
+	response, err := p.GenerateAnthropic(context.Background(), &provider.Request{Model:"deepseek-flash",Input:input})
+	if err != nil { t.Fatal(err) }
+	if received["thinking"] == nil { t.Fatalf("thinking field was not preserved: %#v",received) }
+	messages, ok := received["messages"].([]any)
+	if !ok || len(messages) != 1 { t.Fatalf("Anthropic message blocks were not preserved: %#v",received["messages"]) }
+	if !strings.Contains(string(response.Output),`"stop_reason":"end_turn"`) { t.Fatalf("native response was not preserved: %s",response.Output) }
+}
+
+func TestStreamAnthropicUsesMessageStopTerminal(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type","text/event-stream")
+		_, _ = w.Write([]byte("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":2}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":3}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
+	}))
+	defer server.Close()
+	p, err := New(Config{ID:"deepseek",BaseURL:server.URL,Client:server.Client()})
+	if err != nil { t.Fatal(err) }
+	var events []provider.Event
+	err = p.StreamAnthropic(context.Background(), &provider.Request{Model:"deepseek-flash",Input:[]byte(`{"model":"deepseek-flash","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"stream":true}`),Stream:true},func(event provider.Event) error {
+		events = append(events,event)
+		return nil
+	})
+	if err != nil { t.Fatal(err) }
+	if len(events) != 4 || !events[3].Done || !events[3].ExplicitDone {
+		t.Fatalf("expected message_stop terminal event, got %#v",events)
+	}
+}
+
+func TestStreamAnthropicRejectsMissingMessageStop(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type","text/event-stream")
+		_, _ = w.Write([]byte("event: content_block_delta\ndata: {\"type\":\"content_block_delta\"}\n\n"))
+	}))
+	defer server.Close()
+	p, err := New(Config{ID:"deepseek",BaseURL:server.URL,Client:server.Client()})
+	if err != nil { t.Fatal(err) }
+	err = p.StreamAnthropic(context.Background(), &provider.Request{Model:"deepseek-flash",Input:[]byte(`{"model":"deepseek-flash","messages":[{"role":"user","content":"hello"}],"stream":true}`),Stream:true},func(provider.Event) error { return nil })
+	if err == nil { t.Fatal("expected stream without message_stop to fail closed") }
+}
