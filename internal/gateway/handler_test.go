@@ -61,7 +61,7 @@ func (p *usageTestProvider) GenerateResponses(context.Context, *provider.Request
 }
 
 func (p *usageTestProvider) StreamResponses(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
-	return emit(provider.Event{Data: []byte("event: response.completed\\ndata: {\\"type\\":\\"response.completed\\",\\"response\\":{\\"usage\\":{\\"input_tokens\\":2,\\"output_tokens\\":3,\\"total_tokens\\":5}}}\\n\\n"), Done: true, ExplicitDone: true})
+	return emit(provider.Event{Data: []byte("event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":3,\"total_tokens\":5}}}\n\n"), Done: true, ExplicitDone: true})
 }
 
 func (p *usageTestProvider) HealthCheck(context.Context) error { return nil }
