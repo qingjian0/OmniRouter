@@ -303,20 +303,29 @@ func (s *Scheduler) AddOrReplaceProviderModels(p provider.Provider, models []pro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.health, p.ID())
+	previousPricing := make(map[string]Candidate)
 	for modelID, candidates := range s.candidates {
 		kept := candidates[:0]
 		for _, candidate := range candidates {
-			if candidate.Provider == nil || candidate.Provider.ID() != p.ID() {
+			if candidate.Provider != nil && candidate.Provider.ID() == p.ID() {
+				previousPricing[modelID] = candidate
+			} else {
 				kept = append(kept, candidate)
 			}
 		}
 		s.candidates[modelID] = kept
 	}
 	for _, model := range models {
-		s.candidates[model.ID] = append(s.candidates[model.ID], Candidate{
+		candidate := Candidate{
 			Provider: p, Priority: priority, Weight: weight, Enabled: enabled,
 			Capabilities: append([]string(nil), model.Capabilities...), ContextLimit: model.ContextLimit,
-		})
+		}
+		if previous, ok := previousPricing[model.ID]; ok {
+			candidate.InputCostPerMillionUSD = previous.InputCostPerMillionUSD
+			candidate.OutputCostPerMillionUSD = previous.OutputCostPerMillionUSD
+			candidate.PricingKnown = previous.PricingKnown
+		}
+		s.candidates[model.ID] = append(s.candidates[model.ID], candidate)
 		sort.SliceStable(s.candidates[model.ID], func(i, j int) bool { return s.candidates[model.ID][i].Priority > s.candidates[model.ID][j].Priority })
 		if s.cursor[model.ID] == nil {
 			s.cursor[model.ID] = &atomic.Uint64{}
