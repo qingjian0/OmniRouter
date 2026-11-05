@@ -152,7 +152,6 @@ func validateNonNegative(field string, value *int64) error {
 	return nil
 }
 
-
 type responsesUsage struct {
 	Input  *int64 `json:"input_tokens"`
 	Output *int64 `json:"output_tokens"`

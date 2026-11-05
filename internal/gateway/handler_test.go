@@ -221,37 +221,51 @@ func TestStreamingUsageParseFailureDoesNotPersistInvalidCounts(t *testing.T) {
 	}
 }
 
-
 func TestGatewayResponsesAPIRecordsUsage(t *testing.T) {
 	p := &usageTestProvider{}
 	registry := provider.NewRegistry()
-	if err := registry.Register(p); err != nil { t.Fatal(err) }
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
 	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"model-test","input":"hello"}`))
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK { t.Fatalf("status=%d body=%s",response.Code,response.Body.String()) }
-	if !strings.Contains(response.Body.String(),`"status":"completed"`) { t.Fatalf("unexpected body: %s",response.Body.String()) }
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"status":"completed"`) {
+		t.Fatalf("unexpected body: %s", response.Body.String())
+	}
 }
 
 func TestGatewayResponsesStreamingPreservesSemanticTerminal(t *testing.T) {
 	p := &usageTestProvider{}
 	registry := provider.NewRegistry()
-	if err := registry.Register(p); err != nil { t.Fatal(err) }
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
 	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"model-test","input":"hello","stream":true}`))
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK { t.Fatalf("status=%d body=%s",response.Code,response.Body.String()) }
-	if !strings.Contains(response.Body.String(),"event: response.completed") { t.Fatalf("semantic terminal event was not forwarded: %s",response.Body.String()) }
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "event: response.completed") {
+		t.Fatalf("semantic terminal event was not forwarded: %s", response.Body.String())
+	}
 }
-
 
 func TestRequiredCapabilitiesIncludesDeepSeekReasoningMode(t *testing.T) {
 	got := requiredCapabilities([]byte(`{"model":"deepseek-flash","thinking":{"type":"enabled"},"reasoning_effort":"high","stream":true}`))
 	found := map[string]bool{}
-	for _, capability := range got { found[capability] = true }
-	for _, capability := range []string{"reasoning","streaming"} {
-		if !found[capability] { t.Errorf("missing required capability %q in %v",capability,got) }
+	for _, capability := range got {
+		found[capability] = true
+	}
+	for _, capability := range []string{"reasoning", "streaming"} {
+		if !found[capability] {
+			t.Errorf("missing required capability %q in %v", capability, got)
+		}
 	}
 }

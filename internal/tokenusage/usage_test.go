@@ -98,7 +98,6 @@ func TestParseAnthropicRejectsInt64TotalOverflow(t *testing.T) {
 	}
 }
 
-
 func TestParseResponsesUsageFromResponseAndStreamEvent(t *testing.T) {
 	response, err := ParseResponses([]byte(`{"usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20}}`), true)
 	if err != nil {

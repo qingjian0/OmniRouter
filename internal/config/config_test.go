@@ -43,7 +43,6 @@ func TestLoadRejectsInvalidModelCapabilityJSON(t *testing.T) {
 	}
 }
 
-
 func TestLoadDeepSeekProviderDefaults(t *testing.T) {
 	t.Setenv("OMNI_PROVIDERS", "")
 	t.Setenv("OMNI_PROVIDER_KIND", "deepseek")

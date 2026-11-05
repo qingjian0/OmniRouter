@@ -92,7 +92,9 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		}
 		kind := adapter.NormalizeKind(providerConfig.Kind)
 		baseURL := providerConfig.BaseURL
-		if strings.TrimSpace(baseURL) == "" { baseURL = adapter.DefaultBaseURL(kind) }
+		if strings.TrimSpace(baseURL) == "" {
+			baseURL = adapter.DefaultBaseURL(kind)
+		}
 		providerRecord := provider.ProviderConfig{ID: providerConfig.ID, Name: providerName, Kind: kind, BaseURL: baseURL, Enabled: true, Priority: providerConfig.Priority, Weight: providerConfig.Weight}
 		if err := providerRepo.Upsert(dbCtx, providerRecord); err != nil {
 			return nil, fmt.Errorf("persist provider %q metadata: %w", providerConfig.ID, err)

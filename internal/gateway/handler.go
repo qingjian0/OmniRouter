@@ -797,11 +797,17 @@ func requiredCapabilities(body []byte) []string {
 				case "tool_choice":
 					found["tools"] = true
 				case "reasoning_effort":
-					if level, ok := child.(string); ok && level != "" && level != "none" { found["reasoning"] = true }
+					if level, ok := child.(string); ok && level != "" && level != "none" {
+						found["reasoning"] = true
+					}
 				case "thinking":
-					if settings, ok := child.(map[string]any); ok && settings["type"] == "enabled" { found["reasoning"] = true }
+					if settings, ok := child.(map[string]any); ok && settings["type"] == "enabled" {
+						found["reasoning"] = true
+					}
 				case "reasoning":
-					if settings, ok := child.(map[string]any); ok && settings["effort"] != nil && settings["effort"] != "none" { found["reasoning"] = true }
+					if settings, ok := child.(map[string]any); ok && settings["effort"] != nil && settings["effort"] != "none" {
+						found["reasoning"] = true
+					}
 				case "response_format":
 					if child != nil {
 						found["json"] = true
@@ -1450,7 +1456,9 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kind := adapter.NormalizeKind(input.Kind)
-	if strings.TrimSpace(input.BaseURL) == "" { input.BaseURL = adapter.DefaultBaseURL(kind) }
+	if strings.TrimSpace(input.BaseURL) == "" {
+		input.BaseURL = adapter.DefaultBaseURL(kind)
+	}
 	if strings.TrimSpace(input.ID) == "" || strings.TrimSpace(input.BaseURL) == "" || (len(input.Models) == 0 && kind != adapter.KindDeepSeek) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "id and base_url are required; models are required except for DeepSeek model discovery")
 		return
@@ -1541,7 +1549,9 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	models, _ := upstream.ListModels(r.Context())
 	modelIDs := make([]string, 0, len(models))
-	for _, item := range models { modelIDs = append(modelIDs, item.ID) }
+	for _, item := range models {
+		modelIDs = append(modelIDs, item.ID)
+	}
 	if h.modelRepo != nil {
 		for _, item := range models {
 			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: input.ID, DisplayName: modelDisplayName(item), ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
