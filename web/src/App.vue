@@ -383,7 +383,7 @@ onMounted(refresh);
           </article>
           <article class="panel"><div class="panel-title"><h2>凭据列表</h2></div>
             <div class="table-wrap"><table><thead><tr><th>ID</th><th>账户</th><th>类型</th><th>状态</th><th>版本</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="c in credentials" :key="c.id"><td>{{ c.id }}</td><td>{{ c.account_id }}</td><td>{{ c.type }}</td><td><select :value="c.status" @change="setCredentialStatus(c, eventValue($event))"><option>active</option><option>disabled</option><option>revoked</option><option>expired</option></select></td><td>{{ c.version }}</td><td><button class="danger" @click="removeCredential(c)">删除</button></td></tr><tr v-if="!credentials.length"><td colspan="6" class="empty">暂无凭据或凭据 Vault 尚未启用</td></tr></tbody>
+              <tbody><tr v-for="c in credentials" :key="c.id"><td>{{ c.id }}</td><td>{{ c.account_id }}</td><td>{{ c.kind }}</td><td><select :value="c.status" @change="setCredentialStatus(c, eventValue($event))"><option>active</option><option>disabled</option><option>revoked</option><option>expired</option></select></td><td>{{ c.version }}</td><td><button class="danger" @click="removeCredential(c)">删除</button></td></tr><tr v-if="!credentials.length"><td colspan="6" class="empty">暂无凭据或凭据 Vault 尚未启用</td></tr></tbody>
             </table></div>
           </article>
         </section>
