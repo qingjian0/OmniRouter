@@ -269,3 +269,43 @@ func TestRequiredCapabilitiesIncludesDeepSeekReasoningMode(t *testing.T) {
 		}
 	}
 }
+
+
+type nativeAnthropicTestProvider struct {
+	*usageTestProvider
+}
+
+func (p *nativeAnthropicTestProvider) GenerateAnthropic(context.Context, *provider.Request) (*provider.Response, error) {
+	return &provider.Response{Model:"model-test",Output:[]byte(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"native"}],"usage":{"input_tokens":3,"output_tokens":4}}`)},nil
+}
+
+func (p *nativeAnthropicTestProvider) StreamAnthropic(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
+	if err := emit(provider.Event{Data:[]byte("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":2}}}\n\n")}); err != nil {
+		return err
+	}
+	return emit(provider.Event{Data:[]byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"),Done:true,ExplicitDone:true})
+}
+
+func TestGatewayUsesNativeAnthropicProviderWhenAvailable(t *testing.T) {
+	p := &nativeAnthropicTestProvider{usageTestProvider:&usageTestProvider{}}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil { t.Fatal(err) }
+	handler := NewHandlerWithFullRepositories(registry,"",nil,nil,nil,nil,nil,nil,nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost,"/v1/messages",strings.NewReader(`{"model":"model-test","max_tokens":32,"messages":[{"role":"user","content":"hello"}]}`))
+	handler.ServeHTTP(response,request)
+	if response.Code != http.StatusOK { t.Fatalf("status=%d body=%s",response.Code,response.Body.String()) }
+	if !strings.Contains(response.Body.String(),`"text":"native"`) { t.Fatalf("native Anthropic response was not forwarded: %s",response.Body.String()) }
+}
+
+func TestGatewayStreamsNativeAnthropicEvents(t *testing.T) {
+	p := &nativeAnthropicTestProvider{usageTestProvider:&usageTestProvider{}}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil { t.Fatal(err) }
+	handler := NewHandlerWithFullRepositories(registry,"",nil,nil,nil,nil,nil,nil,nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost,"/v1/messages",strings.NewReader(`{"model":"model-test","max_tokens":32,"stream":true,"messages":[{"role":"user","content":"hello"}]}`))
+	handler.ServeHTTP(response,request)
+	if response.Code != http.StatusOK { t.Fatalf("status=%d body=%s",response.Code,response.Body.String()) }
+	if !strings.Contains(response.Body.String(),"event: message_stop") { t.Fatalf("native message_stop was not forwarded: %s",response.Body.String()) }
+}
