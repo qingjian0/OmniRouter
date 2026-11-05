@@ -146,6 +146,23 @@ func (s *AuthorizationService) Revoke(ctx context.Context, accountID string) err
 // requires exactly one active access token and one active cookie credential
 // for the account; incomplete or ambiguous pairs fail closed.
 func (s *AuthorizationService) LoadAuthorization(ctx context.Context, accountID string) (AuthorizationMaterial, error) {
+	owner, err := s.accounts.Get(ctx, accountID)
+	if err != nil || owner.Status != account.StatusActive {
+		return AuthorizationMaterial{}, ErrAuthorizationRequired
+	}
+	accountSessions, err := s.sessions.List(ctx, accountID)
+	if err != nil {
+		return AuthorizationMaterial{}, err
+	}
+	activeSessions := 0
+	for _, item := range accountSessions {
+		if item.Status == session.StatusActive {
+			activeSessions++
+		}
+	}
+	if activeSessions != 1 {
+		return AuthorizationMaterial{}, ErrAuthorizationRequired
+	}
 	items, err := s.vault.ListContext(ctx, accountID)
 	if err != nil {
 		return AuthorizationMaterial{}, err
