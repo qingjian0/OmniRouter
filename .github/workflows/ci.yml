@@ -83,6 +83,8 @@ jobs:
           bash -n scripts/termux-smoke.sh
           bash -n scripts/backup-sqlite.sh
           bash -n scripts/restore-sqlite.sh
+          node --check browser-extension/popup.js
+          node -e 'JSON.parse(require("fs").readFileSync("browser-extension/manifest.json", "utf8"))'
 
       - name: Test SQLite backup and restore scripts
         shell: bash
@@ -112,6 +114,10 @@ jobs:
           test -s docs/ANDROID-TERMUX-ACCEPTANCE.md
           test -s docs/DATABASE-BACKUP-RESTORE.md
           test -s docs/DEEPSEEK-ADAPTER.md
+          test -s browser-extension/manifest.json
+          test -s browser-extension/popup.html
+          test -s browser-extension/popup.js
+          test -s browser-extension/README.md
           test -s scripts/deepseek-smoke.sh
           test -s .github/workflows/deepseek-live-smoke.yml
           test -s .github/workflows/live-provider-smoke.yml
