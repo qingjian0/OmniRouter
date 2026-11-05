@@ -232,6 +232,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 					Capabilities: caps, ContextLimit: m.ContextLimit,
 					InputCostPerMillionUSD: modelPrice(m.InputCostPerMillionUSD),
 					OutputCostPerMillionUSD: modelPrice(m.OutputCostPerMillionUSD),
+					PricingKnown: m.InputCostPerMillionUSD != nil || m.OutputCostPerMillionUSD != nil,
 				})
 			}
 		}
