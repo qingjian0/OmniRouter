@@ -75,6 +75,19 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
       intended Termux artifact; this is not an Android APK.
 - [ ] Do not publish V1 as supporting Android/Termux until the device gate above passes.
 
+## Product scope gaps requiring explicit V1 sign-off
+
+The implementation currently has an OpenAI-compatible outbound Provider adapter.
+Anthropic Messages and Gemini are inbound protocol adapters translated to that
+upstream; direct native Anthropic/Gemini outbound API adapters are not yet
+implemented. Independent web-session adapters are also not implemented.
+Scheduling currently provides priority/weight selection, health scoring, and
+cooldown/failover foundations, not full task/cost/latency adaptive optimization.
+
+Before tagging V1.0.0, either implement and accept these capabilities or
+explicitly approve moving them to V1.1. Do not infer that inbound protocol
+translation means native upstream API support.
+
 ## Publication
 
 - [ ] Final CI is green on the exact release commit; current development CI is green but no release candidate has been cut.
