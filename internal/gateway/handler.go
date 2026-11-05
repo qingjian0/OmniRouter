@@ -1412,6 +1412,8 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	models, _ := upstream.ListModels(r.Context())
+	modelIDs := make([]string, 0, len(models))
+	for _, item := range models { modelIDs = append(modelIDs, item.ID) }
 	if h.modelRepo != nil {
 		for _, item := range models {
 			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: input.ID, DisplayName: modelDisplayName(item), ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
@@ -1437,7 +1439,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	}); ok {
 		manager.AddOrReplaceProvider(upstream, input.Models, input.Priority, input.Weight, enabled)
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": upstream.ID(), "name": upstream.Name(), "kind": kind, "models": input.Models, "model_capabilities": input.ModelCapabilities, "model_context_limits": input.ModelContextLimits, "enabled": enabled, "persisted": h.providerRepo != nil, "credentials_persisted": h.providerRepo != nil && (input.APIKey == "" || (h.credentials != nil && h.credentials.Persistent()))})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": upstream.ID(), "name": upstream.Name(), "kind": kind, "models": modelIDs, "model_capabilities": input.ModelCapabilities, "model_context_limits": input.ModelContextLimits, "enabled": enabled, "persisted": h.providerRepo != nil, "credentials_persisted": h.providerRepo != nil && (input.APIKey == "" || (h.credentials != nil && h.credentials.Persistent()))})
 }
 
 func (h *Handler) refreshProviderModels(w http.ResponseWriter, r *http.Request) {
