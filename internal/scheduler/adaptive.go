@@ -166,8 +166,8 @@ func (s *AdaptiveScheduler) SelectAdaptive(ctx context.Context, modelID string, 
 }
 
 // ReportOutcome feeds real request results back into future routing decisions.
-// Successful requests refresh the positive health cache; failures enter the
-// existing exponential circuit-breaker cooldown.
+// Request outcomes update the reliability and latency model. Circuit-breaker
+// state remains owned by Scheduler.ReportFailure to avoid double-counting.
 func (s *AdaptiveScheduler) ReportOutcome(providerID string, latency time.Duration, success bool) {
 	if providerID == "" { return }
 	s.metricsMu.Lock()
