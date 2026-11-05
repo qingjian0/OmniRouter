@@ -407,7 +407,7 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	required := requiredCapabilities(body)
-	profile := adaptiveProfileForRequest(r, body, required)
+	profile = adaptiveProfileForRequest(r, body, required)
 	p, err := h.selectProviderFor(r.Context(), model, required, profile)
 	if err != nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = model })
