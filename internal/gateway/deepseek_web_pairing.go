@@ -184,6 +184,9 @@ func (h *Handler) submitDeepSeekWebPairing(w http.ResponseWriter, r *http.Reques
 		for i := range payload.Cookies {
 			payload.Cookies[i].Value = ""
 		}
+		for i := range cookies {
+			cookies[i].Value = ""
+		}
 	}()
 	authorization, err := h.deepSeekWebAuthorization.Authorize(r.Context(), target.ProviderID, target.AccountName, deepseekweb.AuthorizationInput{Token: payload.Token, Cookies: cookies}, nil)
 	if err != nil {
