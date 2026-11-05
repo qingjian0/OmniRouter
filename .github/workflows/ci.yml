@@ -42,7 +42,9 @@ jobs:
           fi
 
       - name: Check smoke-test script syntax
-        run: bash -n scripts/provider-smoke.sh
+        run: |
+          bash -n scripts/provider-smoke.sh
+          bash -n scripts/termux-smoke.sh
 
       - name: Unit and integration tests
         run: go test ./...
