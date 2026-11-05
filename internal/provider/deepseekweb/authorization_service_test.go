@@ -2,6 +2,7 @@ package deepseekweb
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -22,7 +23,7 @@ func TestAuthorizationServicePersistsRestoresAndRevokes(t *testing.T) {
 	}
 	defer runtime.Close()
 
-	encryptor, err := security.NewEncryptor("deepseek-web-test-encryption-key")
+	encryptor, err := security.NewEncryptor(base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	if err != nil {
 		t.Fatal(err)
 	}
