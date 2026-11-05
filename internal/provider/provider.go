@@ -59,3 +59,10 @@ type ResponsesProvider interface {
 	GenerateResponses(context.Context, *Request) (*Response, error)
 	StreamResponses(context.Context, *Request, func(Event) error) error
 }
+
+// AnthropicProvider is an optional native Messages API capability. Adapters
+// without it can continue to use the gateway's protocol translation layer.
+type AnthropicProvider interface {
+	GenerateAnthropic(context.Context, *Request) (*Response, error)
+	StreamAnthropic(context.Context, *Request, func(Event) error) error
+}
