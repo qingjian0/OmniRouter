@@ -8,13 +8,28 @@ import (
 	"omnirouter/internal/provider"
 )
 
-type adaptiveTestProvider struct { id string }
-func (p adaptiveTestProvider) ID() string { return p.id }
+type adaptiveTestProvider struct {
+	id string
+}
+
+func (p adaptiveTestProvider) ID() string   { return p.id }
 func (p adaptiveTestProvider) Name() string { return p.id }
-func (p adaptiveTestProvider) ListModels(context.Context) ([]provider.Model, error) { return nil, nil }
-func (p adaptiveTestProvider) Generate(context.Context, *provider.Request) (*provider.Response, error) { return &provider.Response{}, nil }
-func (p adaptiveTestProvider) Stream(context.Context, *provider.Request, func(provider.Event) error) error { return nil }
-func (p adaptiveTestProvider) HealthCheck(context.Context) error { return nil }
+
+func (p adaptiveTestProvider) ListModels(context.Context) ([]provider.Model, error) {
+	return nil, nil
+}
+
+func (p adaptiveTestProvider) Generate(context.Context, *provider.Request) (*provider.Response, error) {
+	return &provider.Response{}, nil
+}
+
+func (p adaptiveTestProvider) Stream(context.Context, *provider.Request, func(provider.Event) error) error {
+	return nil
+}
+
+func (p adaptiveTestProvider) HealthCheck(context.Context) error {
+	return nil
+}
 
 func TestAdaptiveSchedulerPrefersLowerCostForEconomy(t *testing.T) {
 	s := NewAdaptive(time.Minute)
@@ -24,9 +39,14 @@ func TestAdaptiveSchedulerPrefersLowerCostForEconomy(t *testing.T) {
 		{Provider: cheap, Enabled: true, Weight: 1, InputCostPerMillionUSD: 1, OutputCostPerMillionUSD: 2},
 		{Provider: expensive, Enabled: true, Weight: 1, InputCostPerMillionUSD: 8, OutputCostPerMillionUSD: 12},
 	})
+
 	got, err := s.SelectAdaptive(context.Background(), "m", nil, AdaptiveProfile{TaskType: "economy"})
-	if err != nil { t.Fatal(err) }
-	if got.ID() != "cheap" { t.Fatalf("selected %q, want cheap", got.ID()) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID() != "cheap" {
+		t.Fatalf("selected %q, want cheap", got.ID())
+	}
 }
 
 func TestAdaptiveSchedulerLearnsLatency(t *testing.T) {
@@ -39,22 +59,32 @@ func TestAdaptiveSchedulerLearnsLatency(t *testing.T) {
 	})
 	s.ReportOutcome("slow", 2*time.Second, true)
 	s.ReportOutcome("fast", 100*time.Millisecond, true)
+
 	got, err := s.SelectAdaptive(context.Background(), "m", nil, AdaptiveProfile{TaskType: "speed"})
-	if err != nil { t.Fatal(err) }
-	if got.ID() != "fast" { t.Fatalf("selected %q, want fast", got.ID()) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID() != "fast" {
+		t.Fatalf("selected %q, want fast", got.ID())
+	}
 }
 
 func TestAdaptiveSchedulerFiltersCapabilitiesBeforeScoring(t *testing.T) {
 	s := NewAdaptive(time.Minute)
-	text := adaptiveTestProvider{id: "text"}
-	vision := adaptiveTestProvider{id: "vision"}
+	textProvider := adaptiveTestProvider{id: "text"}
+	visionProvider := adaptiveTestProvider{id: "vision"}
 	s.Replace("m", []Candidate{
-		{Provider: text, Enabled: true, Weight: 1, Capabilities: []string{"chat"}},
-		{Provider: vision, Enabled: true, Weight: 1, Capabilities: []string{"chat", "vision"}},
+		{Provider: textProvider, Enabled: true, Weight: 1, Capabilities: []string{"chat"}},
+		{Provider: visionProvider, Enabled: true, Weight: 1, Capabilities: []string{"chat", "vision"}},
 	})
+
 	got, err := s.SelectWithRequirements(context.Background(), "m", []string{"vision"})
-	if err != nil { t.Fatal(err) }
-	if got.ID() != "vision" { t.Fatalf("selected %q, want vision", got.ID()) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID() != "vision" {
+		t.Fatalf("selected %q, want vision", got.ID())
+	}
 }
 
 func TestAdaptiveSchedulerFailureEntersCooldown(t *testing.T) {
@@ -63,6 +93,7 @@ func TestAdaptiveSchedulerFailureEntersCooldown(t *testing.T) {
 	s.Replace("m", []Candidate{{Provider: p, Enabled: true, Weight: 1}})
 	s.ReportOutcome("p", 100*time.Millisecond, false)
 	s.ReportFailure("p")
+
 	if _, err := s.Select(context.Background(), "m"); err == nil {
 		t.Fatal("expected failed provider to be excluded during cooldown")
 	}
