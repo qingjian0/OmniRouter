@@ -72,7 +72,7 @@ export OMNI_PROVIDERS='[
 
 ### Provider adapters
 
-- DeepSeek official API: dedicated `kind: deepseek` adapter, official model discovery, current V4 model metadata, thinking/reasoning field pass-through, and SSE handling. See [DeepSeek adapter guide](docs/DEEPSEEK-ADAPTER.md) and the manual [DeepSeek live acceptance workflow](.github/workflows/deepseek-live-smoke.yml).
+- DeepSeek official API: dedicated `kind: deepseek` adapter, official model discovery, current V4 model metadata, native Chat Completions, Responses API and Anthropic Messages transports, thinking/reasoning field pass-through, and protocol-specific SSE handling. See [DeepSeek adapter guide](docs/DEEPSEEK-ADAPTER.md) and the manual [DeepSeek live acceptance workflow](.github/workflows/deepseek-live-smoke.yml).
 - Generic OpenAI-compatible endpoints remain available as `kind: openai-compatible`.
 - DeepSeek consumer-web login/session support is a separate future adapter and is not part of the official API adapter.
 
@@ -83,6 +83,7 @@ export OMNI_PROVIDERS='[
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 - `POST /v1/responses` (native DeepSeek Responses API)
+- `POST /v1/messages` (native DeepSeek Anthropic Messages when supported; OpenAI-compatible translation fallback otherwise)
 - `POST /v1/messages`（Anthropic 文本及非流式工具调用子集；文本 SSE；流式工具调用暂不支持）
 - `POST /v1beta/models/{model}:generateContent`（Gemini 文本及非流式函数调用子集）
 - `POST /v1beta/models/{model}:streamGenerateContent`（Gemini 文本 SSE 子集；流式函数调用暂不支持）
