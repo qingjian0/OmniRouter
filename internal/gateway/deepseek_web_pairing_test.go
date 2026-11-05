@@ -173,3 +173,13 @@ func TestDeepSeekWebPairingPreflightAllowsOnlyConfiguredExtension(t *testing.T) 
 		t.Fatal("preflight did not return the configured extension origin")
 	}
 }
+
+func TestDeepSeekWebPairingCreationRequiresConfiguredGatewayKey(t *testing.T) {
+	h := newDeepSeekWebPairingTestHandler(t)
+	request := httptest.NewRequest(http.MethodPost, "/admin/deepseek-web/pairings", strings.NewReader(`{"provider_id":"ds-web","account_name":"test"}`))
+	response := httptest.NewRecorder()
+	h.createDeepSeekWebPairing(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+}
