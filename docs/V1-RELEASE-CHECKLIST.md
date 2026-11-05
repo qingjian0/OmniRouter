@@ -59,6 +59,8 @@ one category must not be represented as passing another.
       `/anthropic/v1/messages` and uses the native `message_stop` SSE terminal.
 - [ ] Real-key acceptance for Responses API non-streaming, streaming, completion,
       incomplete, failed, and cancellation paths.
+- [ ] Real-key acceptance for native Anthropic Messages non-streaming, streaming,
+      thinking, tool calls, image input, usage, and `message_stop` handling.
 
 - [x] An opt-in live smoke script is provided at `scripts/provider-smoke.sh`; it tests
       OpenAI, Anthropic Messages, and Gemini text routes in non-streaming and SSE
