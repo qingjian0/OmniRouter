@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"net/http"
+	"strings"
 	"time"
 
 	"omnirouter/internal/account"
@@ -279,5 +279,7 @@ func (a *App) Run(ctx context.Context) error {
 }
 
 func domainModelFromProvider(item provider.Model, providerID string) domainmodel.Model {
-	return domainmodel.Model{ID: item.ID, ProviderID: providerID, DisplayName: item.ID, ContextLimit: item.ContextLimit, Enabled: true}
+	displayName := item.Name
+	if strings.TrimSpace(displayName) == "" { displayName = item.ID }
+	return domainmodel.Model{ID: item.ID, ProviderID: providerID, DisplayName: displayName, ContextLimit: item.ContextLimit, Enabled: true}
 }
