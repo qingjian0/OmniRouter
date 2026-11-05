@@ -230,9 +230,9 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 				candidates[m.ID] = append(candidates[m.ID], scheduler.Candidate{
 					Provider: upstream, Priority: priority, Weight: weight, Enabled: true,
 					Capabilities: caps, ContextLimit: m.ContextLimit,
-					InputCostPerMillionUSD: modelPrice(m.InputCostPerMillionUSD),
+					InputCostPerMillionUSD:  modelPrice(m.InputCostPerMillionUSD),
 					OutputCostPerMillionUSD: modelPrice(m.OutputCostPerMillionUSD),
-					PricingKnown: m.InputCostPerMillionUSD != nil || m.OutputCostPerMillionUSD != nil,
+					PricingKnown:            m.InputCostPerMillionUSD != nil || m.OutputCostPerMillionUSD != nil,
 				})
 			}
 		}
