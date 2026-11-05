@@ -1989,7 +1989,6 @@ func (h *Handler) setModelStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": r.PathValue("id"), "provider_id": input.ProviderID, "enabled": input.Enabled, "persisted": true})
 }
 
-
 func (h *Handler) setModelPricing(w http.ResponseWriter, r *http.Request) {
 	if h.modelRepo == nil {
 		writeError(w, http.StatusServiceUnavailable, "storage_unavailable", "model repository is unavailable")
