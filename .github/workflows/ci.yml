@@ -46,6 +46,12 @@ jobs:
           bash -n scripts/provider-smoke.sh
           bash -n scripts/termux-smoke.sh
 
+      - name: Check release package inputs
+        run: |
+          test -s docs/INSTALL.md
+          test -s examples/omnirouter.env.example
+          test -s docs/ANDROID-TERMUX-ACCEPTANCE.md
+
       - name: Unit and integration tests
         run: go test ./...
 
