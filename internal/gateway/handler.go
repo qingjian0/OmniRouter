@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"omnirouter/internal/account"
+	"omnirouter/internal/adapter"
 	"omnirouter/internal/admin"
 	"omnirouter/internal/apikey"
 	"omnirouter/internal/credential"
@@ -25,7 +26,6 @@ import (
 	"omnirouter/internal/protocol/anthropic"
 	"omnirouter/internal/protocol/gemini"
 	"omnirouter/internal/provider"
-	openai "omnirouter/internal/provider/openai"
 	"omnirouter/internal/session"
 	"omnirouter/internal/storage"
 	"omnirouter/internal/tokenusage"
@@ -1300,10 +1300,11 @@ func (h *Handler) adminProviders(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"data": items, "persisted": false})
 }
 
-// createProvider installs an OpenAI-compatible provider and persists its metadata.
+// createProvider installs a typed upstream adapter and persists its metadata.
 // Upstream secrets are stored only through the encrypted credential vault.
 func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	var input struct {
+		Kind               string              `json:"kind"`
 		ID                 string              `json:"id"`
 		Name               string              `json:"name"`
 		BaseURL            string              `json:"base_url"`
@@ -1319,11 +1320,13 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid provider JSON")
 		return
 	}
-	if strings.TrimSpace(input.ID) == "" || strings.TrimSpace(input.BaseURL) == "" || len(input.Models) == 0 {
-		writeError(w, http.StatusBadRequest, "invalid_request_error", "id, base_url and at least one model are required")
+	kind := adapter.NormalizeKind(input.Kind)
+	if strings.TrimSpace(input.BaseURL) == "" { input.BaseURL = adapter.DefaultBaseURL(kind) }
+	if strings.TrimSpace(input.ID) == "" || strings.TrimSpace(input.BaseURL) == "" || (len(input.Models) == 0 && kind != adapter.KindDeepSeek) {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "id and base_url are required; models are required except for DeepSeek model discovery")
 		return
 	}
-	upstream, err := openai.New(openai.Config{ID: input.ID, Name: input.Name, BaseURL: input.BaseURL, APIKey: input.APIKey, Models: input.Models, ModelCapabilities: input.ModelCapabilities, ModelContextLimits: input.ModelContextLimits})
+	upstream, err := adapter.New(adapter.Config{Kind: kind, ID: input.ID, Name: input.Name, BaseURL: input.BaseURL, APIKey: input.APIKey, Models: input.Models, ModelCapabilities: input.ModelCapabilities, ModelContextLimits: input.ModelContextLimits})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
@@ -1343,7 +1346,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusServiceUnavailable, "credential_persistence_required", "configure persistent credential encryption before storing provider API keys")
 			return
 		}
-		record := provider.ProviderConfig{ID: input.ID, Name: providerName, Kind: "openai-compatible", BaseURL: input.BaseURL, Enabled: enabled, Priority: input.Priority, Weight: input.Weight}
+		record := provider.ProviderConfig{ID: input.ID, Name: providerName, Kind: kind, BaseURL: input.BaseURL, Enabled: enabled, Priority: input.Priority, Weight: input.Weight}
 		if err := h.providerRepo.Upsert(r.Context(), record); err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "could not persist provider metadata")
 			return
@@ -1397,7 +1400,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusConflict, "credential_error", "stored provider credential is unavailable")
 				return
 			}
-			upstream, err = openai.New(openai.Config{ID: input.ID, Name: providerName, BaseURL: input.BaseURL, APIKey: string(secret), Models: input.Models, ModelCapabilities: input.ModelCapabilities, ModelContextLimits: input.ModelContextLimits})
+			upstream, err = adapter.New(adapter.Config{Kind: kind, ID: input.ID, Name: providerName, BaseURL: input.BaseURL, APIKey: string(secret), Models: input.Models, ModelCapabilities: input.ModelCapabilities, ModelContextLimits: input.ModelContextLimits})
 			for i := range secret {
 				secret[i] = 0
 			}
@@ -1433,7 +1436,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	}); ok {
 		manager.AddOrReplaceProvider(upstream, input.Models, input.Priority, input.Weight, enabled)
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": upstream.ID(), "name": upstream.Name(), "models": input.Models, "model_capabilities": input.ModelCapabilities, "model_context_limits": input.ModelContextLimits, "enabled": enabled, "persisted": h.providerRepo != nil, "credentials_persisted": h.providerRepo != nil && (input.APIKey == "" || (h.credentials != nil && h.credentials.Persistent()))})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": upstream.ID(), "name": upstream.Name(), "kind": kind, "models": input.Models, "model_capabilities": input.ModelCapabilities, "model_context_limits": input.ModelContextLimits, "enabled": enabled, "persisted": h.providerRepo != nil, "credentials_persisted": h.providerRepo != nil && (input.APIKey == "" || (h.credentials != nil && h.credentials.Persistent()))})
 }
 
 func (h *Handler) setProviderPolicy(w http.ResponseWriter, r *http.Request) {
