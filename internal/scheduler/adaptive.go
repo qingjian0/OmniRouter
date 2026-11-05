@@ -144,16 +144,21 @@ func (s *AdaptiveScheduler) SelectAdaptive(ctx context.Context, modelID string, 
 				latencyScore = 1 - float64(stat.latencyEMA-minLatency)/float64(maxLatency-minLatency)
 			}
 		}
-		reliabilityScore := float64(stat.successes+4*95/100) / float64(stat.samples+4)
-		if stat.samples == 0 {
-			reliabilityScore = 0.95
-		}
+		// Four virtual observations at 95% success provide a stable prior
+		// without integer truncation (4*95/100 must be evaluated as float).
+		reliabilityScore := (float64(stat.successes) + 4*0.95) / (float64(stat.samples) + 4)
 		costScore := 0.5
-		if cost, known := estimatedCost(candidate, profile); known && hasPriced {
-			if maxCost == minCost {
-				costScore = 1
+		if hasPriced {
+			if cost, known := estimatedCost(candidate, profile); known {
+				if maxCost == minCost {
+					costScore = 1
+				} else {
+					costScore = 1 - (cost-minCost)/(maxCost-minCost)
+				}
 			} else {
-				costScore = 1 - (cost-minCost)/(maxCost-minCost)
+				// Unknown pricing must never be interpreted as free or beat a
+				// provider with an explicit price under a cost-aware objective.
+				costScore = 0
 			}
 		}
 		priorityScore := 0.5
@@ -287,13 +292,17 @@ func normalizeProfile(profile AdaptiveProfile) AdaptiveProfile {
 }
 
 func estimatedCost(candidate Candidate, profile AdaptiveProfile) (float64, bool) {
-	if candidate.InputCostPerMillionUSD < 0 || candidate.OutputCostPerMillionUSD < 0 {
+	inputPrice := candidate.InputCostPerMillionUSD
+	outputPrice := candidate.OutputCostPerMillionUSD
+	if math.IsNaN(inputPrice) || math.IsInf(inputPrice, 0) ||
+		math.IsNaN(outputPrice) || math.IsInf(outputPrice, 0) ||
+		inputPrice < 0 || outputPrice < 0 {
 		return 0, false
 	}
-	if candidate.InputCostPerMillionUSD == 0 && candidate.OutputCostPerMillionUSD == 0 {
+	if inputPrice == 0 && outputPrice == 0 {
 		return 0, false
 	}
-	input := float64(profile.EstimatedInputTokens) * candidate.InputCostPerMillionUSD / 1_000_000
-	output := float64(profile.EstimatedOutputTokens) * candidate.OutputCostPerMillionUSD / 1_000_000
+	input := float64(profile.EstimatedInputTokens) * inputPrice / 1_000_000
+	output := float64(profile.EstimatedOutputTokens) * outputPrice / 1_000_000
 	return input + output, true
 }
