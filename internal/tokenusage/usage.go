@@ -151,3 +151,45 @@ func validateNonNegative(field string, value *int64) error {
 	}
 	return nil
 }
+
+
+type responsesUsage struct {
+	Input  *int64 `json:"input_tokens"`
+	Output *int64 `json:"output_tokens"`
+	Total  *int64 `json:"total_tokens"`
+}
+
+// ParseResponses extracts OpenAI Responses API usage from either a response
+// object or a response.completed SSE event. It never estimates missing values.
+func ParseResponses(data []byte, final bool) (*Usage, error) {
+	var envelope struct {
+		Usage    *responsesUsage `json:"usage"`
+		Response *struct {
+			Usage *responsesUsage `json:"usage"`
+		} `json:"response"`
+	}
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+	if err := json.Unmarshal(trimmed, &envelope); err != nil {
+		return nil, fmt.Errorf("decode Responses API usage envelope: %w", err)
+	}
+	usage := envelope.Usage
+	if usage == nil && envelope.Response != nil {
+		usage = envelope.Response.Usage
+	}
+	if usage == nil {
+		return nil, nil
+	}
+	if err := validateNonNegative("input_tokens", usage.Input); err != nil {
+		return nil, err
+	}
+	if err := validateNonNegative("output_tokens", usage.Output); err != nil {
+		return nil, err
+	}
+	if err := validateNonNegative("total_tokens", usage.Total); err != nil {
+		return nil, err
+	}
+	return &Usage{InputTokens: usage.Input, OutputTokens: usage.Output, TotalTokens: usage.Total, Source: "provider", Final: final}, nil
+}
