@@ -21,6 +21,7 @@ type Candidate struct {
 	ContextLimit            int
 	InputCostPerMillionUSD  float64
 	OutputCostPerMillionUSD float64
+	PricingKnown            bool
 }
 
 type Scheduler struct {
