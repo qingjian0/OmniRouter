@@ -39,6 +39,9 @@ func TestNewDeepSeekWebCreatesInertRegistrationProvider(t *testing.T) {
 	if DefaultBaseURL(KindDeepSeekWeb) != deepseekweb.DefaultOrigin {
 		t.Fatalf("unexpected DeepSeek Web origin: %q", DefaultBaseURL(KindDeepSeekWeb))
 	}
+	if _, err := New(Config{Kind: KindDeepSeekWeb, ID: "ds-web", APIKey: "unexpected"}); err == nil {
+		t.Fatal("DeepSeek Web registration shell must reject API keys")
+	}
 	if err := upstream.HealthCheck(context.Background()); err == nil {
 		t.Fatal("inert registration shell must not claim a healthy upstream session")
 	}
