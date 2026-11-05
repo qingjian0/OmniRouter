@@ -388,7 +388,7 @@ onMounted(refresh);
               <button class="secondary" type="button" @click="copyPairingNonce">复制配对码</button>
               <small>到期时间：{{ shortTime(pairingTicket.expires_at) }}</small>
             </div>
-            <p v-if="!pairingProviders.length" class="hint">先添加一个 DeepSeek 网页会话 Provider。此流程不会读取密码或自动登录。</p>
+            <p v-if="!pairingProviders.length" class="hint">先添加一个 DeepSeek 网页会话 Provider，并在服务端设置 OMNI_GATEWAY_API_KEY 与扩展精确来源 OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN。此流程不会读取密码或自动登录。</p>
           </article>
           <article class="panel">
             <div class="panel-title"><h2>Provider 列表</h2><span class="muted">{{ providers.length }} 项</span></div>
