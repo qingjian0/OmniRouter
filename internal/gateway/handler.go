@@ -103,6 +103,7 @@ func NewHandlerWithFullRepositories(registry *provider.Registry, apiKey string, 
 	h.mux.Handle("DELETE /admin/sessions/{id}", h.protect(http.HandlerFunc(h.deleteSession)))
 	h.mux.Handle("GET /admin/models", h.protect(http.HandlerFunc(h.adminModels)))
 	h.mux.Handle("PATCH /admin/models/{id}/status", h.protect(http.HandlerFunc(h.setModelStatus)))
+	h.mux.Handle("PATCH /admin/models/{id}/pricing", h.protect(http.HandlerFunc(h.setModelPricing)))
 	h.mux.Handle("DELETE /admin/models/{id}", h.protect(http.HandlerFunc(h.deleteModel)))
 	h.mux.Handle("GET /admin/api-keys", h.protect(http.HandlerFunc(h.adminAPIKeys)))
 	h.mux.Handle("POST /admin/api-keys", h.protect(http.HandlerFunc(h.createAPIKey)))
@@ -1986,6 +1987,44 @@ func (h *Handler) setModelStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": r.PathValue("id"), "provider_id": input.ProviderID, "enabled": input.Enabled, "persisted": true})
+}
+
+
+func (h *Handler) setModelPricing(w http.ResponseWriter, r *http.Request) {
+	if h.modelRepo == nil {
+		writeError(w, http.StatusServiceUnavailable, "storage_unavailable", "model repository is unavailable")
+		return
+	}
+	var input struct {
+		ProviderID              string   `json:"provider_id"`
+		InputCostPerMillionUSD  *float64 `json:"input_cost_per_million_usd"`
+		OutputCostPerMillionUSD *float64 `json:"output_cost_per_million_usd"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err != nil ||
+		strings.TrimSpace(input.ProviderID) == "" || input.InputCostPerMillionUSD == nil || input.OutputCostPerMillionUSD == nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider_id, input_cost_per_million_usd and output_cost_per_million_usd are required")
+		return
+	}
+	if err := h.modelRepo.SetPricing(r.Context(), r.PathValue("id"), input.ProviderID, *input.InputCostPerMillionUSD, *input.OutputCostPerMillionUSD); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not_found", "model not found")
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
+		}
+		return
+	}
+	runtimeUpdated := false
+	if updater, ok := h.selector.(interface {
+		SetModelPricing(string, string, float64, float64) bool
+	}); ok {
+		runtimeUpdated = updater.SetModelPricing(r.PathValue("id"), input.ProviderID, *input.InputCostPerMillionUSD, *input.OutputCostPerMillionUSD)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id": r.PathValue("id"), "provider_id": input.ProviderID,
+		"input_cost_per_million_usd": *input.InputCostPerMillionUSD,
+		"output_cost_per_million_usd": *input.OutputCostPerMillionUSD,
+		"runtime_updated": runtimeUpdated, "persisted": true,
+	})
 }
 
 func (h *Handler) deleteModel(w http.ResponseWriter, r *http.Request) {
