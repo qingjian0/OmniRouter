@@ -80,14 +80,18 @@ func (s *AuthorizationService) Authorize(ctx context.Context, providerID, accoun
 		return AuthorizationRecord{}, fmt.Errorf("create DeepSeek web account: %w", err)
 	}
 	rollback := func() {
-		_, _ = s.vault.DeleteContext(ctx, tokenID)
-		_, _ = s.vault.DeleteContext(ctx, cookieID)
-		_ = s.sessions.Delete(ctx, sessionID)
-		_ = s.accounts.Delete(ctx, accountID)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_, _ = s.vault.DeleteContext(cleanupCtx, tokenID)
+		_, _ = s.vault.DeleteContext(cleanupCtx, cookieID)
+		_ = s.sessions.Delete(cleanupCtx, sessionID)
+		_ = s.accounts.Delete(cleanupCtx, accountID)
 	}
 	tokenMeta, err := s.vault.Put(credential.Metadata{ID: tokenID, AccountID: accountID, Type: string(credential.KindAccessToken), ExpiresAt: expiresAt}, credential.KindAccessToken, material.Token)
 	if err != nil {
-		_ = s.accounts.Delete(ctx, accountID)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = s.accounts.Delete(cleanupCtx, accountID)
 		return AuthorizationRecord{}, fmt.Errorf("store encrypted DeepSeek web access token: %w", err)
 	}
 	cookieMeta, err := s.vault.Put(credential.Metadata{ID: cookieID, AccountID: accountID, Type: string(credential.KindCookie), ExpiresAt: expiresAt}, credential.KindCookie, material.CookieHeader)
