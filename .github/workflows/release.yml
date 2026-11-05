@@ -77,10 +77,12 @@ jobs:
           name="omnirouter-${VERSION}-${GOOS}-${GOARCH}"
           CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "dist/${name}${EXT}" ./cmd/omnirouter
           cp README.md "dist/README.md"
+          cp docs/INSTALL.md "dist/INSTALL.md"
+          cp examples/omnirouter.env.example "dist/omnirouter.env.example"
           if [ "${GOOS}" = "windows" ]; then
-            (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md)
+            (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example)
           else
-            tar -C dist -czf "dist/${name}.tar.gz" "${name}${EXT}" README.md
+            tar -C dist -czf "dist/${name}.tar.gz" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example
           fi
 
       - name: Upload release asset
