@@ -41,6 +41,9 @@ jobs:
             exit 1
           fi
 
+      - name: Check smoke-test script syntax
+        run: bash -n scripts/provider-smoke.sh
+
       - name: Unit and integration tests
         run: go test ./...
 
