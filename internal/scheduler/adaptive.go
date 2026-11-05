@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"omnirouter/internal/provider"
@@ -77,7 +78,7 @@ func (s *AdaptiveScheduler) SelectAdaptive(ctx context.Context, modelID string, 
 		s.mu.Lock()
 		cursor = s.cursor[modelID]
 		if cursor == nil {
-			s.cursor[modelID] = newAtomicCursor()
+			s.cursor[modelID] = &atomic.Uint64{}
 			cursor = s.cursor[modelID]
 		}
 		s.mu.Unlock()
