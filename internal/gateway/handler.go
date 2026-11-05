@@ -215,6 +215,7 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 	beginStreamRequest(r)
 	var usage *tokenusage.Usage
 	terminal := false
+	streamStarted := time.Now()
 	streamErr := responsesProvider.StreamResponses(r.Context(), input, func(event provider.Event) error {
 		if len(event.Data) > 0 {
 			usage = mergeResponsesStreamUsage(r, usage, event.Data, event.Done && event.ExplicitDone)
@@ -232,6 +233,7 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	})
+	h.reportProviderOutcome(upstream, time.Since(streamStarted), streamErr == nil && terminal)
 	if streamErr != nil {
 		storeRequestUsage(r, usage)
 		setRequestError(r, classifyRequestError(r, streamErr, true))
@@ -294,6 +296,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 		beginStreamRequest(r)
 		var usage *tokenusage.Usage
 		terminal := false
+		streamStarted := time.Now()
 		err := p.Stream(r.Context(), &provider.Request{Model: request.Model, Input: body, Stream: true}, func(event provider.Event) error {
 			chunk := "data: [DONE]\n\n"
 			if !event.Done {
@@ -317,6 +320,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 			return nil
 		})
+		h.reportProviderOutcome(p, time.Since(streamStarted), err == nil && terminal)
 		if err != nil {
 			storeRequestUsage(r, usage)
 			setRequestError(r, classifyRequestError(r, err, true))
@@ -586,6 +590,7 @@ func (h *Handler) streamNativeAnthropic(w http.ResponseWriter, r *http.Request, 
 	beginStreamRequest(r)
 	var usage *tokenusage.Usage
 	terminal := false
+	streamStarted := time.Now()
 	err := native.StreamAnthropic(r.Context(), &provider.Request{Model: model, Input: body, Stream: true}, func(event provider.Event) error {
 		if len(event.Data) > 0 {
 			usage = mergeAnthropicStreamUsage(r, usage, event.Data, event.Done && event.ExplicitDone)
@@ -603,6 +608,7 @@ func (h *Handler) streamNativeAnthropic(w http.ResponseWriter, r *http.Request, 
 		}
 		return nil
 	})
+	h.reportProviderOutcome(upstream, time.Since(streamStarted), err == nil && terminal)
 	if err != nil {
 		storeRequestUsage(r, usage)
 		setRequestError(r, classifyRequestError(r, err, true))
@@ -631,6 +637,7 @@ func (h *Handler) streamAnthropic(w http.ResponseWriter, r *http.Request, p prov
 	beginStreamRequest(r)
 	var usage *tokenusage.Usage
 	terminal := false
+	streamStarted := time.Now()
 	err := p.Stream(r.Context(), &provider.Request{Model: model, Input: payload, Stream: true}, func(event provider.Event) error {
 		if event.Done {
 			terminal = event.ExplicitDone
@@ -666,6 +673,7 @@ func (h *Handler) streamAnthropic(w http.ResponseWriter, r *http.Request, p prov
 		flusher.Flush()
 		return nil
 	})
+	h.reportProviderOutcome(p, time.Since(streamStarted), err == nil && terminal)
 	if err != nil {
 		storeRequestUsage(r, usage)
 		setRequestError(r, classifyRequestError(r, err, true))
