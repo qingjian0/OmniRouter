@@ -371,6 +371,7 @@ the one propagated after the request record is attempted.
 - [V1.0.0 release checklist](docs/V1-RELEASE-CHECKLIST.md)
 - [Live Provider acceptance](docs/PROVIDER-ACCEPTANCE.md)
 - [Android / Termux device acceptance](docs/ANDROID-TERMUX-ACCEPTANCE.md)
+- [SQLite backup and restore](docs/DATABASE-BACKUP-RESTORE.md)
 
 The release workflow packages Linux amd64/arm64, Windows amd64, and macOS
 amd64/arm64 binaries when a `v*` tag is pushed. It generates SHA-256 checksums
