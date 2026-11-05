@@ -26,8 +26,11 @@
 
 ## 运行
 
+从源码运行完整 Vue 管理控制台前，先构建前端静态资源；预编译发行版不需要 Node.js：
+
 ```sh
-go run ./cmd/omnirouter
+cd web && npm install --no-audit --no-fund && npm run build
+cd .. && go run ./cmd/omnirouter
 ```
 
 默认监听 `127.0.0.1:8080`。不配置 Provider 时，健康端点和管理页面仍可访问，但模型请求不会有可用上游。
@@ -37,6 +40,8 @@ go run ./cmd/omnirouter
 ```sh
 export OMNI_ADDR=127.0.0.1:8080
 export OMNI_GATEWAY_API_KEY='replace-with-a-long-random-key'
+# Generate once with: openssl rand -base64 32; persist the same value across restarts.
+export OMNI_CREDENTIAL_ENCRYPTION_KEY='replace-with-base64-encoded-32-byte-key'
 export OMNI_PROVIDER_ID=deepseek
 export OMNI_PROVIDER_NAME=DeepSeek
 export OMNI_PROVIDER_BASE_URL=https://api.deepseek.com/v1
@@ -49,13 +54,14 @@ export OMNI_PROVIDER_MODELS=deepseek-chat,deepseek-reasoner
 设置 `OMNI_PROVIDERS` 为 JSON 数组。`base_url` 使用 OpenAI-compatible API 的根路径（例如以 `/v1` 结尾），`models` 是该 Provider 实际支持的模型 ID。相同模型 ID 可配置在多个 Provider 上，以便调度回退。
 
 ```sh
+# Set OMNI_CREDENTIAL_ENCRYPTION_KEY as above before configuring upstream API keys.
 export OMNI_PROVIDERS='[
   {"id":"deepseek","name":"DeepSeek","base_url":"https://api.deepseek.com/v1","api_key":"KEY_A","models":["deepseek-chat"],"priority":100,"weight":1},
   {"id":"compatible-backup","name":"Compatible Backup","base_url":"https://example.invalid/v1","api_key":"KEY_B","models":["deepseek-chat"],"priority":90,"weight":1}
 ]'
 ```
 
-生产环境请通过安全的环境变量注入机制提供密钥，不要把真实密钥提交到配置文件或仓库。当前 JSON 环境配置适合第一版启动接入；后续会迁移到受保护的配置/凭据管理界面。
+生产环境请通过安全的环境变量注入机制提供密钥，不要把真实密钥提交到配置文件或仓库。请备份并长期保留 `OMNI_CREDENTIAL_ENCRYPTION_KEY`；更换该密钥会使既有密文无法解密。Provider 和 Credential 也可通过管理控制台写入受保护的持久化存储。
 
 ### API
 
