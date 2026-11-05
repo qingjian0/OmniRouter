@@ -121,11 +121,13 @@ func RedactHeaderName(name string) bool {
 // Response bodies are intentionally not included because they may echo secrets.
 func SafeFailure(status int) error {
 	switch status {
-	case http.StatusUnauthorized, http.StatusForbidden:
+	case http.StatusUnauthorized:
 		return ErrSessionExpired
+	case http.StatusForbidden:
+		return ErrPolicyBlocked
 	case http.StatusTooManyRequests:
 		return ErrRateLimited
-	case http.StatusBadGateway, http.StatusNotImplemented, http.StatusServiceUnavailable:
+	case http.StatusNotFound, http.StatusBadGateway, http.StatusNotImplemented, http.StatusServiceUnavailable:
 		return ErrUpstreamChanged
 	default:
 		if status >= 400 {
