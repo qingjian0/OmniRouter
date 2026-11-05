@@ -47,23 +47,24 @@ export OMNI_ADDR=127.0.0.1:8080
 export OMNI_GATEWAY_API_KEY='replace-with-a-long-random-key'
 # Generate once with: openssl rand -base64 32; persist the same value across restarts.
 export OMNI_CREDENTIAL_ENCRYPTION_KEY='replace-with-base64-encoded-32-byte-key'
+export OMNI_PROVIDER_KIND=deepseek
 export OMNI_PROVIDER_ID=deepseek
 export OMNI_PROVIDER_NAME=DeepSeek
-export OMNI_PROVIDER_BASE_URL=https://api.deepseek.com/v1
+export OMNI_PROVIDER_BASE_URL=https://api.deepseek.com
 export OMNI_PROVIDER_API_KEY='your-provider-api-key'
-export OMNI_PROVIDER_MODELS=deepseek-chat
-export OMNI_PROVIDER_MODEL_CAPABILITIES='{"deepseek-chat":["chat","streaming","tools"]}',deepseek-reasoner
+export OMNI_PROVIDER_MODELS=deepseek-flash,deepseek-v4-pro
+# DeepSeek adapter discovers the live catalogue from GET /models.
 ```
 
 ### 多 Provider 配置
 
-设置 `OMNI_PROVIDERS` 为 JSON 数组。`base_url` 使用 OpenAI-compatible API 的根路径（例如以 `/v1` 结尾），`models` 是该 Provider 实际支持的模型 ID。相同模型 ID 可配置在多个 Provider 上，以便调度回退。
+设置 `OMNI_PROVIDERS` 为 JSON 数组。每个 Provider 可通过 `kind` 选择适配器（`deepseek` 或 `openai-compatible`）；DeepSeek 官方 API 根地址为 `https://api.deepseek.com`，不带 `/v1`。其他 OpenAI-compatible 服务按其实际 API 根路径配置。相同模型 ID 可配置在多个 Provider 上，以便调度回退。
 
 ```sh
 # Set OMNI_CREDENTIAL_ENCRYPTION_KEY as above before configuring upstream API keys.
 export OMNI_PROVIDERS='[
-  {"id":"deepseek","name":"DeepSeek","base_url":"https://api.deepseek.com/v1","api_key":"KEY_A","models":["deepseek-chat"],"priority":100,"weight":1},
-  {"id":"compatible-backup","name":"Compatible Backup","base_url":"https://example.invalid/v1","api_key":"KEY_B","models":["deepseek-chat"],"priority":90,"weight":1}
+  {"kind":"deepseek","id":"deepseek","name":"DeepSeek","base_url":"https://api.deepseek.com","api_key":"KEY_A","models":["deepseek-flash","deepseek-v4-pro"],"priority":100,"weight":1},
+  {"id":"compatible-backup","name":"Compatible Backup","base_url":"https://example.invalid/v1","api_key":"KEY_B","models":["deepseek-flash"],"priority":90,"weight":1}
 ]'
 ```
 
