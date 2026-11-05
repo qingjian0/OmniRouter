@@ -493,6 +493,15 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 	_, _ = w.Write(output)
 }
 
+// reportProviderOutcome feeds observed request latency and success into schedulers
+// that implement optional adaptive outcome reporting.
+func (h *Handler) reportProviderOutcome(p provider.Provider, latency time.Duration, success bool) {
+	if p == nil || h.selector == nil { return }
+	if reporter, ok := h.selector.(interface { ReportOutcome(string, time.Duration, bool) }); ok {
+		reporter.ReportOutcome(p.ID(), latency, success)
+	}
+}
+
 // generateWithFallback retries a failed non-streaming request on another
 // healthy provider for the same model. It never retries a provider twice in
 // one request and preserves the original capability requirements.
@@ -512,13 +521,16 @@ func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Pro
 			break
 		}
 		attempted[current.ID()] = struct{}{}
+		started := time.Now()
 		response, err := current.Generate(ctx, &provider.Request{Model: model, Input: payload})
 		if err == nil && response == nil {
 			err = fmt.Errorf("provider %q returned an empty response", current.ID())
 		}
 		if err == nil {
+			h.reportProviderOutcome(current, time.Since(started), true)
 			return response, current, nil
 		}
+		h.reportProviderOutcome(current, time.Since(started), false)
 		lastErr = err
 		if h.selector == nil || ctx.Err() != nil {
 			break
