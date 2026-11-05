@@ -9,12 +9,12 @@ import (
 )
 
 type Config struct {
-	HTTP                    HTTPConfig
-	Database                DatabaseConfig
-	Provider                ProviderConfig
-	Providers               []ProviderConfig
-	GatewayAPIKey           string
-	CredentialEncryptionKey string
+	HTTP                       HTTPConfig
+	Database                   DatabaseConfig
+	Provider                   ProviderConfig
+	Providers                  []ProviderConfig
+	GatewayAPIKey              string
+	CredentialEncryptionKey    string
 	DeepSeekWebExtensionOrigin string
 }
 
