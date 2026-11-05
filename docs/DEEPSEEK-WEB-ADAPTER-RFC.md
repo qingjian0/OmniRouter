@@ -1,6 +1,6 @@
 # DeepSeek consumer-web adapter RFC
 
-Status: implementation design / not release-certified  
+Status: Slice A security boundary partially implemented / not release-certified  
 Target branch: `feature/deepseek-web-adapter` (stacked on the official API adapter branch)
 
 ## 1. Scope and trust boundary
@@ -153,9 +153,13 @@ All state-changing actions require the existing admin gateway authentication.
 ## 9. Delivery slices and acceptance gates
 
 ### Slice A — domain and storage integration
-- Add the `deepseek-web` Provider kind and validation.
-- Resolve the credential-pair association from the existing Account Vault.
-- Add explicit session lifecycle and redaction tests.
+- [x] Add strict browser authorization material validation for `chat.deepseek.com` cookies and access tokens.
+- [x] Add an authorization service that creates a separate Account, stores access token and cookie header as separate encrypted Vault credentials, and records Session metadata.
+- [x] Add restart restoration that requires exactly one active token and one active cookie credential for the account.
+- [x] Add account-wide revoke semantics for credentials, sessions, and account state.
+- [x] Add tests for malformed/foreign cookies, injection, duplicate cookies, missing session ID, input-buffer isolation, redaction header names, and typed upstream status mapping.
+- [ ] Add SQLite integration tests for authorize / restart restore / revoke and failure rollback.
+- [ ] Register `deepseek-web` as a runtime provider only after the browser authorization and transport interfaces are ready.
 - Do not send upstream completion requests yet.
 
 ### Slice B — interactive browser authorization
