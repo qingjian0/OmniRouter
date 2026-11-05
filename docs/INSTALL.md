@@ -39,6 +39,13 @@ support is advertised.
 
 ## Configure a Provider
 
+For the official DeepSeek API, set `OMNI_PROVIDER_KIND=deepseek` and use
+`https://api.deepseek.com` (without a `/v1` suffix). The adapter discovers
+current models from the authenticated `GET /models` endpoint and maps context,
+modalities, reasoning-effort levels, and protocol capabilities. Its offline
+fallback catalogue uses `deepseek-flash` and `deepseek-v4-pro`; retired names
+`deepseek-chat` and `deepseek-reasoner` should not be used for new deployments.
+
 1. Extract the archive.
 2. Copy `omnirouter.env.example` to `.env`.
 3. Replace the Provider API key and generate both gateway and credential
@@ -82,12 +89,12 @@ $env:OMNI_ADDR = "127.0.0.1:8080"
 $env:OMNI_DATABASE_PATH = ".\data\omnirouter.db"
 $env:OMNI_GATEWAY_API_KEY = "<generated-gateway-key>"
 $env:OMNI_CREDENTIAL_ENCRYPTION_KEY = "<generated-base64-32-byte-key>"
+$env:OMNI_PROVIDER_KIND = "deepseek"
 $env:OMNI_PROVIDER_ID = "deepseek"
 $env:OMNI_PROVIDER_NAME = "DeepSeek"
-$env:OMNI_PROVIDER_BASE_URL = "https://api.deepseek.com/v1"
+$env:OMNI_PROVIDER_BASE_URL = "https://api.deepseek.com"
 $env:OMNI_PROVIDER_API_KEY = "<provider-api-key>"
-$env:OMNI_PROVIDER_MODELS = "deepseek-chat,deepseek-reasoner"
-$env:OMNI_PROVIDER_MODEL_CAPABILITIES = '{"deepseek-chat":["chat","streaming","tools"],"deepseek-reasoner":["chat","streaming"]}'
+$env:OMNI_PROVIDER_MODELS = "deepseek-flash,deepseek-v4-pro"
 .\omnirouter.exe
 ```
 
