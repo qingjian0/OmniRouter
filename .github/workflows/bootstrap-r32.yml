@@ -65,7 +65,7 @@ jobs:
         run: go vet ./...
 
       - name: Build
-        run: go build ./cmd/omnirouter
+        run: go build -o /tmp/omnirouter ./cmd/omnirouter
 
       - name: Commit imported source and go.sum
         shell: bash
