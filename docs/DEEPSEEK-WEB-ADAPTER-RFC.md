@@ -168,7 +168,7 @@ failure must not mark the official DeepSeek API provider unhealthy.
 
 ## 8. Admin UI
 
-The provider form distinguishes "DeepSeek 官方 API" from "DeepSeek 网页会话". The current increment adds the inert web-provider registration form and authenticated one-time pairing-code creation/copy flow. The pairing UI requires `OMNI_GATEWAY_API_KEY` and the exact extension-origin setting. It does not claim that inference is available. Account/session health, re-authentication, and revoke controls remain pending.
+The provider form distinguishes "DeepSeek 官方 API" from "DeepSeek 网页会话". The current increment adds the inert web-provider registration form and authenticated one-time pairing-code creation/copy flow. The pairing UI requires `OMNI_GATEWAY_API_KEY` and the exact extension-origin setting. The accounts table exposes an account-wide revoke action at `POST /admin/deepseek-web/accounts/{id}/revoke`, which disables the account and revokes its stored credentials and sessions. It does not claim that inference is available. Last-validation and re-authentication controls remain pending.
 
 For the completed web adapter show:
 
