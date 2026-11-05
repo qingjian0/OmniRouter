@@ -70,7 +70,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           EXT: ${{ matrix.ext }}
-          VERSION: ${{ github.event.github.event.inputs.tag || github.ref_name }}
+          VERSION: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -112,7 +112,7 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.github.event.inputs.tag || github.ref_name }}
-          name: OmniRouter ${{ github.event.github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: OmniRouter ${{ github.event.inputs.tag || github.ref_name }}
           generate_release_notes: true
           files: release-assets/*
