@@ -107,23 +107,25 @@ async function refresh() {
   }
 }
 
-async function mutate(path: string, method: string, payload: unknown, success: string) {
+async function mutate(path: string, method: string, payload: unknown, success: string): Promise<boolean> {
   error.value = "";
   notice.value = "";
   try {
     const result = await api(path, method, payload);
     if (result.secret) oneTimeSecret.value = result.secret;
-    notice.value = success;
     await refresh();
+    notice.value = success;
+    return true;
   } catch (e) {
     error.value = messageOf(e);
+    return false;
   }
 }
 
 async function createProvider() {
   try {
     const capabilities = JSON.parse(providerForm.capabilities || "{}");
-    await mutate("/admin/providers", "POST", {
+    const saved = await mutate("/admin/providers", "POST", {
       id: providerForm.id.trim(),
       name: providerForm.name.trim(),
       base_url: providerForm.base_url.trim(),
@@ -134,7 +136,7 @@ async function createProvider() {
       weight: providerForm.weight,
       enabled: providerForm.enabled
     }, "Provider 已保存");
-    Object.assign(providerForm, { id: "", name: "", base_url: "", api_key: "", models: "", priority: 100, weight: 1, enabled: true, capabilities: "{}" });
+    if (saved) Object.assign(providerForm, { id: "", name: "", base_url: "", api_key: "", models: "", priority: 100, weight: 1, enabled: true, capabilities: "{}" });
   } catch (e) {
     error.value = `Provider 能力 JSON 无效：${messageOf(e)}`;
   }
@@ -153,8 +155,9 @@ function removeProvider(p: Row) {
   }
 }
 async function createAccount() {
-  await mutate("/admin/accounts", "POST", accountForm, "账户已创建");
-  Object.assign(accountForm, { provider_id: "", name: "" });
+  if (await mutate("/admin/accounts", "POST", accountForm, "账户已创建")) {
+    Object.assign(accountForm, { provider_id: "", name: "" });
+  }
 }
 function setAccountStatus(a: Row, status: string) {
   return mutate(`/admin/accounts/${encodeURIComponent(a.id)}/status`, "PATCH", { status }, "账户状态已更新");
@@ -168,12 +171,12 @@ function isoDate(value: string): string | undefined {
   return value ? new Date(value).toISOString() : undefined;
 }
 async function createSession() {
-  await mutate("/admin/sessions", "POST", {
+  const saved = await mutate("/admin/sessions", "POST", {
     account_id: sessionForm.account_id,
     status: sessionForm.status,
     ...(isoDate(sessionForm.expires_at) ? { expires_at: isoDate(sessionForm.expires_at) } : {})
   }, "会话已创建");
-  Object.assign(sessionForm, { account_id: "", status: "unknown", expires_at: "" });
+  if (saved) Object.assign(sessionForm, { account_id: "", status: "unknown", expires_at: "" });
 }
 function setSessionStatus(s: Row, status: string) {
   return mutate(`/admin/sessions/${encodeURIComponent(s.id)}/status`, "PATCH", { status }, "会话状态已更新");
@@ -184,13 +187,13 @@ function removeSession(s: Row) {
   }
 }
 async function createCredential() {
-  await mutate("/admin/credentials", "POST", {
+  const saved = await mutate("/admin/credentials", "POST", {
     account_id: credentialForm.account_id,
     kind: credentialForm.kind,
     value: credentialForm.value,
     ...(isoDate(credentialForm.expires_at) ? { expires_at: isoDate(credentialForm.expires_at) } : {})
   }, "凭据已加密保存；列表不会显示明文");
-  Object.assign(credentialForm, { account_id: "", kind: "api_key", value: "", expires_at: "" });
+  if (saved) Object.assign(credentialForm, { account_id: "", kind: "api_key", value: "", expires_at: "" });
 }
 function setCredentialStatus(c: Row, status: string) {
   return mutate(`/admin/credentials/${encodeURIComponent(c.id)}/status`, "PATCH", { status }, "凭据状态已更新");
@@ -201,8 +204,9 @@ function removeCredential(c: Row) {
   }
 }
 async function createAPIKey() {
-  await mutate("/admin/api-keys", "POST", { name: apiKeyForm.name.trim(), scopes: scopes.value }, "API Key 已创建。密钥只显示一次，请立即保存。");
-  apiKeyForm.name = "";
+  if (await mutate("/admin/api-keys", "POST", { name: apiKeyForm.name.trim(), scopes: scopes.value }, "API Key 已创建。密钥只显示一次，请立即保存。")) {
+    apiKeyForm.name = "";
+  }
 }
 function setAPIKeyEnabled(k: Row, enabled: boolean) {
   return mutate(`/admin/api-keys/${encodeURIComponent(k.id)}/status`, "PATCH", { enabled }, "API Key 状态已更新");
