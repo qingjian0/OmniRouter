@@ -146,7 +146,7 @@ func (s *AdaptiveScheduler) SelectAdaptive(ctx context.Context, modelID string, 
 		}
 		// Four virtual observations at 95% success provide a stable prior
 		// without integer truncation (4*95/100 must be evaluated as float).
-		reliabilityScore := (float64(stat.successes) + 4*0.95) / (float64(stat.samples) + 4)
+		reliability := reliabilityScore(stat)
 		costScore := 0.5
 		if hasPriced {
 			if cost, known := estimatedCost(candidate, profile); known {
@@ -167,7 +167,7 @@ func (s *AdaptiveScheduler) SelectAdaptive(ctx context.Context, modelID string, 
 		}
 		weightScore := math.Log1p(float64(candidate.Weight)) / math.Log1p(float64(maxWeight))
 		score := weights.cost*costScore + weights.latency*latencyScore +
-			weights.reliability*reliabilityScore + weights.priority*priorityScore +
+			weights.reliability*reliability + weights.priority*priorityScore +
 			weights.weight*weightScore
 		ranked = append(ranked, scored{candidate: candidate, score: score})
 		if score > best {
@@ -305,4 +305,9 @@ func estimatedCost(candidate Candidate, profile AdaptiveProfile) (float64, bool)
 	input := float64(profile.EstimatedInputTokens) * inputPrice / 1_000_000
 	output := float64(profile.EstimatedOutputTokens) * outputPrice / 1_000_000
 	return input + output, true
+}
+
+func reliabilityScore(stat providerPerformance) float64 {
+	// Four virtual observations at 95% success provide a stable prior.
+	return (float64(stat.successes) + 4*0.95) / (float64(stat.samples) + 4)
 }
