@@ -52,3 +52,10 @@ func BindingIDs(providerID string) (accountID, credentialID string) {
 	suffix := hex.EncodeToString(sum[:12])
 	return "provider_account_" + suffix, "provider_credential_" + suffix
 }
+
+// ResponsesProvider is an optional capability for adapters that implement the
+// OpenAI Responses API natively. It is separate from Chat Completions support.
+type ResponsesProvider interface {
+	GenerateResponses(context.Context, *Request) (*Response, error)
+	StreamResponses(context.Context, *Request, func(Event) error) error
+}
