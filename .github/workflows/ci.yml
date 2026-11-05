@@ -122,8 +122,10 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Build
-        run: go build -o /tmp/omnirouter ./cmd/omnirouter
+      - name: Build and verify version command
+        run: |
+          go build -o /tmp/omnirouter ./cmd/omnirouter
+          /tmp/omnirouter --version | grep -F "OmniRouter dev"
 
   cross-build:
     needs: frontend
