@@ -1,6 +1,6 @@
 # OmniRouter
 
-轻量化、跨平台的统一 AI 接入、反向代理与调度网关。核心采用 Go 模块化单体，优先保持低依赖、低资源占用；管理界面使用原生 HTML/CSS/JavaScript，不要求 Node.js。
+轻量化、跨平台的统一 AI 接入、反向代理与调度网关。核心采用 Go 模块化单体，优先保持低依赖、低资源占用；管理界面采用 Vue 3 + TypeScript，构建后通过 Go embed 嵌入单一可执行文件；Node.js 仅用于前端构建，运行时不需要 Node.js。
 
 ## 当前实现状态
 
@@ -14,12 +14,13 @@
 - Gemini `generateContent` / `streamGenerateContent` 基础协议转换，覆盖文本、图片输入、functionDeclarations/functionCall/functionResponse 与流式函数调用。
 - 多 Provider JSON 环境配置、模型路由、优先级与健康候选加权轮询、健康检查缓存及指数退避故障冷却。
 - 可选 Gateway Bearer API Key 认证。
-- `/admin/providers` 元数据端点及嵌入式轻量管理页。
+- Provider、Model、Account、Session、Credential、API Key、请求历史和 Token 用量管理 API。
+- Vue 3 + TypeScript 管理控制台，构建后嵌入 Go 二进制；运行时无 Node.js 依赖。
 - 初始 SQLite Schema、纯 Go SQLite driver 声明及启动迁移接线；Provider 元数据、模型能力、Account/Session、Credential 密文及 API Key 元数据已接入 SQL Repository；Provider API Key 可通过 AES-GCM Credential Vault 绑定并在启动时恢复。
 - 有界内存 HTTP 观测：请求 ID、状态码、延迟、在途数、状态分布、近似 P95 与最近请求列表。
 - OpenAI-compatible 上游 HTTP transport：连接、TLS 握手、响应头阶段超时；不设置总请求超时以保留长连接 SSE。
 
-**仍未完成的能力：** 凭据加密密钥轮换/托管、音频/视频转换、完整模型能力自动发现、完整管理后台、更多原生 Provider 适配器，以及跨平台与 Android 实机验证。持久化请求历史、Provider/Model 归因、上游 Token 用量统计、SQLite 聚合报告和相关管理 API 已实现；R3.2 的真实 SQLite 集成测试已在 GitHub Actions 中执行通过。当前管理页仍是轻量状态与 Provider 元数据页，不是完整控制台。
+**仍未完成的能力：** 持久化凭据密钥轮换/托管、音频/视频转换、完整模型能力自动发现、更多原生 Provider 适配器、真实上游联调和 Android/Termux 实机验收。Vue 管理控制台正在补齐并纳入嵌入式构建链；管理 API 已覆盖 Provider、Model、Account、Session、Credential、API Key、请求记录与用量报告。
 
 **验证状态（2026-11-05）：** GitHub Actions `OmniRouter CI` Run [41954487103](https://github.com/qingjian0/OmniRouter/actions/runs/41954487103) 已完整通过 Go 1.23 依赖校验、格式检查、`go test ./...`（含真实 `modernc.org/sqlite` 驱动集成测试）、`go test -race ./...`、`go vet ./...` 和可执行文件构建。该结果不代表已完成真实上游 Provider 联调、跨平台构建或 Android 实机验证。
 
@@ -75,25 +76,28 @@ export OMNI_PROVIDERS='[
 
 ## 构建
 
+源码构建需要 Go 1.23+ 与 Node.js 22+：
+
 ```sh
-go build ./...
+cd web && npm install --no-audit --no-fund && npm run build
+cd .. && go test ./... && go build ./cmd/omnirouter
 ```
 
-当前 Go module 声明 Go 1.23。跨平台构建和 Android 实机运行尚未验证。Android 交叉编译不等于 Termux / Android 设备运行验证。
+Node.js 只用于 Vue 管理端构建；发布后的 Go 二进制已内嵌静态资源，运行时不需要 Node.js。当前 CI 会先构建 Vue 资产，再执行 Go 测试、交叉编译和发行包打包。Android/Termux 仍须真机验收。
 
 ## 设计原则
 
 - 模块化单体，不拆微服务。
-- 核心不依赖 Node.js、Python 或 Java Runtime。
+- Go 服务运行时不依赖 Node.js、Python 或 Java Runtime；Vue 管理端只在构建期需要 Node.js。
 - Provider 适配与协议入口解耦。
 - 按请求所需能力过滤模型候选，再结合优先级、权重和 Provider 健康状态调度，不依赖随机 map 遍历。
 - 凭据不通过管理 API 返回。
 - 流式请求不设置全局 WriteTimeout。
 - CI 保持宽松：第一版功能完成后再集中构建、测试和跨平台验证。
 
-### Batch C progress
+### Historical implementation notes
 
-Additional source modules provide SQL repositories for providers, accounts, sessions, models/capabilities, encrypted credentials, hashed gateway API keys, and request logs. The pure-Go SQLite driver is declared and registered; App startup opens the configured database and applies embedded migrations. Provider adapters are reconstructed from persisted metadata, model capabilities, and encrypted credential bindings. These source changes remain unverified at build/runtime level until the driver dependency can be fetched.
+The batch notes below preserve the evolution of the implementation. Statements that say SQL integration, request history, or provider recovery are still pending are historical snapshots and are superseded by the current implementation status and CI evidence at the top of this README.
 
 ### 协议兼容范围（当前）
 
