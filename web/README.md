@@ -11,9 +11,9 @@ npm install
 npm run dev
 ```
 
-The dev server is for UI development only. API calls use same-origin paths and
-expect the Go gateway to be available at the same origin or a configured Vite
-proxy (see below).
+The dev server is for UI development only. Vite proxies `/healthz`, `/readyz`,
+`/admin`, `/v1`, and `/v1beta` to `http://127.0.0.1:8080`. Start the Go gateway
+on that address, then open the Vite URL (normally `http://127.0.0.1:5173`).
 
 ## Production build
 
