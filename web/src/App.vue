@@ -300,7 +300,7 @@ onMounted(refresh);
           </div>
           <article class="panel"><div class="panel-title"><h2>最近请求</h2><button class="text-button" @click="activeTab = 'requests'">查看全部 →</button></div>
             <div class="table-wrap"><table><thead><tr><th>时间</th><th>路径</th><th>状态</th><th>Provider / Model</th><th>耗时</th><th>生命周期</th></tr></thead>
-              <tbody><tr v-for="r in requests.slice(0, 8)" :key="r.request_id"><td>{{ shortTime(r.started_at || r.created_at) }}</td><td>{{ r.path }}</td><td>{{ r.status_code }}</td><td>{{ r.provider_id || "—" }} / {{ r.model_id || "—" }}</td><td>{{ r.latency_ms ?? "—" }} ms</td><td>{{ r.lifecycle_status || "—" }}</td></tr><tr v-if="!requests.length"><td colspan="6" class="empty">暂无请求记录</td></tr></tbody>
+              <tbody><tr v-for="r in requests.slice(0, 8)" :key="r.id"><td>{{ shortTime(r.started_at || r.created_at) }}</td><td>{{ r.path }}</td><td>{{ r.status }}</td><td>{{ r.provider_id || "—" }} / {{ r.model_id || "—" }}</td><td>{{ r.duration_ms ?? "—" }} ms</td><td>{{ r.lifecycle_status || "—" }}</td></tr><tr v-if="!requests.length"><td colspan="6" class="empty">暂无请求记录</td></tr></tbody>
             </table></div>
           </article>
         </section>
@@ -407,7 +407,7 @@ onMounted(refresh);
         <section v-else-if="activeTab === 'requests'" class="stack">
           <article class="panel"><div class="panel-title"><h2>最近 100 条请求</h2><span class="muted">请求正文和凭据不会被展示</span></div>
             <div class="table-wrap"><table><thead><tr><th>时间</th><th>请求 ID</th><th>方法 / 路径</th><th>HTTP</th><th>Provider / Model</th><th>Token</th><th>生命周期 / 错误</th></tr></thead>
-              <tbody><tr v-for="r in requests" :key="r.request_id"><td>{{ shortTime(r.started_at || r.created_at) }}</td><td>{{ r.request_id }}</td><td>{{ r.method }} {{ r.path }}</td><td>{{ r.status_code }}</td><td>{{ r.provider_id || "—" }} / {{ r.model_id || "—" }}</td><td>{{ r.input_tokens ?? "—" }} / {{ r.output_tokens ?? "—" }}</td><td>{{ r.lifecycle_status || "—" }} / {{ r.error_code || "—" }}</td></tr><tr v-if="!requests.length"><td colspan="7" class="empty">暂无请求记录</td></tr></tbody>
+              <tbody><tr v-for="r in requests" :key="r.id"><td>{{ shortTime(r.started_at || r.created_at) }}</td><td>{{ r.id }}</td><td>{{ r.method }} {{ r.path }}</td><td>{{ r.status }}</td><td>{{ r.provider_id || "—" }} / {{ r.model_id || "—" }}</td><td>{{ r.input_tokens ?? "—" }} / {{ r.output_tokens ?? "—" }}</td><td>{{ r.lifecycle_status || "—" }} / {{ r.error_code || "—" }}</td></tr><tr v-if="!requests.length"><td colspan="7" class="empty">暂无请求记录</td></tr></tbody>
             </table></div>
           </article>
         </section>
