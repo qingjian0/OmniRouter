@@ -169,7 +169,7 @@ func (p *Provider) DiscoverModels(ctx context.Context) ([]provider.Model, error)
 		if item.Effort != nil && len(item.Effort.SupportedLevels) > 0 {
 			caps = append(caps, "reasoning")
 		}
-		if _, ok := item.APICapabilities["anthropic_messages"]; ok {
+		if _, ok := item.APICapabilities["anthropic_messages"]; ok || id == "deepseek-flash" || id == "deepseek-v4-pro" {
 			caps = append(caps, "anthropic_messages")
 		}
 		if _, ok := item.APICapabilities["openai_responses"]; ok || id == "deepseek-flash" || id == "deepseek-v4-pro" {
@@ -199,6 +199,129 @@ func (p *Provider) Generate(ctx context.Context, req *provider.Request) (*provid
 
 func (p *Provider) Stream(ctx context.Context, req *provider.Request, emit func(provider.Event) error) error {
 	return p.chat.Stream(ctx, req, emit)
+}
+
+
+func (p *Provider) GenerateAnthropic(ctx context.Context, req *provider.Request) (*provider.Response, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is required")
+	}
+	body, err := p.doAnthropic(ctx, req.Input)
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+	data, err := io.ReadAll(io.LimitReader(body, 32<<20))
+	if err != nil {
+		return nil, err
+	}
+	return &provider.Response{Model: req.Model, Output: data}, nil
+}
+
+func (p *Provider) StreamAnthropic(ctx context.Context, req *provider.Request, emit func(provider.Event) error) error {
+	if req == nil {
+		return fmt.Errorf("request is required")
+	}
+	body, err := p.doAnthropic(ctx, req.Input)
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 64*1024), 4<<20)
+	var lines []string
+	terminal := false
+	flush := func() error {
+		if len(lines) == 0 {
+			return nil
+		}
+		frame := strings.Join(lines, "\n") + "\n\n"
+		eventType := ""
+		dataLines := make([]string, 0, 1)
+		for _, line := range lines {
+			if strings.HasPrefix(line, "event:") {
+				eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			}
+			if strings.HasPrefix(line, "data:") {
+				dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+			}
+		}
+		lines = lines[:0]
+		data := strings.Join(dataLines, "\n")
+		if eventType == "" && data != "" {
+			var envelope struct { Type string `json:"type"` }
+			_ = json.Unmarshal([]byte(data), &envelope)
+			eventType = envelope.Type
+		}
+		switch eventType {
+		case "message_stop":
+			terminal = true
+			return emit(provider.Event{Data: []byte(frame), Done: true, ExplicitDone: true})
+		case "error":
+			terminal = true
+			if err := emit(provider.Event{Data: []byte(frame), Done: true, ExplicitDone: false}); err != nil {
+				return err
+			}
+			return fmt.Errorf("DeepSeek Anthropic Messages API emitted an error event")
+		default:
+			return emit(provider.Event{Data: []byte(frame)})
+		}
+	}
+	for scanner.Scan() {
+		line := strings.TrimRight(scanner.Text(), "\r")
+		if line == "" {
+			if err := flush(); err != nil {
+				return err
+			}
+			if terminal {
+				return nil
+			}
+			continue
+		}
+		lines = append(lines, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+	if !terminal {
+		return fmt.Errorf("DeepSeek Anthropic stream ended without message_stop")
+	}
+	return nil
+}
+
+func (p *Provider) doAnthropic(ctx context.Context, input []byte) (io.ReadCloser, error) {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(input, &payload); err != nil {
+		return nil, fmt.Errorf("invalid Anthropic Messages payload: %w", err)
+	}
+	if _, ok := payload["model"]; !ok {
+		return nil, fmt.Errorf("model is required")
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/anthropic/v1/messages", bytes.NewReader(encoded))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("anthropic-version", "2023-06-01")
+	p.authorize(req)
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		return nil, fmt.Errorf("DeepSeek Anthropic Messages API returned HTTP %d", resp.StatusCode)
+	}
+	return resp.Body, nil
 }
 
 func (p *Provider) GenerateResponses(ctx context.Context, req *provider.Request) (*provider.Response, error) {
