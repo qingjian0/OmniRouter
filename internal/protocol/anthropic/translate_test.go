@@ -69,3 +69,53 @@ func TestStreamTranslatorEmitsTerminalMessageEvents(t *testing.T) {
 		t.Fatalf("missing terminal Anthropic events: %q", joined)
 	}
 }
+
+
+func TestImageAndToolTranslation(t *testing.T) {
+	request := []byte(\`{"model":"claude-test","max_tokens":64,"messages":[{"role":"user","content":[{"type":"text","text":"Inspect this image"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}}]}],"tools":[{"name":"lookup","description":"Look up a record","input_schema":{"type":"object","properties":{"id":{"type":"string"}}}}]}\`)
+	translated, _, _, err := ToOpenAI(request)
+	if err != nil {
+		t.Fatalf("ToOpenAI image/tool request: %v", err)
+	}
+	var openAI struct {
+		Messages []struct {
+			Content []struct {
+				Type     string \`json:"type"\`
+				ImageURL struct {
+					URL string \`json:"url"\`
+				} \`json:"image_url"\`
+			} \`json:"content"\`
+		} \`json:"messages"\`
+		Tools []struct {
+			Type string \`json:"type"\`
+		} \`json:"tools"\`
+	}
+	if err := json.Unmarshal(translated, &openAI); err != nil {
+		t.Fatalf("decode OpenAI request: %v", err)
+	}
+	if len(openAI.Messages) != 1 || len(openAI.Messages[0].Content) != 2 || openAI.Messages[0].Content[1].Type != "image_url" || !strings.HasPrefix(openAI.Messages[0].Content[1].ImageURL.URL, "data:image/png;base64,") {
+		t.Fatalf("image was not preserved in OpenAI request: %s", translated)
+	}
+	if len(openAI.Tools) != 1 || openAI.Tools[0].Type != "function" {
+		t.Fatalf("tool declaration was not preserved: %s", translated)
+	}
+
+	upstream := []byte(\`{"id":"chatcmpl-tool","choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\\"id\\":\\"42\\"}"}}]},"finish_reason":"tool_calls"}]}\`)
+	output, err := FromOpenAI(upstream, "claude-test")
+	if err != nil {
+		t.Fatalf("FromOpenAI tool response: %v", err)
+	}
+	var response struct {
+		Content []struct {
+			Type string \`json:"type"\`
+			Name string \`json:"name"\`
+		} \`json:"content"\`
+		StopReason string \`json:"stop_reason"\`
+	}
+	if err := json.Unmarshal(output, &response); err != nil {
+		t.Fatalf("decode Anthropic tool response: %v", err)
+	}
+	if len(response.Content) != 1 || response.Content[0].Type != "tool_use" || response.Content[0].Name != "lookup" || response.StopReason != "tool_use" {
+		t.Fatalf("unexpected Anthropic tool response: %s", output)
+	}
+}
