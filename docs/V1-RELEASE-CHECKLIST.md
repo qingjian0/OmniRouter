@@ -63,8 +63,9 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
 - [x] Linux amd64/arm64, Windows amd64, and macOS amd64/arm64 binaries and archives all built successfully in CI run 41959344425.
 - [x] Release workflow is configured to generate SHA-256 checksums for every release asset; an actual tagged release is still pending.
 - [x] Fresh-install and upgrade instructions drafted in `docs/INSTALL.md`; fresh-machine execution remains pending.
-- [x] Release archives include the binary, README, installation guide, and secret-free environment template; archive creation is tested in CI run 41959344425.
-- [ ] Database backup/restore procedure documented and tested.
+- [x] Release archives include the binary, README, installation guide, secret-free environment template, acceptance guides, and operational scripts; archive creation is tested in the current CI.
+- [x] SQLite backup/restore documentation and scripts added (`docs/DATABASE-BACKUP-RESTORE.md`, `scripts/backup-sqlite.sh`, `scripts/restore-sqlite.sh`).
+- [ ] CI backup/restore script test and a real deployment restore acceptance must pass.
 - [ ] Release notes list supported protocol subsets and known limitations.
 - [x] Android/Termux runtime smoke script and device procedure are provided in `scripts/termux-smoke.sh` and `docs/ANDROID-TERMUX-ACCEPTANCE.md`.
 - [ ] Android/Termux arm64 runtime is tested on a real device: launch, SQLite
