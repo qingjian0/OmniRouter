@@ -35,7 +35,7 @@ const requests = ref<Row[]>([]);
 const oneTimeSecret = ref("");
 
 const providerForm = reactive({
-  id: "", name: "", base_url: "", api_key: "", models: "",
+  kind: "openai-compatible", id: "", name: "", base_url: "", api_key: "", models: "",
   priority: 100, weight: 1, enabled: true,
   capabilities: ""
 });
@@ -122,10 +122,24 @@ async function mutate(path: string, method: string, payload: unknown, success: s
   }
 }
 
+function applyProviderKindDefaults() {
+  if (providerForm.kind === "deepseek") {
+    if (!providerForm.id || providerForm.id === "openai-compatible") providerForm.id = "deepseek";
+    if (!providerForm.name || providerForm.name === "OpenAI-compatible") providerForm.name = "DeepSeek";
+    if (!providerForm.base_url) providerForm.base_url = "https://api.deepseek.com";
+    if (!providerForm.models) providerForm.models = "deepseek-flash,deepseek-v4-pro";
+    providerForm.capabilities = "";
+  } else {
+    if (providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "";
+    if (providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "";
+  }
+}
+
 async function createProvider() {
   try {
     const capabilities = JSON.parse(providerForm.capabilities || "{}");
     const saved = await mutate("/admin/providers", "POST", {
+      kind: providerForm.kind,
       id: providerForm.id.trim(),
       name: providerForm.name.trim(),
       base_url: providerForm.base_url.trim(),
@@ -136,10 +150,14 @@ async function createProvider() {
       weight: providerForm.weight,
       enabled: providerForm.enabled
     }, "Provider 已保存");
-    if (saved) Object.assign(providerForm, { id: "", name: "", base_url: "", api_key: "", models: "", priority: 100, weight: 1, enabled: true, capabilities: "" });
+    if (saved) Object.assign(providerForm, { kind: "openai-compatible", id: "", name: "", base_url: "", api_key: "", models: "", priority: 100, weight: 1, enabled: true, capabilities: "" });
   } catch (e) {
     error.value = `Provider 能力 JSON 无效：${messageOf(e)}`;
   }
+}
+
+function refreshProviderModels(p: Row) {
+  return mutate(`/admin/providers/${encodeURIComponent(p.id)}/models/refresh`, "POST", {}, "Provider 模型目录已刷新");
 }
 
 function saveProviderPolicy(p: Row) {
@@ -307,16 +325,17 @@ onMounted(refresh);
 
         <section v-else-if="activeTab === 'providers'" class="stack">
           <article class="panel">
-            <div class="panel-title"><h2>添加 Provider</h2><span class="muted">OpenAI-compatible 上游</span></div>
+            <div class="panel-title"><h2>添加 Provider</h2><span class="muted">官方 API / OpenAI-compatible</span></div>
             <form class="form-grid" @submit.prevent="createProvider">
+              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible</option><option value="deepseek">DeepSeek 官方 API</option></select></label>
               <label>ID<input v-model="providerForm.id" required placeholder="deepseek-primary" /></label>
               <label>名称<input v-model="providerForm.name" placeholder="DeepSeek Primary" /></label>
-              <label class="wide">Base URL<input v-model="providerForm.base_url" required placeholder="https://api.example.com/v1" /></label>
+              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : 'https://api.example.com/v1'" /></label>
               <label class="wide">上游 API Key<input v-model="providerForm.api_key" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
-              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" required placeholder="model-a,model-b" /></label>
+              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : 'model-a,model-b'" /></label>
               <label>优先级<input v-model.number="providerForm.priority" type="number" min="0" /></label>
               <label>权重<input v-model.number="providerForm.weight" type="number" min="0" max="1000000" /></label>
-              <label class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
+              <label v-if="providerForm.kind !== 'deepseek'" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
               <label class="check"><input v-model="providerForm.enabled" type="checkbox" />启用</label>
               <div class="form-actions"><button class="primary" type="submit">保存 Provider</button></div>
             </form>
@@ -324,8 +343,8 @@ onMounted(refresh);
           </article>
           <article class="panel">
             <div class="panel-title"><h2>Provider 列表</h2><span class="muted">{{ providers.length }} 项</span></div>
-            <div class="table-wrap"><table><thead><tr><th>Provider</th><th>Base URL</th><th>启用</th><th>优先级</th><th>权重</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="p in providers" :key="p.id"><td><b>{{ p.name || p.id }}</b><small>{{ p.id }}</small></td><td class="url">{{ p.base_url || "—" }}</td><td><input v-model="p.enabled" type="checkbox" /></td><td><input v-model.number="p.priority" class="small-input" type="number" min="0" /></td><td><input v-model.number="p.weight" class="small-input" type="number" min="0" /></td><td class="actions"><button class="secondary" @click="saveProviderPolicy(p)">保存策略</button><button class="danger" @click="removeProvider(p)">删除</button></td></tr><tr v-if="!providers.length"><td colspan="6" class="empty">暂无 Provider</td></tr></tbody>
+            <div class="table-wrap"><table><thead><tr><th>Provider</th><th>适配器</th><th>Base URL</th><th>启用</th><th>优先级</th><th>权重</th><th>操作</th></tr></thead>
+              <tbody><tr v-for="p in providers" :key="p.id"><td><b>{{ p.name || p.id }}</b><small>{{ p.id }}</small></td><td>{{ p.kind || "openai-compatible" }}</td><td class="url">{{ p.base_url || "—" }}</td><td><input v-model="p.enabled" type="checkbox" /></td><td><input v-model.number="p.priority" class="small-input" type="number" min="0" /></td><td><input v-model.number="p.weight" class="small-input" type="number" min="0" /></td><td class="actions"><button v-if="p.kind === 'deepseek'" class="secondary" @click="refreshProviderModels(p)">刷新模型</button><button class="secondary" @click="saveProviderPolicy(p)">保存策略</button><button class="danger" @click="removeProvider(p)">删除</button></td></tr><tr v-if="!providers.length"><td colspan="7" class="empty">暂无 Provider</td></tr></tbody>
             </table></div>
           </article>
         </section>
