@@ -7,7 +7,8 @@ import (
 )
 
 type Model struct {
-	ID           string   `json:"id"`
+	ID           string
+	Name         string   `json:"name,omitempty"`   `json:"id"`
 	Provider     string   `json:"provider"`
 	Capabilities []string `json:"capabilities,omitempty"`
 	ContextLimit int      `json:"context_limit,omitempty"`
