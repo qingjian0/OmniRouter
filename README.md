@@ -82,6 +82,7 @@ export OMNI_PROVIDERS='[
 - `GET /readyz`
 - `GET /v1/models`
 - `POST /v1/chat/completions`
+- `POST /v1/responses` (native DeepSeek Responses API)
 - `POST /v1/messages`（Anthropic 文本及非流式工具调用子集；文本 SSE；流式工具调用暂不支持）
 - `POST /v1beta/models/{model}:generateContent`（Gemini 文本及非流式函数调用子集）
 - `POST /v1beta/models/{model}:streamGenerateContent`（Gemini 文本 SSE 子集；流式函数调用暂不支持）
