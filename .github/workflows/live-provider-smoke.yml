@@ -39,8 +39,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
-          test -s ../internal/admin/static/index.html
-          test -n "$(find ../internal/admin/static/assets -type f -print -quit)"
+          test -s ../internal/admin/static/dist/dist/index.html
+          test -n "$(find ../internal/admin/static/dist/dist/assets -type f -print -quit)"
 
       - name: Set up Go
         uses: actions/setup-go@v5
