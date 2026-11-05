@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"unicode"
 	"time"
+	"unicode"
 
 	"omnirouter/internal/account"
 	"omnirouter/internal/credential"
@@ -141,7 +141,7 @@ func (s *AuthorizationService) Revoke(ctx context.Context, accountID string) err
 	return s.accounts.SetStatus(ctx, accountID, account.StatusDisabled)
 }
 
- 
+
 // LoadAuthorization restores the encrypted pair after process restart. It
 // requires exactly one active access token and one active cookie credential
 // for the account; incomplete or ambiguous pairs fail closed.
