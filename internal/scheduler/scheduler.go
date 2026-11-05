@@ -13,12 +13,12 @@ import (
 )
 
 type Candidate struct {
-	Provider     provider.Provider
-	Priority     int
-	Weight       uint32
-	Enabled      bool
-	Capabilities []string
-	ContextLimit int
+	Provider                provider.Provider
+	Priority                int
+	Weight                  uint32
+	Enabled                 bool
+	Capabilities            []string
+	ContextLimit            int
 	InputCostPerMillionUSD  float64
 	OutputCostPerMillionUSD float64
 }
