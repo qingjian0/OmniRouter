@@ -186,9 +186,14 @@ All state-changing actions require the existing admin gateway authentication.
 - Do not send upstream completion requests yet.
 
 ### Slice B — interactive browser authorization
-- Dedicated profile lifecycle and visible login.
-- User-triggered import/consent and minimal credential extraction.
-- Encrypted persistence, re-authentication, revoke, expiry, restart restore.
+- [x] Add an in-memory, cryptographically random, single-use pairing ticket with a 2-minute lifetime and bounded pending-ticket count.
+- [x] Add exact-origin validators for the DeepSeek page and administrator-configured browser extension origin.
+- [x] Add loopback-peer validation for the future local pairing endpoint.
+- [x] Add tests for ticket replay, expiry, pending-ticket limits, origin spoofing, and non-loopback peers.
+- [ ] Implement the authenticated admin pairing endpoint and extension-origin allowlist configuration.
+- [ ] Build the browser extension with explicit active-tab consent and minimal session extraction.
+- [ ] Connect the pairing endpoint to the encrypted AuthorizationService.
+- [ ] Test extension pairing on Windows, Linux, and macOS; evaluate Android browser support separately.
 - No real account credentials in CI.
 
 ### Slice C — protocol transport
