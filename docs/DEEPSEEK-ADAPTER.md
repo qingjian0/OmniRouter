@@ -95,3 +95,13 @@ Authorization: Bearer <OMNI_GATEWAY_API_KEY>
 A successful response returns the discovered model records and count. The route
 fails closed on upstream discovery errors, persists the new catalogue, removes
 stale model rows for that Provider, and replaces its scheduler routes.
+
+## Live acceptance
+
+The repository includes `scripts/deepseek-smoke.sh` and the manual GitHub Actions
+workflow `.github/workflows/deepseek-live-smoke.yml`. Configure the repository
+secrets `OMNI_PROVIDER_API_KEY`, `OMNI_CREDENTIAL_ENCRYPTION_KEY`, and
+`OMNI_GATEWAY_API_KEY`, then dispatch the workflow with the model to test.
+It checks catalogue discovery, Chat Completions (including thinking), native
+Responses API, both SSE terminal formats, and usage endpoint availability.
+No secret value is printed by the script.
