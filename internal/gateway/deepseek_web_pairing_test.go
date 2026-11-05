@@ -183,3 +183,28 @@ func TestDeepSeekWebPairingCreationRequiresConfiguredGatewayKey(t *testing.T) {
 		t.Fatalf("status=%d, want %d", response.Code, http.StatusServiceUnavailable)
 	}
 }
+
+func TestDeepSeekWebPairingCreationReturnsShortLivedNonce(t *testing.T) {
+	h := newDeepSeekWebPairingTestHandler(t)
+	h.apiKey = "configured-master-key"
+	request := httptest.NewRequest(http.MethodPost, "/admin/deepseek-web/pairings", strings.NewReader(`{"provider_id":"ds-web","account_name":"test account"}`))
+	response := httptest.NewRecorder()
+	h.createDeepSeekWebPairing(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var result struct {
+		Nonce      string `json:"nonce"`
+		ProviderID string `json:"provider_id"`
+		Account    string `json:"account_name"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Nonce) != 64 || result.ProviderID != "ds-web" || result.Account != "test account" {
+		t.Fatalf("unexpected pairing response: %+v", result)
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("pairing response must not be cached")
+	}
+}
