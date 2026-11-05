@@ -99,7 +99,8 @@ stale model rows for that Provider, and replaces its scheduler routes.
 ## Live acceptance
 
 The repository includes `scripts/deepseek-smoke.sh` and the manual GitHub Actions
-workflow `.github/workflows/deepseek-live-smoke.yml`. Configure the repository
+workflow `.github/workflows/deepseek-live-smoke.yml`. The script exercises all
+three public protocol paths: Chat Completions, Responses, and Anthropic Messages. Configure the repository
 secrets `OMNI_PROVIDER_API_KEY`, `OMNI_CREDENTIAL_ENCRYPTION_KEY`, and
 `OMNI_GATEWAY_API_KEY`, then dispatch the workflow with the model to test.
 It checks catalogue discovery, Chat Completions (including thinking and forced
