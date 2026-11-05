@@ -1,6 +1,6 @@
 # DeepSeek consumer-web adapter RFC
 
-Status: Slice A security boundary partially implemented / not release-certified  
+Status: Slice A security boundary and Slice B pairing path/source implemented / not release-certified  
 Target branch: `feature/deepseek-web-adapter` (stacked on the official API adapter branch)
 
 ## 1. Scope and trust boundary
@@ -190,7 +190,8 @@ All state-changing actions require the existing admin gateway authentication.
 - [x] Add tests for malformed/foreign cookies, injection, duplicate cookies, missing session ID, input-buffer isolation, redaction header names, and typed upstream status mapping.
 - [x] Add SQLite integration coverage for authorize / encrypted restart restore / revoke.
 - [ ] Execute the repository-wide CI suite and add failure-injection coverage for partial persistence rollback.
-- [ ] Register `deepseek-web` as a runtime provider only after the browser authorization and transport interfaces are ready.
+- [x] Add an inert `deepseek-web` registration shell so admins can create the provider and pair a session; it advertises zero models and rejects API keys/model lists, so it cannot receive inference traffic.
+- [ ] Replace the inert shell with the real runtime Provider only after the version-isolated browser transport and SSE interfaces are implemented.
 - Do not send upstream completion requests yet.
 
 ### Slice B — interactive browser authorization
