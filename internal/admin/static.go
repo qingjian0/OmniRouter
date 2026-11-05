@@ -17,8 +17,8 @@ func Handler() http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	content := static
-	if _, err := fs.Stat(static, "dist/index.html"); err == nil {
+	var content fs.FS
+	if _, statErr := fs.Stat(static, "dist/index.html"); statErr == nil {
 		content, err = fs.Sub(assets, "static/dist")
 	} else {
 		content, err = fs.Sub(assets, "fallback")
