@@ -83,6 +83,7 @@ func NewHandlerWithFullRepositories(registry *provider.Registry, apiKey string, 
 	h.mux.Handle("GET /", admin.Handler())
 	h.mux.Handle("GET /v1/models", h.protect(http.HandlerFunc(h.models)))
 	h.mux.Handle("POST /v1/chat/completions", h.protect(http.HandlerFunc(h.chatCompletions)))
+	h.mux.Handle("POST /v1/responses", h.protect(http.HandlerFunc(h.responses)))
 	h.mux.Handle("POST /v1/messages", h.protect(http.HandlerFunc(h.anthropicMessages)))
 	h.mux.Handle("POST /v1beta/models/", h.protect(http.HandlerFunc(h.geminiGenerateContent)))
 	h.mux.Handle("GET /admin/providers", h.protect(http.HandlerFunc(h.adminProviders)))
@@ -141,6 +142,107 @@ func (h *Handler) models(w http.ResponseWriter, r *http.Request) {
 		data = append(data, map[string]any{"id": model.ID, "object": "model", "owned_by": model.Provider, "name": model.Name, "capabilities": model.Capabilities, "context_limit": model.ContextLimit, "max_output_tokens": model.MaxOutputTokens, "input_modalities": model.InputModalities, "output_modalities": model.OutputModalities, "reasoning_effort": model.ReasoningEffort, "api_capabilities": model.APICapabilities})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"object": "list", "data": data})
+}
+
+func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, (8<<20)+1))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "could not read request body")
+		return
+	}
+	if len(body) > 8<<20 {
+		writeError(w, http.StatusRequestEntityTooLarge, "invalid_request_error", "request body exceeds 8 MiB")
+		return
+	}
+	var request struct {
+		Model  string `json:"model"`
+		Stream bool   `json:"stream"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil || strings.TrimSpace(request.Model) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "valid JSON with a model is required")
+		return
+	}
+	var upstream provider.Provider
+	if h.selector != nil {
+		upstream, err = h.selectProviderFor(r.Context(), request.Model, []string{"responses"})
+	} else {
+		var ok bool
+		upstream, ok = h.registry.ResolveModel(request.Model)
+		if !ok {
+			err = http.ErrNoLocation
+		}
+	}
+	if err != nil || upstream == nil {
+		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = request.Model })
+		setRequestError(r, "provider_unavailable")
+		writeError(w, http.StatusServiceUnavailable, "provider_unavailable", "no healthy provider declares native Responses API support for model "+request.Model)
+		return
+	}
+	responsesProvider, ok := upstream.(provider.ResponsesProvider)
+	if !ok {
+		writeError(w, http.StatusNotImplemented, "unsupported_operation", "selected provider does not implement the native Responses API")
+		return
+	}
+	setRequestRoute(r, upstream, request.Model)
+	input := &provider.Request{Model: request.Model, Input: body, Stream: request.Stream}
+	if !request.Stream {
+		result, callErr := responsesProvider.GenerateResponses(r.Context(), input)
+		if callErr != nil {
+			setRequestError(r, classifyRequestError(r, callErr, false))
+			if h.selector != nil {
+				h.selector.ReportFailure(upstream.ID())
+			}
+			writeError(w, http.StatusBadGateway, "upstream_error", "Responses API upstream request failed")
+			return
+		}
+		captureResponsesUsage(r, result.Output)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(result.Output)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "server_error", "streaming is not supported by this server")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	beginStreamRequest(r)
+	var usage *tokenusage.Usage
+	terminal := false
+	streamErr := responsesProvider.StreamResponses(r.Context(), input, func(event provider.Event) error {
+		if len(event.Data) > 0 {
+			usage = mergeResponsesStreamUsage(r, usage, event.Data, event.Done && event.ExplicitDone)
+			if _, writeErr := w.Write(event.Data); writeErr != nil {
+				return downstreamWriteError{err: writeErr}
+			}
+			flusher.Flush()
+		}
+		if event.Done {
+			terminal = event.ExplicitDone
+			if usage != nil {
+				usage.Final = event.ExplicitDone
+			}
+			storeRequestUsage(r, usage)
+		}
+		return nil
+	})
+	if streamErr != nil {
+		storeRequestUsage(r, usage)
+		setRequestError(r, classifyRequestError(r, streamErr, true))
+		if h.selector != nil {
+			h.selector.ReportFailure(upstream.ID())
+		}
+	} else if !terminal {
+		storeRequestUsage(r, usage)
+		setRequestError(r, "stream_incomplete")
+	} else {
+		completeStreamRequest(r)
+	}
 }
 
 func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -622,6 +724,25 @@ func storeRequestUsage(r *http.Request, usage *tokenusage.Usage) {
 		d.UsageSource = usage.Source
 		d.UsageFinal = usage.Final
 	})
+}
+
+func mergeResponsesStreamUsage(r *http.Request, current *tokenusage.Usage, raw []byte, final bool) *tokenusage.Usage {
+	data := eventData(raw)
+	next, err := tokenusage.ParseResponses(data, final)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return current
+	}
+	return tokenusage.Merge(current, next)
+}
+
+func captureResponsesUsage(r *http.Request, raw []byte) {
+	usage, err := tokenusage.ParseResponses(raw, true)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return
+	}
+	storeRequestUsage(r, usage)
 }
 
 func captureResponseUsage(r *http.Request, raw []byte) {
