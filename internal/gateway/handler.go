@@ -1413,7 +1413,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	models, _ := upstream.ListModels(r.Context())
 	if h.modelRepo != nil {
 		for _, item := range models {
-			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: input.ID, DisplayName: item.ID, ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
+			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: input.ID, DisplayName: modelDisplayName(item), ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
 				writeError(w, http.StatusInternalServerError, "storage_error", "could not persist provider model")
 				return
 			}
@@ -1437,6 +1437,11 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		manager.AddOrReplaceProvider(upstream, input.Models, input.Priority, input.Weight, enabled)
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": upstream.ID(), "name": upstream.Name(), "kind": kind, "models": input.Models, "model_capabilities": input.ModelCapabilities, "model_context_limits": input.ModelContextLimits, "enabled": enabled, "persisted": h.providerRepo != nil, "credentials_persisted": h.providerRepo != nil && (input.APIKey == "" || (h.credentials != nil && h.credentials.Persistent()))})
+}
+
+func modelDisplayName(item provider.Model) string {
+	if name := strings.TrimSpace(item.Name); name != "" { return name }
+	return item.ID
 }
 
 func (h *Handler) setProviderPolicy(w http.ResponseWriter, r *http.Request) {
