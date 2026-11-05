@@ -13,19 +13,19 @@ import (
 )
 
 const (
-	ProviderKind = "deepseek-web"
-	DefaultOrigin = "https://chat.deepseek.com"
-	MaxTokenBytes = 16 << 10
-	MaxCookieBytes = 32 << 10
-	MaxCookieCount = 64
+	ProviderKind    = "deepseek-web"
+	DefaultOrigin   = "https://chat.deepseek.com"
+	MaxTokenBytes   = 16 << 10
+	MaxCookieBytes  = 32 << 10
+	MaxCookieCount  = 64
 )
 
 var (
 	ErrAuthorizationRequired = errors.New("DeepSeek web authorization is required")
-	ErrSessionExpired = errors.New("DeepSeek web session has expired")
-	ErrPolicyBlocked = errors.New("DeepSeek web request was blocked by an upstream policy")
-	ErrUpstreamChanged = errors.New("DeepSeek web protocol changed")
-	ErrRateLimited = errors.New("DeepSeek web request was rate limited")
+	ErrSessionExpired        = errors.New("DeepSeek web session has expired")
+	ErrPolicyBlocked         = errors.New("DeepSeek web request was blocked by an upstream policy")
+	ErrUpstreamChanged       = errors.New("DeepSeek web protocol changed")
+	ErrRateLimited           = errors.New("DeepSeek web request was rate limited")
 )
 
 // BrowserCookie is the minimum browser-cookie data accepted at the explicit
@@ -49,7 +49,7 @@ type AuthorizationInput struct {
 // AuthorizationMaterial is validated secret material. It must never be logged,
 // marshalled to JSON, or returned by an admin API.
 type AuthorizationMaterial struct {
-	Token       []byte
+	Token        []byte
 	CookieHeader []byte
 }
 
@@ -101,7 +101,7 @@ func ValidateAuthorization(input AuthorizationInput) (AuthorizationMaterial, err
 	sort.Strings(cookies)
 	header := strings.Join(cookies, "; ")
 	return AuthorizationMaterial{
-		Token: append([]byte(nil), input.Token...),
+		Token:        append([]byte(nil), input.Token...),
 		CookieHeader: []byte(header),
 	}, nil
 }
