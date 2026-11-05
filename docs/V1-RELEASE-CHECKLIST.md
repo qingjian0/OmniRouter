@@ -46,6 +46,8 @@ one category must not be represented as passing another.
 
 - [x] An opt-in OpenAI-compatible live smoke script is provided at
       `scripts/provider-smoke.sh`; its real-provider execution remains pending.
+- [x] A manual GitHub Actions workflow is provided to run the live smoke test
+      using repository secrets; it must be configured and executed before release.
 
 Use test credentials stored only as GitHub Actions secrets or local environment
 variables. Never commit credentials, cookies, API keys, or real request payloads.
