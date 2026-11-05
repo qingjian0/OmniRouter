@@ -209,11 +209,12 @@ func (p *Provider) authorize(req *http.Request) {
 }
 
 func modelDefaults(providerID, id string) provider.Model {
-	m := provider.Model{ID: id, Name: id, Provider: providerID, Capabilities: []string{"chat", "streaming", "tools", "reasoning"}}
+	m := provider.Model{ID: id, Name: id, Provider: providerID, Capabilities: []string{"chat", "streaming"}}
 	switch id {
 	case "deepseek-flash":
 		m.Name = "DeepSeek V4.1 Flash"
-		m.Capabilities = append(m.Capabilities, "vision", "responses")
+		m.Capabilities = append(m.Capabilities, "tools", "reasoning", "vision", "responses")
+		m.APICapabilities = []string{"anthropic_messages", "openai_responses"}
 		m.ContextLimit = 1048576
 		m.MaxOutputTokens = 393216
 		m.InputModalities = []string{"text", "image"}
@@ -221,7 +222,8 @@ func modelDefaults(providerID, id string) provider.Model {
 		m.ReasoningEffort = []string{"low", "high", "max"}
 	case "deepseek-v4-pro":
 		m.Name = "DeepSeek V4 Pro"
-		m.Capabilities = append(m.Capabilities, "responses")
+		m.Capabilities = append(m.Capabilities, "tools", "reasoning", "responses")
+		m.APICapabilities = []string{"anthropic_messages", "openai_responses"}
 		m.ContextLimit = 1048576
 		m.MaxOutputTokens = 393216
 		m.InputModalities = []string{"text"}
