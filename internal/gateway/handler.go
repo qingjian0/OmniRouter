@@ -1603,8 +1603,25 @@ func (h *Handler) refreshProviderModels(w http.ResponseWriter, r *http.Request) 
 		priority, weight, enabled = normalizedPriority(record.Priority), normalizedWeight(record.Weight), record.Enabled
 	}
 	if h.modelRepo != nil {
+		existing, listErr := h.modelRepo.List(r.Context(), id)
+		if listErr != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "could not inspect existing provider models")
+			return
+		}
+		discovered := make(map[string]struct{}, len(models))
 		for _, item := range models {
-			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: id, DisplayName: modelDisplayName(item), ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
+			discovered[item.ID] = struct{}{}
+		}
+		for _, item := range existing {
+			if _, ok := discovered[item.ID]; !ok {
+				if err := h.modelRepo.Delete(r.Context(), item.ID, id); err != nil {
+					writeError(w, http.StatusInternalServerError, "storage_error", "could not remove stale provider model")
+					return
+				}
+			}
+		}
+		for _, item := range models {
+			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: id, DisplayName: modelDisplayName(provider.Model{ID: item.ID, Name: item.DisplayName}), ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
 				writeError(w, http.StatusInternalServerError, "storage_error", "could not persist discovered model")
 				return
 			}
@@ -1623,7 +1640,9 @@ func (h *Handler) refreshProviderModels(w http.ResponseWriter, r *http.Request) 
 }
 
 func modelDisplayName(item provider.Model) string {
-	if name := strings.TrimSpace(item.Name); name != "" { return name }
+	if name := strings.TrimSpace(item.Name); name != "" {
+		return name
+	}
 	return item.ID
 }
 
