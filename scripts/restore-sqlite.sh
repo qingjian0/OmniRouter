@@ -20,6 +20,10 @@ if ! command -v sqlite3 >/dev/null 2>&1; then
 fi
 
 if [[ -f "${BACKUP}.sha256" ]]; then
+  if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+    echo "sha256sum or shasum is required to verify the backup." >&2
+    exit 2
+  fi
   expected="$(awk '{print $1}' "${BACKUP}.sha256")"
   if command -v sha256sum >/dev/null 2>&1; then
     actual="$(sha256sum "${BACKUP}" | awk '{print $1}')"
