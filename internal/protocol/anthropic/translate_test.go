@@ -118,3 +118,15 @@ func TestImageAndToolTranslation(t *testing.T) {
 		t.Fatalf("unexpected Anthropic tool response: %s", output)
 	}
 }
+
+
+func TestRequestMetadataDoesNotTranslateContentBlocks(t *testing.T) {
+	body := []byte(`{"model":"deepseek-flash","stream":true,"messages":[{"role":"user","content":[{"type":"image","source":{"type":"file","file_id":"file_123"}}]}]}`)
+	model, stream, err := RequestMetadata(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model != "deepseek-flash" || !stream {
+		t.Fatalf("metadata = %q/%v", model, stream)
+	}
+}
