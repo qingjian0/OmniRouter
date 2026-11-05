@@ -17,7 +17,7 @@ one category must not be represented as passing another.
 
 - [x] Go 1.23 module and dependency lockfile are present.
 - [x] Real `modernc.org/sqlite` integration suite passed in GitHub Actions
-      run 41954487103, according to the repository validation record.
+      run 41963844575, according to the repository validation record.
 - [x] `go test ./...`, `go test -race ./...`, `go vet ./...`, and Linux
       executable build passed in that run.
 - [ ] Re-run all gates on the final release candidate commit.
@@ -39,8 +39,11 @@ one category must not be represented as passing another.
       are documented. Persistent key rotation remains explicitly out of scope
       unless implemented and tested before release.
 - [ ] Admin API authorization, secret redaction, and input validation pass.
-- [ ] The embedded admin page clearly exposes the V1 operational controls and
-      does not imply unsupported browser-login/session automation.
+- [x] The Vue 3 + TypeScript admin console exposes Provider, Model, Account,
+      Session, Credential, API Key, request history, usage, and service overview
+      controls; CI run 41963844575 verified the embedded index and static assets.
+- [ ] The console's admin API authorization, secret redaction, and input-validation
+      behavior must still pass the dedicated security acceptance review.
 
 ## Provider acceptance
 
@@ -61,12 +64,14 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
 
 ## Build and packaging
 
-- [x] Linux amd64/arm64, Windows amd64, and macOS amd64/arm64 binaries and archives all built successfully in CI run 41959344425.
+- [x] Linux amd64/arm64, Windows amd64, and macOS amd64/arm64 binaries and archives all built successfully in CI run 41963844575.
 - [x] Release workflow is configured to generate SHA-256 checksums for every release asset; an actual tagged release is still pending.
 - [x] Fresh-install and upgrade instructions drafted in `docs/INSTALL.md`; fresh-machine execution remains pending.
-- [x] Release archives include the binary, README, installation guide, secret-free environment template, acceptance guides, and operational scripts; archive creation is tested in the current CI.
+- [x] Release archives include the binary, README, installation guide, secret-free environment template, acceptance guides, database recovery guide, and operational scripts; archive creation is tested in CI run 41963844575.
+- [x] Binaries expose `--version`; the release linker flags embed the exact version tag and checked-out commit SHA, verified by CI.
 - [x] SQLite backup/restore documentation and scripts added (`docs/DATABASE-BACKUP-RESTORE.md`, `scripts/backup-sqlite.sh`, `scripts/restore-sqlite.sh`).
-- [ ] CI backup/restore script test and a real deployment restore acceptance must pass.
+- [x] CI backup/restore round-trip test passed in run 41963844575.
+- [ ] A real deployment restore acceptance must still pass.
 - [ ] Release notes list supported protocol subsets and known limitations.
 - [x] Android/Termux runtime smoke script and device procedure are provided in `scripts/termux-smoke.sh` and `docs/ANDROID-TERMUX-ACCEPTANCE.md`.
 - [ ] Android/Termux arm64 runtime is tested on a real device: launch, SQLite
