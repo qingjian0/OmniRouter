@@ -44,6 +44,9 @@ one category must not be represented as passing another.
 
 ## Provider acceptance
 
+- [x] An opt-in OpenAI-compatible live smoke script is provided at
+      `scripts/provider-smoke.sh`; its real-provider execution remains pending.
+
 Use test credentials stored only as GitHub Actions secrets or local environment
 variables. Never commit credentials, cookies, API keys, or real request payloads.
 
@@ -62,8 +65,11 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
 - [ ] Fresh-install and upgrade instructions verified.
 - [ ] Database backup/restore procedure documented and tested.
 - [ ] Release notes list supported protocol subsets and known limitations.
-- [ ] Android/Termux runtime is explicitly marked unverified and is not advertised
-      as a V1 supported target until device testing is complete.
+- [ ] Android/Termux arm64 runtime is tested on a real device: launch, SQLite
+      read/write and restart recovery, local/LAN binding, storage permissions,
+      and process shutdown/restart. The Linux arm64 release binary is the
+      intended Termux artifact; this is not an Android APK.
+- [ ] Do not publish V1 as supporting Android/Termux until the device gate above passes.
 
 ## Publication
 
