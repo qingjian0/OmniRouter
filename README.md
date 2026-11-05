@@ -46,7 +46,8 @@ export OMNI_PROVIDER_ID=deepseek
 export OMNI_PROVIDER_NAME=DeepSeek
 export OMNI_PROVIDER_BASE_URL=https://api.deepseek.com/v1
 export OMNI_PROVIDER_API_KEY='your-provider-api-key'
-export OMNI_PROVIDER_MODELS=deepseek-chat,deepseek-reasoner
+export OMNI_PROVIDER_MODELS=deepseek-chat
+export OMNI_PROVIDER_MODEL_CAPABILITIES='{"deepseek-chat":["chat","streaming","tools"]}',deepseek-reasoner
 ```
 
 ### 多 Provider 配置
