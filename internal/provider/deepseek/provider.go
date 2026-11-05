@@ -127,6 +127,8 @@ func (p *Provider) ListModels(ctx context.Context) ([]provider.Model, error) {
 // DiscoverModels reads the authenticated official GET /models catalogue and
 // maps provider metadata into OmniRouter's provider-neutral model vocabulary.
 func (p *Provider) DiscoverModels(ctx context.Context) ([]provider.Model, error) {
+	ctx, cancel := boundedContext(ctx)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/models", nil)
 	if err != nil {
 		return nil, err
@@ -244,6 +246,13 @@ func effortLevels(value *struct {
 		return nil
 	}
 	return append([]string(nil), value.SupportedLevels...)
+}
+
+func boundedContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, 10*time.Second)
 }
 
 func contains(values []string, wanted string) bool {
