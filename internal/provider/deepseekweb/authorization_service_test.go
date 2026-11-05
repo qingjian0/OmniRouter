@@ -10,6 +10,7 @@ import (
 
 	"omnirouter/internal/account"
 	"omnirouter/internal/credential"
+	providerrepo "omnirouter/internal/provider"
 	"omnirouter/internal/security"
 	"omnirouter/internal/session"
 	"omnirouter/internal/storage"
@@ -33,6 +34,16 @@ func TestAuthorizationServicePersistsRestoresAndRevokes(t *testing.T) {
 	}
 	vault, err := credential.NewPersistentVault(encryptor, credentialRepo)
 	if err != nil {
+		t.Fatal(err)
+	}
+	providerRepo, err := providerrepo.NewRepository(runtime.Store().DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := providerRepo.Upsert(ctx, providerrepo.ProviderConfig{
+		ID: "deepseek-web", Name: "DeepSeek Web", Kind: ProviderKind,
+		BaseURL: DefaultOrigin, Enabled: true,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	accountRepo, err := account.NewRepository(runtime.Store().DB())
