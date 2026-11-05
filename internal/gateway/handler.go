@@ -27,6 +27,7 @@ import (
 	"omnirouter/internal/protocol/gemini"
 	"omnirouter/internal/provider"
 	"omnirouter/internal/session"
+	"omnirouter/internal/scheduler"
 	"omnirouter/internal/storage"
 	"omnirouter/internal/tokenusage"
 )
@@ -166,7 +167,8 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 	var upstream provider.Provider
 	if h.selector != nil {
 		requirements := append(requiredCapabilities(body), "responses")
-		upstream, err = h.selectProviderFor(r.Context(), request.Model, requirements)
+		profile := adaptiveProfileForRequest(r, body, requirements)
+		upstream, err = h.selectProviderFor(r.Context(), request.Model, requirements, profile)
 	} else {
 		var ok bool
 		upstream, ok = h.registry.ResolveModel(request.Model)
@@ -269,7 +271,9 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	var p provider.Provider
 	if h.selector != nil {
-		p, err = h.selectProviderFor(r.Context(), request.Model, requiredCapabilities(body))
+		required := requiredCapabilities(body)
+		profile := adaptiveProfileForRequest(r, body, required)
+		p, err = h.selectProviderFor(r.Context(), request.Model, required, profile)
 	} else {
 		var ok bool
 		p, ok = h.registry.ResolveModel(request.Model)
@@ -336,7 +340,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	response, p, err := h.generateWithFallback(r.Context(), p, request.Model, requiredCapabilities(body), body)
+	response, p, err := h.generateWithFallback(r.Context(), p, request.Model, requiredCapabilities(body), adaptiveProfileForRequest(r, body, requiredCapabilities(body)), body)
 	if err != nil {
 		setRequestRoute(r, p, request.Model)
 		setRequestError(r, classifyRequestError(r, err, false))
@@ -372,7 +376,8 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 	if stream {
 		nativeRequirements = append(nativeRequirements, "streaming")
 	}
-	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements); nativeErr == nil {
+	profile := adaptiveProfileForRequest(r, body, nativeRequirements)
+	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements, profile); nativeErr == nil {
 		if nativeAnthropic, ok := native.(provider.AnthropicProvider); ok {
 			setRequestRoute(r, native, model)
 			if stream {
@@ -401,7 +406,9 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
 	}
-	p, err := h.selectProviderFor(r.Context(), model, requiredCapabilities(body))
+	required := requiredCapabilities(body)
+	profile := adaptiveProfileForRequest(r, body, required)
+	p, err := h.selectProviderFor(r.Context(), model, required, profile)
 	if err != nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = model })
 		setRequestError(r, "provider_unavailable")
@@ -413,7 +420,7 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 		h.streamAnthropic(w, r, p, model, openAIRequest)
 		return
 	}
-	response, p, err := h.generateWithFallback(r.Context(), p, model, requiredCapabilities(body), openAIRequest)
+	response, p, err := h.generateWithFallback(r.Context(), p, model, requiredCapabilities(body), profile, openAIRequest)
 	if err != nil {
 		setRequestRoute(r, p, model)
 		setRequestError(r, classifyRequestError(r, err, false))
@@ -466,7 +473,8 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 	if stream {
 		required = append(required, "streaming")
 	}
-	p, err := h.selectProviderFor(r.Context(), model, required)
+	profile := adaptiveProfileForRequest(r, body, required)
+	p, err := h.selectProviderFor(r.Context(), model, required, profile)
 	if err != nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = model })
 		setRequestError(r, "provider_unavailable")
@@ -478,7 +486,7 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 		h.streamGemini(w, r, p, model, payload)
 		return
 	}
-	response, p, err := h.generateWithFallback(r.Context(), p, model, required, payload)
+	response, p, err := h.generateWithFallback(r.Context(), p, model, required, profile, payload)
 	if err != nil {
 		setRequestRoute(r, p, model)
 		setRequestError(r, classifyRequestError(r, err, false))
@@ -514,7 +522,7 @@ func (h *Handler) reportProviderOutcome(p provider.Provider, latency time.Durati
 // generateWithFallback retries a failed non-streaming request on another
 // healthy provider for the same model. It never retries a provider twice in
 // one request and preserves the original capability requirements.
-func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, payload []byte) (*provider.Response, provider.Provider, error) {
+func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, profile scheduler.AdaptiveProfile, payload []byte) (*provider.Response, provider.Provider, error) {
 	if initial == nil {
 		return nil, nil, fmt.Errorf("no provider selected")
 	}
@@ -545,7 +553,7 @@ func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Pro
 			break
 		}
 		h.selector.ReportFailure(current.ID())
-		next, selectErr := h.selectProviderFor(ctx, model, required)
+		next, selectErr := h.selectProviderFor(ctx, model, required, profile)
 		if selectErr != nil {
 			break
 		}
@@ -888,13 +896,106 @@ func eventData(raw []byte) []byte {
 	return []byte(strings.Join(lines, "\n"))
 }
 
-func (h *Handler) selectProviderFor(ctx context.Context, model string, required []string) (provider.Provider, error) {
+func (h *Handler) selectProviderFor(ctx context.Context, model string, required []string, profile scheduler.AdaptiveProfile) (provider.Provider, error) {
+	if selector, ok := h.selector.(interface {
+		SelectAdaptive(context.Context, string, []string, scheduler.AdaptiveProfile) (provider.Provider, error)
+	}); ok {
+		return selector.SelectAdaptive(ctx, model, required, profile)
+	}
 	if selector, ok := h.selector.(interface {
 		SelectWithRequirements(context.Context, string, []string) (provider.Provider, error)
 	}); ok {
 		return selector.SelectWithRequirements(ctx, model, required)
 	}
 	return h.selectProvider(ctx, model)
+}
+
+
+func adaptiveProfileForRequest(r *http.Request, body []byte, required []string) scheduler.AdaptiveProfile {
+	objective := strings.ToLower(strings.TrimSpace(r.Header.Get("X-OmniRouter-Objective")))
+	switch objective {
+	case "balanced", "economy", "speed", "reasoning", "vision", "tools":
+	default:
+		objective = objectiveForCapabilities(required)
+	}
+	inputTokens := positiveTokenEstimate(r.Header.Get("X-OmniRouter-Input-Tokens"), 2_000_000)
+	if inputTokens == 0 {
+		inputTokens = int64((len(body) + 3) / 4)
+		if inputTokens < 1 {
+			inputTokens = 1
+		}
+	}
+	outputTokens := positiveTokenEstimate(r.Header.Get("X-OmniRouter-Output-Tokens"), 1_000_000)
+	if outputTokens == 0 {
+		outputTokens = declaredOutputTokenLimit(body)
+	}
+	if outputTokens == 0 {
+		outputTokens = 512
+	}
+	return scheduler.AdaptiveProfile{
+		TaskType: objective, EstimatedInputTokens: inputTokens, EstimatedOutputTokens: outputTokens,
+	}
+}
+
+func objectiveForCapabilities(required []string) string {
+	for _, capability := range required {
+		if capability == "reasoning" {
+			return "reasoning"
+		}
+	}
+	for _, capability := range required {
+		if capability == "vision" {
+			return "vision"
+		}
+	}
+	for _, capability := range required {
+		if capability == "tools" {
+			return "tools"
+		}
+	}
+	for _, capability := range required {
+		if capability == "streaming" {
+			return "speed"
+		}
+	}
+	return "balanced"
+}
+
+func positiveTokenEstimate(raw string, maximum int64) int64 {
+	value, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || value <= 0 || value > maximum {
+		return 0
+	}
+	return value
+}
+
+func declaredOutputTokenLimit(body []byte) int64 {
+	var value any
+	if json.Unmarshal(body, &value) != nil {
+		return 0
+	}
+	var maximum int64
+	var walk func(any)
+	walk = func(item any) {
+		switch current := item.(type) {
+		case map[string]any:
+			for key, child := range current {
+				switch key {
+				case "max_tokens", "max_completion_tokens", "max_output_tokens", "maxOutputTokens":
+					if number, ok := child.(float64); ok && number > 0 && number <= 1_000_000 && int64(number) > maximum {
+						maximum = int64(number)
+					}
+				}
+				walk(child)
+			}
+		case []any:
+			for _, child := range current {
+				walk(child)
+			}
+		}
+	}
+	walk(value)
+	return maximum
 }
 
 // requiredCapabilities performs conservative structural detection. It does not
