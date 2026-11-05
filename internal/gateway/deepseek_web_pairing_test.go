@@ -111,8 +111,12 @@ func TestDeepSeekWebPairingSubmissionPersistsAndConsumesTicket(t *testing.T) {
 	if string(material.Token) != "test-access-token" {
 		t.Fatal("stored access token does not match submitted token")
 	}
-	for i := range material.Token { material.Token[i] = 0 }
-	for i := range material.CookieHeader { material.CookieHeader[i] = 0 }
+	for i := range material.Token {
+		material.Token[i] = 0
+	}
+	for i := range material.CookieHeader {
+		material.CookieHeader[i] = 0
+	}
 
 	replay := httptest.NewRecorder()
 	replayRequest := httptest.NewRequest(http.MethodPost, "/internal/deepseek-web/pairings/"+ticket.Nonce, strings.NewReader(body))
