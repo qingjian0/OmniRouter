@@ -37,3 +37,26 @@ the OpenAI-compatible gateway path at that time. It does not certify Anthropic
 or Gemini protocol translation, tool calls, vision, provider failover, long
 streams, cancellation, or every model capability. Those require separate
 acceptance cases and must be recorded independently.
+
+
+## Optional GitHub Actions live test
+
+The repository also provides `.github/workflows/live-provider-smoke.yml`.
+After this workflow is merged to the default branch, configure these repository
+Actions secrets:
+
+- `OMNI_PROVIDER_BASE_URL` — OpenAI-compatible upstream root URL, usually ending
+  in `/v1`.
+- `OMNI_PROVIDER_API_KEY` — upstream credential.
+- `OMNI_CREDENTIAL_ENCRYPTION_KEY` — Base64-encoded 32-byte key used by the
+  gateway's persistent credential vault.
+- `OMNI_GATEWAY_API_KEY` — gateway access key.
+
+Then run **Actions → Live Provider Smoke → Run workflow** and enter one model ID
+that the upstream supports. The workflow builds OmniRouter, starts it with a
+temporary SQLite database, and executes the same non-streaming + SSE smoke test.
+It does not reveal the secret values or print response bodies.
+
+This workflow validates one real OpenAI-compatible upstream path only. It does
+not certify Anthropic/Gemini request translation or Android/Termux runtime.
+Do not add credentials to workflow inputs, source files, or commit messages.

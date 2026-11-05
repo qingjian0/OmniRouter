@@ -45,7 +45,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -70,17 +70,19 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           EXT: ${{ matrix.ext }}
-          VERSION: ${{ inputs.tag || github.ref_name }}
+          VERSION: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           mkdir -p dist
           name="omnirouter-${VERSION}-${GOOS}-${GOARCH}"
           CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "dist/${name}${EXT}" ./cmd/omnirouter
           cp README.md "dist/README.md"
+          cp docs/INSTALL.md "dist/INSTALL.md"
+          cp examples/omnirouter.env.example "dist/omnirouter.env.example"
           if [ "${GOOS}" = "windows" ]; then
-            (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md)
+            (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example)
           else
-            tar -C dist -czf "dist/${name}.tar.gz" "${name}${EXT}" README.md
+            tar -C dist -czf "dist/${name}.tar.gz" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example
           fi
 
       - name: Upload release asset
@@ -110,7 +112,7 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          name: OmniRouter ${{ inputs.tag || github.ref_name }}
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: OmniRouter ${{ github.event.inputs.tag || github.ref_name }}
           generate_release_notes: true
           files: release-assets/*
