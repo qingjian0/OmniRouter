@@ -98,3 +98,70 @@ func hasCapability(model provider.Model, wanted string) bool {
 	for _, capability := range model.Capabilities { if capability == wanted { return true } }
 	return false
 }
+
+
+func TestGenerateResponsesPreservesRequestAndResponse(t *testing.T) {
+	var received map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/responses" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-secret" {
+			t.Fatal("missing bearer authorization")
+		}
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatal(err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp_1","object":"response","status":"completed","model":"deepseek-flash","output":[{"type":"message","content":[{"type":"output_text","text":"hello"}]}],"usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20,"output_tokens_details":{"reasoning_tokens":3}}}`))
+	}))
+	defer server.Close()
+	p, err := New(Config{ID:"deepseek",APIKey:"test-secret",BaseURL:server.URL,Client:server.Client()})
+	if err != nil { t.Fatal(err) }
+	input := []byte(`{"model":"deepseek-flash","input":"hello","reasoning":{"effort":"high"},"stream":false}`)
+	response, err := p.GenerateResponses(context.Background(), &provider.Request{Model:"deepseek-flash",Input:input})
+	if err != nil { t.Fatal(err) }
+	if received["reasoning"] == nil { t.Fatalf("reasoning settings were not preserved: %#v",received) }
+	if !strings.Contains(string(response.Output),`"reasoning_tokens":3`) { t.Fatalf("response metadata was not preserved: %s",response.Output) }
+}
+
+func TestStreamResponsesUsesSemanticTerminalEvent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/responses" { t.Fatalf("path = %s",r.URL.Path) }
+		w.Header().Set("Content-Type","text/event-stream")
+		_, _ = w.Write([]byte("event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hello\"}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"total_tokens\":3}}}\n\n"))
+	}))
+	defer server.Close()
+	p, err := New(Config{ID:"deepseek",BaseURL:server.URL,Client:server.Client()})
+	if err != nil { t.Fatal(err) }
+	var events []provider.Event
+	err = p.StreamResponses(context.Background(), &provider.Request{Model:"deepseek-flash",Input:[]byte(`{"model":"deepseek-flash","input":"hello","stream":true}`),Stream:true},func(event provider.Event) error {
+		events = append(events,event)
+		return nil
+	})
+	if err != nil { t.Fatal(err) }
+	if len(events) != 2 || !events[1].Done || !events[1].ExplicitDone {
+		t.Fatalf("expected response.completed terminal event, got %#v",events)
+	}
+	if !strings.Contains(string(events[1].Data),"response.completed") {
+		t.Fatalf("terminal SSE frame was not preserved: %s",events[1].Data)
+	}
+}
+
+func TestStreamResponsesRejectsIncompleteTerminalEvent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type","text/event-stream")
+		_, _ = w.Write([]byte("event: response.incomplete\ndata: {\"type\":\"response.incomplete\"}\n\n"))
+	}))
+	defer server.Close()
+	p, err := New(Config{ID:"deepseek",BaseURL:server.URL,Client:server.Client()})
+	if err != nil { t.Fatal(err) }
+	var terminal provider.Event
+	err = p.StreamResponses(context.Background(), &provider.Request{Model:"deepseek-flash",Input:[]byte(`{"model":"deepseek-flash","input":"hello","stream":true}`),Stream:true},func(event provider.Event) error {
+		if event.Done { terminal = event }
+		return nil
+	})
+	if err == nil || !terminal.Done || terminal.ExplicitDone {
+		t.Fatalf("expected incomplete terminal event to fail closed, event=%#v err=%v",terminal,err)
+	}
+}
