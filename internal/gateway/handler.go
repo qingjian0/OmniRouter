@@ -1621,7 +1621,7 @@ func (h *Handler) refreshProviderModels(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 		for _, item := range models {
-			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: id, DisplayName: modelDisplayName(provider.Model{ID: item.ID, Name: item.DisplayName}), ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
+			if err := h.modelRepo.Upsert(r.Context(), domainmodel.Model{ID: item.ID, ProviderID: id, DisplayName: modelDisplayName(item), ContextLimit: item.ContextLimit, Enabled: enabled}); err != nil {
 				writeError(w, http.StatusInternalServerError, "storage_error", "could not persist discovered model")
 				return
 			}
