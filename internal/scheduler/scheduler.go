@@ -19,6 +19,8 @@ type Candidate struct {
 	Enabled      bool
 	Capabilities []string
 	ContextLimit int
+	InputCostPerMillionUSD  float64
+	OutputCostPerMillionUSD float64
 }
 
 type Scheduler struct {
