@@ -20,10 +20,15 @@
 - 有界内存 HTTP 观测：请求 ID、状态码、延迟、在途数、状态分布、近似 P95 与最近请求列表。
 - OpenAI-compatible 上游 HTTP transport：连接、TLS 握手、响应头阶段超时；不设置总请求超时以保留长连接 SSE。
 
-**仍未完成的能力：** 持久化凭据密钥轮换/托管、音频/视频转换、完整模型能力自动发现、更多原生 Provider 适配器、真实上游联调和 Android/Termux 实机验收。Vue 管理控制台正在补齐并纳入嵌入式构建链；管理 API 已覆盖 Provider、Model、Account、Session、Credential、API Key、请求记录与用量报告。
+****当前已完成：** Go 网关核心、SQLite 持久化、Provider/Model/Account/Session/Credential/API Key 管理 API、请求与 Token 用量记录、Vue 3 + TypeScript 管理控制台（已嵌入 Go 二进制）、SQLite 备份恢复脚本、跨平台发行包工作流和 `--version` 构建元数据。
 
-**验证状态（2026-11-05）：** GitHub Actions `OmniRouter CI` Run [41954487103](https://github.com/qingjian0/OmniRouter/actions/runs/41954487103) 已完整通过 Go 1.23 依赖校验、格式检查、`go test ./...`（含真实 `modernc.org/sqlite` 驱动集成测试）、`go test -race ./...`、`go vet ./...` 和可执行文件构建。该结果不代表已完成真实上游 Provider 联调、跨平台构建或 Android 实机验证。
+**仍未完成的能力：** 原生 Anthropic/Gemini 出站 Provider 适配器、独立网页版登录会话适配器、完整任务/成本/延迟自适应调度、持久化凭据密钥轮换、音频/视频转换、完整模型能力自动发现、真实上游验收和 Android/Termux 真机验收。
 
+**协议边界：** 当前出站 Provider 适配器是 OpenAI-compatible。Anthropic Messages 与 Gemini 是入站客户端协议，转换后通过 OpenAI-compatible 上游执行；这不等于直接支持 Anthropic/Gemini 官方上游 API。发布前必须按 [V1 发布清单](docs/V1-RELEASE-CHECKLIST.md) 对这一范围作出明确决定。
+
+**验证状态（2026-11-05）：** GitHub Actions `OmniRouter CI` Run [41963844575](https://github.com/qingjian0/OmniRouter/actions/runs/41963844575) 全部通过：Vue 类型检查与构建、嵌入式静态资源服务测试、Go 格式检查、`go test ./...`、`go test -race ./...`、`go vet ./...`、SQLite 备份/恢复往返测试、版本链接参数验证，以及 Linux amd64/arm64、Windows amd64、macOS amd64/arm64 五个平台的二进制和发行包构建。
+
+**发布状态：尚未发布 V1.0.0。** CI 和交叉编译通过不代表真实上游验收、Termux 真机验收或上述产品范围缺口已经解决。
 ## 运行
 
 从源码运行完整 Vue 管理控制台前，先构建前端静态资源；预编译发行版不需要 Node.js：
