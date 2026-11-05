@@ -58,13 +58,14 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
 
 ## Build and packaging
 
-- [ ] Linux amd64 and arm64 builds.
-- [ ] Windows amd64 build.
-- [ ] macOS amd64 and arm64 builds.
+- [x] Linux amd64 and arm64 cross-builds passed in CI run 41958521186.
+- [x] Windows amd64 cross-build passed in CI run 41958521186.
+- [x] macOS amd64 and arm64 cross-builds passed in CI run 41958521186.
 - [ ] SHA-256 checksums generated for all release assets.
-- [ ] Fresh-install and upgrade instructions verified.
+- [x] Fresh-install and upgrade instructions drafted in `docs/INSTALL.md`; fresh-machine execution remains pending.
 - [ ] Database backup/restore procedure documented and tested.
 - [ ] Release notes list supported protocol subsets and known limitations.
+- [x] Android/Termux runtime smoke script and device procedure are provided in `scripts/termux-smoke.sh` and `docs/ANDROID-TERMUX-ACCEPTANCE.md`.
 - [ ] Android/Termux arm64 runtime is tested on a real device: launch, SQLite
       read/write and restart recovery, local/LAN binding, storage permissions,
       and process shutdown/restart. The Linux arm64 release binary is the
