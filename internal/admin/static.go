@@ -13,15 +13,18 @@ import (
 var assets embed.FS
 
 func Handler() http.Handler {
-	content, err := fs.Sub(assets, "static")
+	static, err := fs.Sub(assets, "static")
 	if err != nil {
 		panic(err)
 	}
-	if _, err := fs.Stat(content, "index.html"); err != nil {
+	content := static
+	if _, err := fs.Stat(static, "dist/index.html"); err == nil {
+		content, err = fs.Sub(assets, "static/dist")
+	} else {
 		content, err = fs.Sub(assets, "fallback")
-		if err != nil {
-			panic(err)
-		}
+	}
+	if err != nil {
+		panic(err)
 	}
 	return http.FileServer(http.FS(content))
 }
