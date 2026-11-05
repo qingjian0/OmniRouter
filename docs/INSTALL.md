@@ -92,6 +92,14 @@ $env:OMNI_PROVIDER_MODELS = "deepseek-chat,deepseek-reasoner"
 
 ## Verify the service
 
+Check the embedded version and build commit before starting:
+
+```sh
+./omnirouter --version
+```
+
+On Windows use `./omnirouter.exe --version` in PowerShell. Then check the service:
+
 ```sh
 curl http://127.0.0.1:8080/healthz
 curl http://127.0.0.1:8080/readyz
