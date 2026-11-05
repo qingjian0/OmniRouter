@@ -64,6 +64,7 @@ jobs:
           set -euo pipefail
           go mod download
           go build -trimpath -o "${RUNNER_TEMP}/omnirouter" ./cmd/omnirouter
+          export OMNI_PROVIDER_MODEL_CAPABILITIES="$(python3 -c 'import json, os; print(json.dumps({os.environ["OMNI_PROVIDER_MODELS"]: ["chat", "streaming"]}))')"
           "${RUNNER_TEMP}/omnirouter" >"${RUNNER_TEMP}/omnirouter-live-smoke.log" 2>&1 &
           pid=$!
           cleanup() {
