@@ -109,7 +109,6 @@ func (r *Repository) Capabilities(ctx context.Context, modelID, providerID strin
 	return out, rows.Err()
 }
 
-
 func (r *Repository) SetPricing(ctx context.Context, modelID, providerID string, inputCost, outputCost float64) error {
 	if math.IsNaN(inputCost) || math.IsInf(inputCost, 0) || inputCost < 0 ||
 		math.IsNaN(outputCost) || math.IsInf(outputCost, 0) || outputCost < 0 {
