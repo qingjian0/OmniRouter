@@ -359,3 +359,16 @@ The Recorder also treats request-log sink panics as persistence failures rather
 than allowing a telemetry side effect to escape after the response. Sink panic
 details are not exposed; if the handler itself panics, that original panic remains
 the one propagated after the request record is attempted.
+
+
+## V1 release and acceptance documents
+
+- [Installation, configuration, first run and upgrade](docs/INSTALL.md)
+- [V1.0.0 release checklist](docs/V1-RELEASE-CHECKLIST.md)
+- [Live Provider acceptance](docs/PROVIDER-ACCEPTANCE.md)
+- [Android / Termux device acceptance](docs/ANDROID-TERMUX-ACCEPTANCE.md)
+
+The release workflow packages Linux amd64/arm64, Windows amd64, and macOS
+amd64/arm64 binaries when a `v*` tag is pushed. It generates SHA-256 checksums
+and publishes a GitHub Release only after all build jobs succeed. A passing
+cross-build does not replace live Provider or Android/Termux device acceptance.
