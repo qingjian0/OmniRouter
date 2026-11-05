@@ -311,3 +311,21 @@ func reliabilityScore(stat providerPerformance) float64 {
 	// Four virtual observations at 95% success provide a stable prior.
 	return (float64(stat.successes) + 4*0.95) / (float64(stat.samples) + 4)
 }
+
+func (s *AdaptiveScheduler) SetModelPricing(modelID, providerID string, inputCost, outputCost float64) bool {
+	if modelID == "" || providerID == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	updated := false
+	for i := range s.candidates[modelID] {
+		candidate := &s.candidates[modelID][i]
+		if candidate.Provider != nil && candidate.Provider.ID() == providerID {
+			candidate.InputCostPerMillionUSD = inputCost
+			candidate.OutputCostPerMillionUSD = outputCost
+			updated = true
+		}
+	}
+	return updated
+}
