@@ -496,8 +496,12 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 // reportProviderOutcome feeds observed request latency and success into schedulers
 // that implement optional adaptive outcome reporting.
 func (h *Handler) reportProviderOutcome(p provider.Provider, latency time.Duration, success bool) {
-	if p == nil || h.selector == nil { return }
-	if reporter, ok := h.selector.(interface { ReportOutcome(string, time.Duration, bool) }); ok {
+	if p == nil || h.selector == nil {
+		return
+	}
+	if reporter, ok := h.selector.(interface {
+		ReportOutcome(string, time.Duration, bool)
+	}); ok {
 		reporter.ReportOutcome(p.ID(), latency, success)
 	}
 }
