@@ -7,17 +7,18 @@ import (
 )
 
 type Model struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name,omitempty"`
-	MaxOutputTokens int `json:"max_output_tokens,omitempty"`
-	InputModalities []string `json:"input_modalities,omitempty"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name,omitempty"`
+	Provider         string   `json:"provider"`
+	Capabilities     []string `json:"capabilities,omitempty"`
+	ContextLimit     int      `json:"context_limit,omitempty"`
+	MaxOutputTokens  int      `json:"max_output_tokens,omitempty"`
+	InputModalities  []string `json:"input_modalities,omitempty"`
 	OutputModalities []string `json:"output_modalities,omitempty"`
-	ReasoningEffort []string `json:"reasoning_effort,omitempty"`
-	APICapabilities []string `json:"api_capabilities,omitempty"`
-	Provider     string   `json:"provider"`
-	Capabilities []string `json:"capabilities,omitempty"`
-	ContextLimit int      `json:"context_limit,omitempty"`
+	ReasoningEffort  []string `json:"reasoning_effort,omitempty"`
+	APICapabilities  []string `json:"api_capabilities,omitempty"`
 }
+
 type Request struct {
 	Model  string
 	Input  []byte
