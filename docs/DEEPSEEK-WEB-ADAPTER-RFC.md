@@ -68,20 +68,42 @@ create a second secret store.
 
 ## 4. Browser authorization flow
 
-Preferred first implementation: a dedicated browser profile owned by
-OmniRouter, with an explicit "Open login" action. The user completes the
-ordinary DeepSeek login and any site verification in the visible browser.
-OmniRouter may then read only the minimum required session material from that
-profile, subject to local user consent.
+Preferred implementation: a small, user-installed browser extension for
+Chrome/Edge (and Firefox only after a separate compatibility test). The user
+opens and logs in to `https://chat.deepseek.com` normally, then explicitly
+clicks "Connect this tab" in the extension. The extension reads only the
+minimum session values from that active DeepSeek origin and sends them to the
+local OmniRouter pairing endpoint.
 
-Do not attach to or scrape the user's default browser profile. Do not export
-the whole profile. Do not inject cookies into unrelated domains. Do not run
-headless login or background challenge automation.
+Pairing protocol:
+1. The authenticated local admin UI creates a cryptographically random,
+   single-use pairing nonce with a short expiry (maximum 2 minutes).
+2. The nonce is bound to the selected provider/account creation request and
+   consumed atomically by the first valid extension submission.
+3. The extension may submit only while the active tab origin is exactly
+   `https://chat.deepseek.com`; it must not read unrelated tabs or origins.
+4. The local endpoint accepts only loopback connections by default, validates
+   the configured extension origin and nonce, enforces a small request-size
+   limit, and immediately passes the material to the authorization validator.
+5. The extension clears transient values after the response. The admin UI
+   receives status and non-secret metadata only.
 
-The first implementation must have an explicit browser capability check.
-If no supported browser is installed or the runtime cannot securely access the
-profile, the UI reports that interactive authorization is unavailable; it
-must not silently fall back to password login or manual secret scraping.
+The extension must declare the narrowest possible host permissions and show
+the user an explicit consent action before reading session material. No
+password, MFA seed, browser profile, browsing history, or page content is
+collected. Do not attach to or scrape the user's default browser profile, do
+not export a whole profile, and do not inject cookies into unrelated domains.
+
+A dedicated visible browser profile may be offered as an alternative desktop
+flow only if it uses ordinary interactive login and never automates site
+verification. Headless login, challenge solving, and background anti-abuse
+automation are out of scope.
+
+If the extension or browser is unavailable, the UI reports that interactive
+authorization is unavailable; it must not silently fall back to password
+login or unrestricted manual secret scraping. Android/Termux support is
+conditional on a browser that supports the extension bridge; otherwise the
+official API adapter remains available.
 
 ## 5. Provider contract
 
