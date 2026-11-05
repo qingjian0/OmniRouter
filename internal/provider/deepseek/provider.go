@@ -132,7 +132,9 @@ func (p *Provider) DiscoverModels(ctx context.Context) ([]provider.Model, error)
 		if item.Effort != nil && len(item.Effort.SupportedLevels) > 0 { caps = append(caps, "reasoning") }
 		if _, ok := item.APICapabilities["anthropic_messages"]; ok { caps = append(caps, "anthropic_messages") }
 		if _, ok := item.APICapabilities["openai_responses"]; ok { caps = append(caps, "responses") }
-		out = append(out, provider.Model{ID:id, Name:item.Name, Provider:p.id, Capabilities:caps, ContextLimit:item.ContextWindow})
+		apiCapabilities := make([]string, 0, len(item.APICapabilities))
+		for capability := range item.APICapabilities { apiCapabilities = append(apiCapabilities, capability) }
+		out = append(out, provider.Model{ID:id, Name:item.Name, Provider:p.id, Capabilities:caps, ContextLimit:item.ContextWindow, MaxOutputTokens:item.MaxOutputTokens, InputModalities:append([]string(nil), item.InputModalities...), OutputModalities:append([]string(nil), item.OutputModalities...), ReasoningEffort:effortLevels(item.Effort), APICapabilities:apiCapabilities})
 	}
 	p.mu.Lock()
 	p.cached, p.cachedAt = cloneModels(out), time.Now()
@@ -162,15 +164,27 @@ func modelDefaults(providerID, id string) provider.Model {
 		m.Name = "DeepSeek V4.1 Flash"
 		m.Capabilities = append(m.Capabilities, "vision", "responses")
 		m.ContextLimit = 1048576
+		m.MaxOutputTokens = 393216
+		m.InputModalities = []string{"text", "image"}
+		m.OutputModalities = []string{"text"}
+		m.ReasoningEffort = []string{"low", "high", "max"}
 	case "deepseek-v4-pro":
 		m.Name = "DeepSeek V4 Pro"
 		m.Capabilities = append(m.Capabilities, "responses")
 		m.ContextLimit = 1048576
+		m.MaxOutputTokens = 393216
+		m.InputModalities = []string{"text"}
+		m.OutputModalities = []string{"text"}
+		m.ReasoningEffort = []string{"low", "high", "max"}
 	}
 	return m
 }
 func defaultModels(providerID string) []provider.Model {
 	return []provider.Model{modelDefaults(providerID,"deepseek-flash"), modelDefaults(providerID,"deepseek-v4-pro")}
+}
+func effortLevels(value *struct { SupportedLevels []string `json:"supported_levels"` }) []string {
+	if value == nil { return nil }
+	return append([]string(nil), value.SupportedLevels...)
 }
 func contains(values []string, wanted string) bool {
 	for _, value := range values { if strings.EqualFold(value,wanted) { return true } }
@@ -181,6 +195,10 @@ func cloneModels(values []provider.Model) []provider.Model {
 	for i, value := range values {
 		out[i] = value
 		out[i].Capabilities = append([]string(nil),value.Capabilities...)
+		out[i].InputModalities = append([]string(nil), value.InputModalities...)
+		out[i].OutputModalities = append([]string(nil), value.OutputModalities...)
+		out[i].ReasoningEffort = append([]string(nil), value.ReasoningEffort...)
+		out[i].APICapabilities = append([]string(nil), value.APICapabilities...)
 	}
 	return out
 }
