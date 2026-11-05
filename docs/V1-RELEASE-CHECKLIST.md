@@ -55,6 +55,8 @@ one category must not be represented as passing another.
       mode, tool calls, usage, timeout/cancellation, and error mapping.
 - [x] Native DeepSeek Responses API ingress and semantic SSE terminal handling
       are implemented at `/v1/responses`.
+- [x] Native DeepSeek Anthropic Messages ingress at `/v1/messages` forwards to
+      `/anthropic/v1/messages` and uses the native `message_stop` SSE terminal.
 - [ ] Real-key acceptance for Responses API non-streaming, streaming, completion,
       incomplete, failed, and cancellation paths.
 
