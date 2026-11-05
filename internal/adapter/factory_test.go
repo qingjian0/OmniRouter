@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"testing"
 
 	"omnirouter/internal/provider/deepseek"
@@ -14,7 +15,7 @@ func TestNewDeepSeekUsesOfficialDefaults(t *testing.T) {
 	if upstream.ID() != "deepseek" || upstream.Name() != "DeepSeek" {
 		t.Fatalf("unexpected provider identity: %q %q", upstream.ID(), upstream.Name())
 	}
-	models, err := upstream.ListModels(t.Context())
+	models, err := upstream.ListModels(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
