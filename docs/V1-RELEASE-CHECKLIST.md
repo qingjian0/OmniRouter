@@ -53,8 +53,10 @@ one category must not be represented as passing another.
       Implementation guide: `docs/DEEPSEEK-ADAPTER.md`.
 - [ ] DeepSeek real-key acceptance: model discovery, non-streaming, SSE, thinking
       mode, tool calls, usage, timeout/cancellation, and error mapping.
-- [ ] Native DeepSeek Responses API route and semantic SSE support are implemented
-      and accepted before final V1 if included in the supported DeepSeek surface.
+- [x] Native DeepSeek Responses API ingress and semantic SSE terminal handling
+      are implemented at `/v1/responses`.
+- [ ] Real-key acceptance for Responses API non-streaming, streaming, completion,
+      incomplete, failed, and cancellation paths.
 
 - [x] An opt-in live smoke script is provided at `scripts/provider-smoke.sh`; it tests
       OpenAI, Anthropic Messages, and Gemini text routes in non-streaming and SSE
