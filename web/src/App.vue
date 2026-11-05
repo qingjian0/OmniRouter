@@ -242,6 +242,11 @@ function setModelEnabled(m: Row, enabled: boolean) {
 }
 
 function saveModelPricing(m: Row) {
+  if (m.input_cost_per_million_usd === undefined || m.input_cost_per_million_usd === null || m.input_cost_per_million_usd === "" ||
+      m.output_cost_per_million_usd === undefined || m.output_cost_per_million_usd === null || m.output_cost_per_million_usd === "") {
+    error.value = "请输入输入和输出价格；填写 0 表示该项免费，未填写代表未知价格";
+    return;
+  }
   const input = Number(m.input_cost_per_million_usd);
   const output = Number(m.output_cost_per_million_usd);
   if (!Number.isFinite(input) || input < 0 || !Number.isFinite(output) || output < 0) {
