@@ -77,7 +77,6 @@ func TestStreamTranslatorEmitsCandidateChunk(t *testing.T) {
 	}
 }
 
-
 func TestImageAndFunctionCallTranslation(t *testing.T) {
 	request := []byte(`{"contents":[{"role":"user","parts":[{"text":"Inspect this image"},{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]}],"tools":[{"functionDeclarations":[{"name":"lookup","description":"Look up a record","parameters":{"type":"object","properties":{"id":{"type":"string"}}}}]}]}`)
 	translated, err := ToOpenAIStream(request, "gemini-test", false)
