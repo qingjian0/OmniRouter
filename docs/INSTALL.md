@@ -1,5 +1,23 @@
 # OmniRouter V1 installation and first run
 
+## Build from source
+
+The Go server has no Node.js runtime dependency. The Vue 3 + TypeScript admin
+console is compiled into the Go binary at build time. Source builds therefore
+need Go 1.23+, Node.js 22+, and npm:
+
+```sh
+cd web
+npm install --no-audit --no-fund
+npm run build
+cd ..
+go test ./...
+go build -o omnirouter ./cmd/omnirouter
+```
+
+Prebuilt release binaries already contain the compiled admin console and do not
+require Node.js, npm, Python, or a Java runtime.
+
 ## Release artifacts
 
 Choose the binary for the target platform:
