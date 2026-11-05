@@ -358,6 +358,39 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusRequestEntityTooLarge, "invalid_request_error", "request body exceeds 8 MiB")
 		return
 	}
+	model, stream, err := anthropic.RequestMetadata(body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return
+	}
+	nativeRequirements := append(requiredCapabilities(body), "anthropic_messages")
+	if stream {
+		nativeRequirements = append(nativeRequirements, "streaming")
+	}
+	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements); nativeErr == nil {
+		if nativeAnthropic, ok := native.(provider.AnthropicProvider); ok {
+			setRequestRoute(r, native, model)
+			if stream {
+				h.streamNativeAnthropic(w, r, nativeAnthropic, native, model, body)
+				return
+			}
+			response, callErr := nativeAnthropic.GenerateAnthropic(r.Context(), &provider.Request{Model: model, Input: body})
+			if callErr != nil {
+				setRequestError(r, classifyRequestError(r, callErr, false))
+				if h.selector != nil {
+					h.selector.ReportFailure(native.ID())
+				}
+				writeError(w, http.StatusBadGateway, "upstream_error", "native Anthropic upstream request failed")
+				return
+			}
+			captureAnthropicUsage(r, response.Output)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(response.Output)
+			return
+		}
+	}
+
 	openAIRequest, model, stream, err := anthropic.ToOpenAI(body)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
@@ -504,6 +537,68 @@ func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Pro
 		lastErr = fmt.Errorf("no alternate healthy provider is available")
 	}
 	return nil, current, lastErr
+}
+
+func captureAnthropicUsage(r *http.Request, raw []byte) {
+	usage, err := tokenusage.ParseAnthropic(raw, true)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return
+	}
+	storeRequestUsage(r, usage)
+}
+
+func mergeAnthropicStreamUsage(r *http.Request, current *tokenusage.Usage, raw []byte, final bool) *tokenusage.Usage {
+	usage, err := tokenusage.ParseAnthropic(eventData(raw), final)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return current
+	}
+	return tokenusage.Merge(current, usage)
+}
+
+func (h *Handler) streamNativeAnthropic(w http.ResponseWriter, r *http.Request, native provider.AnthropicProvider, upstream provider.Provider, model string, body []byte) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "server_error", "streaming is not supported by this server")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	beginStreamRequest(r)
+	var usage *tokenusage.Usage
+	terminal := false
+	err := native.StreamAnthropic(r.Context(), &provider.Request{Model: model, Input: body, Stream: true}, func(event provider.Event) error {
+		if len(event.Data) > 0 {
+			usage = mergeAnthropicStreamUsage(r, usage, event.Data, event.Done && event.ExplicitDone)
+			if _, writeErr := w.Write(event.Data); writeErr != nil {
+				return downstreamWriteError{err: writeErr}
+			}
+			flusher.Flush()
+		}
+		if event.Done {
+			terminal = event.ExplicitDone
+			if usage != nil {
+				usage.Final = event.ExplicitDone
+			}
+			storeRequestUsage(r, usage)
+		}
+		return nil
+	})
+	if err != nil {
+		storeRequestUsage(r, usage)
+		setRequestError(r, classifyRequestError(r, err, true))
+		if h.selector != nil {
+			h.selector.ReportFailure(upstream.ID())
+		}
+	} else if !terminal {
+		storeRequestUsage(r, usage)
+		setRequestError(r, "stream_incomplete")
+	} else {
+		completeStreamRequest(r)
+	}
 }
 
 func (h *Handler) streamAnthropic(w http.ResponseWriter, r *http.Request, p provider.Provider, model string, payload []byte) {
