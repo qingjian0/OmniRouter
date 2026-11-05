@@ -1,3 +1,28 @@
+> **Current status correction — 2026-11-05**
+>
+> This file contains historical implementation-batch notes. Some early sections
+> describe work as pending or unverified; those statements were accurate when
+> written but are superseded by the later implementation and validation records.
+> For the current source baseline, use `README.md` and
+> `docs/R3.2-VALIDATION.md`.
+>
+> **Verified now:** the repository's Go 1.23 CI passed on the real
+> `modernc.org/sqlite` driver, including `go test ./...`,
+> `go test -race ./...`, `go vet ./...`, and a Linux build
+> (Actions run 41954487103).
+>
+> **Still not certified:** live upstream Provider acceptance for OpenAI-compatible,
+> Anthropic, and Gemini routes; complete failover/cancellation/long-stream
+> acceptance against real endpoints; Windows/macOS cross-build execution;
+> Android/Termux runtime; and final V1.0.0 release.
+>
+> Release work is tracked in `docs/V1-RELEASE-CHECKLIST.md`. The release
+> workflow is present on `dev`, but it has not yet been exercised by a version
+> tag. Do not interpret the historical batch notes below as the current status
+> of the source tree.
+>
+> ---
+>
 # V1 implementation batches
 
 ## Batch A — Core gateway and provider routing
