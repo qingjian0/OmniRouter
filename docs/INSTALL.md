@@ -113,6 +113,16 @@ trusted TLS reverse proxy and firewall allow-listing.
   notes and configuration changes, then starting the new binary.
 - Do not delete the database or encryption key as part of an ordinary upgrade.
 
+## Operational scripts
+
+The release archives include these optional Bash scripts:
+
+- `backup-sqlite.sh` and `restore-sqlite.sh`: consistent SQLite snapshot, checksum, integrity verification, and restore. See [DATABASE-BACKUP-RESTORE.md](DATABASE-BACKUP-RESTORE.md). Requires the `sqlite3` CLI.
+- `provider-smoke.sh`: tests one configured OpenAI-compatible upstream using non-streaming and SSE requests.
+- `termux-smoke.sh`: minimum loopback, SQLite, and graceful-shutdown check to run directly on a Termux device.
+
+Windows users can run these scripts under Git Bash or WSL; the prebuilt Windows binary itself does not require Bash.
+
 ## API surface
 
 - OpenAI-compatible: `GET /v1/models`, `POST /v1/chat/completions`
