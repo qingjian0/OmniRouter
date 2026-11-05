@@ -17,7 +17,7 @@ var (
 )
 
 const (
-	PairingLifetime     = 2 * time.Minute
+	PairingLifetime    = 2 * time.Minute
 	MaxPendingPairings = 128
 )
 
