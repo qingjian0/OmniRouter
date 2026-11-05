@@ -55,6 +55,15 @@ func (p *usageTestProvider) Generate(context.Context, *provider.Request) (*provi
 func (p *usageTestProvider) Stream(ctx context.Context, req *provider.Request, emit func(provider.Event) error) error {
 	return p.stream(ctx, req, emit)
 }
+
+func (p *usageTestProvider) GenerateResponses(context.Context, *provider.Request) (*provider.Response, error) {
+	return &provider.Response{Model: "model-test", Output: []byte(`{"id":"resp_1","status":"completed","usage":{"input_tokens":4,"output_tokens":6,"total_tokens":10}}`)}, nil
+}
+
+func (p *usageTestProvider) StreamResponses(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
+	return emit(provider.Event{Data: []byte("event: response.completed\\ndata: {\\"type\\":\\"response.completed\\",\\"response\\":{\\"usage\\":{\\"input_tokens\\":2,\\"output_tokens\\":3,\\"total_tokens\\":5}}}\\n\\n"), Done: true, ExplicitDone: true})
+}
+
 func (p *usageTestProvider) HealthCheck(context.Context) error { return nil }
 
 func newUsageTestHandler(p provider.Provider) (*Handler, http.Handler) {
@@ -210,4 +219,29 @@ func TestStreamingUsageParseFailureDoesNotPersistInvalidCounts(t *testing.T) {
 	if record.ErrorCode != "usage_parse_error" || record.LifecycleStatus != "completed" {
 		t.Fatalf("usage parse error should be visible without failing inference: %+v", record)
 	}
+}
+
+
+func TestGatewayResponsesAPIRecordsUsage(t *testing.T) {
+	p := &usageTestProvider{}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil { t.Fatal(err) }
+	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"model-test","input":"hello"}`))
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("status=%d body=%s",response.Code,response.Body.String()) }
+	if !strings.Contains(response.Body.String(),`"status":"completed"`) { t.Fatalf("unexpected body: %s",response.Body.String()) }
+}
+
+func TestGatewayResponsesStreamingPreservesSemanticTerminal(t *testing.T) {
+	p := &usageTestProvider{}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil { t.Fatal(err) }
+	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"model-test","input":"hello","stream":true}`))
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("status=%d body=%s",response.Code,response.Body.String()) }
+	if !strings.Contains(response.Body.String(),"event: response.completed") { t.Fatalf("semantic terminal event was not forwarded: %s",response.Body.String()) }
 }
