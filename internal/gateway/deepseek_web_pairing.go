@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -196,7 +195,7 @@ func (h *Handler) submitDeepSeekWebPairing(w http.ResponseWriter, r *http.Reques
 		"account_id": authorization.AccountID,
 		"session_id": authorization.SessionID,
 		"status": "stored",
-		"message": fmt.Sprintf("authorization stored for account %q", target.AccountName),
+		"message": "authorization stored",
 	})
 }
 
