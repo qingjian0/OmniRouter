@@ -78,9 +78,9 @@ jobs:
           CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "dist/${name}${EXT}" ./cmd/omnirouter
           cp README.md "dist/README.md"
           if [ "${GOOS}" = "windows" ]; then
-            (cd dist && 7z a "${name}.zip" "${name}${EXT}" README.md LICENSE)
+                        (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md)
           else
-            tar -C dist -czf "dist/${name}.tar.gz" "${name}${EXT}" README.md LICENSE
+            tar -C dist -czf "dist/${name}.tar.gz" "${name}${EXT}" README.md
           fi
 
       - name: Upload release asset
