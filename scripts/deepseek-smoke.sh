@@ -58,7 +58,27 @@ if obj.get("status") != "completed":
     raise SystemExit(f"Responses API status is not completed: {obj.get('status')!r}")
 PY
 
-echo "[4/6] Chat Completions SSE terminal marker"
+echo "[4/9] Chat Completions forced function tool call"
+python3 - "$OMNI_SMOKE_MODEL" >"$tmp/tool.json" <<'PY'
+import json, sys
+print(json.dumps({
+  "model": sys.argv[1],
+  "messages": [{"role":"user","content":"Call the lookup function with id 42."}],
+  "thinking": {"type":"disabled"},
+  "tools": [{"type":"function","function":{"name":"lookup","description":"Look up a record","parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}}}],
+  "tool_choice": {"type":"function","function":{"name":"lookup"}}
+}))
+PY
+curl -fsS --max-time 180 -X POST "${OMNI_BASE_URL}/v1/chat/completions" "${auth[@]}" --data-binary @"$tmp/tool.json" >"$tmp/tool-output.json"
+python3 - "$tmp/tool-output.json" <<'PY'
+import json, sys
+obj=json.load(open(sys.argv[1],encoding="utf-8"))
+calls=obj.get("choices",[{}])[0].get("message",{}).get("tool_calls",[])
+if not calls or calls[0].get("function",{}).get("name") != "lookup":
+    raise SystemExit("forced function tool call was not returned")
+PY
+
+echo "[5/9] Chat Completions SSE terminal marker"
 python3 - "$OMNI_SMOKE_MODEL" >"$tmp/chat-stream.json" <<'PY'
 import json, sys
 print(json.dumps({
@@ -71,7 +91,7 @@ PY
 curl -fsSN --max-time 180 -X POST "${OMNI_BASE_URL}/v1/chat/completions" "${auth[@]}" --data-binary @"$tmp/chat-stream.json" >"$tmp/chat-stream.out"
 grep -Fq "data: [DONE]" "$tmp/chat-stream.out"
 
-echo "[5/6] Responses API semantic SSE completion event"
+echo "[6/9] Responses API semantic SSE completion event"
 python3 - "$OMNI_SMOKE_MODEL" >"$tmp/responses-stream.json" <<'PY'
 import json, sys
 print(json.dumps({
@@ -84,7 +104,39 @@ PY
 curl -fsSN --max-time 180 -X POST "${OMNI_BASE_URL}/v1/responses" "${auth[@]}" --data-binary @"$tmp/responses-stream.json" >"$tmp/responses-stream.out"
 grep -Fq "event: response.completed" "$tmp/responses-stream.out"
 
-echo "[6/6] Verify persisted usage endpoint is readable"
+echo "[7/9] Native Anthropic Messages non-streaming"
+python3 - "$OMNI_SMOKE_MODEL" >"$tmp/anthropic.json" <<'PY'
+import json, sys
+print(json.dumps({
+  "model": sys.argv[1],
+  "max_tokens": 128,
+  "messages": [{"role":"user","content":"Reply with the single word READY."}],
+  "thinking": {"type":"enabled"},
+  "stream": False
+}))
+PY
+curl -fsS --max-time 180 -X POST "${OMNI_BASE_URL}/v1/messages" "${auth[@]}" --data-binary @"$tmp/anthropic.json" >"$tmp/anthropic-output.json"
+python3 - "$tmp/anthropic-output.json" <<'PY'
+import json, sys
+obj=json.load(open(sys.argv[1],encoding="utf-8"))
+if obj.get("type") != "message" or not obj.get("content"):
+    raise SystemExit("native Anthropic Messages response is malformed")
+PY
+
+echo "[8/9] Native Anthropic Messages SSE message_stop"
+python3 - "$OMNI_SMOKE_MODEL" >"$tmp/anthropic-stream.json" <<'PY'
+import json, sys
+print(json.dumps({
+  "model": sys.argv[1],
+  "max_tokens": 128,
+  "messages": [{"role":"user","content":"Count from one to three."}],
+  "stream": True
+}))
+PY
+curl -fsSN --max-time 180 -X POST "${OMNI_BASE_URL}/v1/messages" "${auth[@]}" --data-binary @"$tmp/anthropic-stream.json" >"$tmp/anthropic-stream.out"
+grep -Fq "event: message_stop" "$tmp/anthropic-stream.out"
+
+echo "[9/9] Verify persisted usage endpoint is readable"
 curl -fsS --max-time 20 "${OMNI_BASE_URL}/admin/usage" "${auth[@]}" >"$tmp/usage.json"
 python3 - "$tmp/usage.json" <<'PY'
 import json, sys
