@@ -910,7 +910,6 @@ func (h *Handler) selectProviderFor(ctx context.Context, model string, required 
 	return h.selectProvider(ctx, model)
 }
 
-
 func adaptiveProfileForRequest(r *http.Request, body []byte, required []string) scheduler.AdaptiveProfile {
 	objective := strings.ToLower(strings.TrimSpace(r.Header.Get("X-OmniRouter-Objective")))
 	switch objective {
