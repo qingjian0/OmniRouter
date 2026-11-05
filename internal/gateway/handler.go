@@ -21,12 +21,12 @@ import (
 	"omnirouter/internal/admin"
 	"omnirouter/internal/apikey"
 	"omnirouter/internal/credential"
-	"omnirouter/internal/provider/deepseekweb"
 	domainmodel "omnirouter/internal/model"
 	"omnirouter/internal/observability"
 	"omnirouter/internal/protocol/anthropic"
 	"omnirouter/internal/protocol/gemini"
 	"omnirouter/internal/provider"
+	"omnirouter/internal/provider/deepseekweb"
 	"omnirouter/internal/session"
 	"omnirouter/internal/storage"
 	"omnirouter/internal/tokenusage"
@@ -38,24 +38,24 @@ type Selector interface {
 }
 
 type Handler struct {
-	registry     *provider.Registry
-	selector     Selector
-	apiKey       string
-	mux          *http.ServeMux
-	metrics      *observability.Recorder
-	accounts     *account.Store
-	sessions     *session.Store
-	credentials  *credential.Vault
-	providerRepo *provider.Repository
-	accountRepo  *account.Repository
-	sessionRepo  *session.Repository
-	modelRepo    *domainmodel.Repository
-	apiKeyRepo   *apikey.Repository
-	requestLogs  *storage.RequestLogRepository
-	deepSeekWebPairings *deepseekweb.PairingManager
-	deepSeekWebAuthorization *deepseekweb.AuthorizationService
+	registry                   *provider.Registry
+	selector                   Selector
+	apiKey                     string
+	mux                        *http.ServeMux
+	metrics                    *observability.Recorder
+	accounts                   *account.Store
+	sessions                   *session.Store
+	credentials                *credential.Vault
+	providerRepo               *provider.Repository
+	accountRepo                *account.Repository
+	sessionRepo                *session.Repository
+	modelRepo                  *domainmodel.Repository
+	apiKeyRepo                 *apikey.Repository
+	requestLogs                *storage.RequestLogRepository
+	deepSeekWebPairings        *deepseekweb.PairingManager
+	deepSeekWebAuthorization   *deepseekweb.AuthorizationService
 	deepSeekWebExtensionOrigin string
-	mutationMu   sync.Mutex
+	mutationMu                 sync.Mutex
 }
 
 func NewHandler(registry *provider.Registry, apiKey string, selector Selector) http.Handler {
