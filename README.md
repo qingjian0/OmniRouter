@@ -72,7 +72,7 @@ export OMNI_PROVIDERS='[
 
 ### Provider adapters
 
-- DeepSeek official API: dedicated `kind: deepseek` adapter, official model discovery, current V4 model metadata, thinking/reasoning field pass-through, and SSE handling. See [DeepSeek adapter guide](docs/DEEPSEEK-ADAPTER.md).
+- DeepSeek official API: dedicated `kind: deepseek` adapter, official model discovery, current V4 model metadata, thinking/reasoning field pass-through, and SSE handling. See [DeepSeek adapter guide](docs/DEEPSEEK-ADAPTER.md) and the manual [DeepSeek live acceptance workflow](.github/workflows/deepseek-live-smoke.yml).
 - Generic OpenAI-compatible endpoints remain available as `kind: openai-compatible`.
 - DeepSeek consumer-web login/session support is a separate future adapter and is not part of the official API adapter.
 
