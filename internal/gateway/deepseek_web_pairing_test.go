@@ -118,6 +118,18 @@ func TestDeepSeekWebPairingSubmissionPersistsAndConsumesTicket(t *testing.T) {
 		material.CookieHeader[i] = 0
 	}
 
+	h.apiKey = "configured-master-key"
+	revokeRequest := httptest.NewRequest(http.MethodPost, "/admin/deepseek-web/accounts/"+result.AccountID+"/revoke", nil)
+	revokeRequest.SetPathValue("id", result.AccountID)
+	revokeResponse := httptest.NewRecorder()
+	h.revokeDeepSeekWebAccount(revokeResponse, revokeRequest)
+	if revokeResponse.Code != http.StatusOK {
+		t.Fatalf("revoke status=%d body=%s", revokeResponse.Code, revokeResponse.Body.String())
+	}
+	if _, err := h.deepSeekWebAuthorization.LoadAuthorization(context.Background(), result.AccountID); err == nil {
+		t.Fatal("revoked account authorization must not be restored")
+	}
+
 	replay := httptest.NewRecorder()
 	replayRequest := httptest.NewRequest(http.MethodPost, "/internal/deepseek-web/pairings", strings.NewReader(body))
 	replayRequest.RemoteAddr = "127.0.0.1:43122"
