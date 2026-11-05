@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"strings"
+	"unicode"
 	"time"
 
 	"omnirouter/internal/account"
@@ -80,7 +82,7 @@ func (s *AuthorizationService) Authorize(ctx context.Context, providerID, accoun
 	rollback := func() {
 		_, _ = s.vault.DeleteContext(ctx, tokenID)
 		_, _ = s.vault.DeleteContext(ctx, cookieID)
-		_ = s.sessions.Revoke(ctx, sessionID)
+		_ = s.sessions.Delete(ctx, sessionID)
 		_ = s.accounts.Delete(ctx, accountID)
 	}
 	tokenMeta, err := s.vault.Put(credential.Metadata{ID: tokenID, AccountID: accountID, Type: string(credential.KindAccessToken), ExpiresAt: expiresAt}, credential.KindAccessToken, material.Token)
@@ -137,6 +139,67 @@ func (s *AuthorizationService) Revoke(ctx context.Context, accountID string) err
 		}
 	}
 	return s.accounts.SetStatus(ctx, accountID, account.StatusDisabled)
+}
+
+ 
+// LoadAuthorization restores the encrypted pair after process restart. It
+// requires exactly one active access token and one active cookie credential
+// for the account; incomplete or ambiguous pairs fail closed.
+func (s *AuthorizationService) LoadAuthorization(ctx context.Context, accountID string) (AuthorizationMaterial, error) {
+	items, err := s.vault.ListContext(ctx, accountID)
+	if err != nil {
+		return AuthorizationMaterial{}, err
+	}
+	var tokenID, cookieID string
+	for _, item := range items {
+		switch item.Kind {
+		case credential.KindAccessToken:
+			if tokenID != "" {
+				return AuthorizationMaterial{}, ErrAuthorizationRequired
+			}
+			tokenID = item.ID
+		case credential.KindCookie:
+			if cookieID != "" {
+				return AuthorizationMaterial{}, ErrAuthorizationRequired
+			}
+			cookieID = item.ID
+		}
+	}
+	if tokenID == "" || cookieID == "" {
+		return AuthorizationMaterial{}, ErrAuthorizationRequired
+	}
+	tokenMeta, token, err := s.vault.Reveal(tokenID)
+	if err != nil {
+		return AuthorizationMaterial{}, ErrAuthorizationRequired
+	}
+	defer zeroBytes(token)
+	cookieMeta, cookieHeader, err := s.vault.Reveal(cookieID)
+	if err != nil {
+		return AuthorizationMaterial{}, ErrAuthorizationRequired
+	}
+	defer zeroBytes(cookieHeader)
+	if tokenMeta.AccountID != accountID || cookieMeta.AccountID != accountID ||
+		tokenMeta.Kind != credential.KindAccessToken || cookieMeta.Kind != credential.KindCookie ||
+		len(token) == 0 || len(token) > MaxTokenBytes || len(cookieHeader) == 0 || len(cookieHeader) > MaxCookieBytes {
+		return AuthorizationMaterial{}, ErrAuthorizationRequired
+	}
+	req, _ := http.NewRequest(http.MethodGet, DefaultOrigin, nil)
+	req.Header.Set("Cookie", string(cookieHeader))
+	hasSession := false
+	for _, item := range req.Cookies() {
+		if item.Name == "ds_session_id" && item.Value != "" {
+			hasSession = true
+		}
+	}
+	if !hasSession {
+		return AuthorizationMaterial{}, ErrAuthorizationRequired
+	}
+	for _, r := range string(token) {
+		if unicode.IsControl(r) || unicode.IsSpace(r) {
+			return AuthorizationMaterial{}, ErrAuthorizationRequired
+		}
+	}
+	return AuthorizationMaterial{Token: append([]byte(nil), token...), CookieHeader: append([]byte(nil), cookieHeader...)}, nil
 }
 
 func randomID(prefix string) (string, error) {
