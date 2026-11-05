@@ -201,7 +201,6 @@ func (p *Provider) Stream(ctx context.Context, req *provider.Request, emit func(
 	return p.chat.Stream(ctx, req, emit)
 }
 
-
 func (p *Provider) GenerateAnthropic(ctx context.Context, req *provider.Request) (*provider.Response, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request is required")
@@ -250,7 +249,9 @@ func (p *Provider) StreamAnthropic(ctx context.Context, req *provider.Request, e
 		lines = lines[:0]
 		data := strings.Join(dataLines, "\n")
 		if eventType == "" && data != "" {
-			var envelope struct { Type string `json:"type"` }
+			var envelope struct {
+				Type string `json:"type"`
+			}
 			_ = json.Unmarshal([]byte(data), &envelope)
 			eventType = envelope.Type
 		}

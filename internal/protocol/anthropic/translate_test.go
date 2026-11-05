@@ -119,7 +119,6 @@ func TestImageAndToolTranslation(t *testing.T) {
 	}
 }
 
-
 func TestRequestMetadataDoesNotTranslateContentBlocks(t *testing.T) {
 	body := []byte(`{"model":"deepseek-flash","stream":true,"messages":[{"role":"user","content":[{"type":"image","source":{"type":"file","file_id":"file_123"}}]}]}`)
 	model, stream, err := RequestMetadata(body)

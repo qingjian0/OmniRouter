@@ -9,7 +9,6 @@ import (
 	"strings"
 )
 
-
 type requestMetadata struct {
 	Model  string `json:"model"`
 	Stream bool   `json:"stream"`
