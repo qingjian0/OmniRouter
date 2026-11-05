@@ -46,6 +46,10 @@ jobs:
           bash -n scripts/provider-smoke.sh
           bash -n scripts/termux-smoke.sh
 
+      - name: Check workflow YAML syntax
+        run: |
+          ruby -e 'require "yaml"; Dir.glob(".github/workflows/*.yml").each { |path| YAML.load_file(path); puts "YAML OK: #{path}" }'
+
       - name: Check release package inputs
         run: |
           test -s docs/INSTALL.md
