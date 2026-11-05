@@ -1,0 +1,1 @@
+Vite-generated Vue admin assets are written to this directory before release builds.
