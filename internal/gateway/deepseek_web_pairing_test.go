@@ -79,11 +79,11 @@ func TestDeepSeekWebPairingSubmissionPersistsAndConsumesTicket(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := `{"token":"` + base64.StdEncoding.EncodeToString([]byte("test-access-token")) + `","cookies":[{"name":"ds_session_id","value":"session-value","domain":"chat.deepseek.com","path":"/","secure":true}]}`
-	request := httptest.NewRequest(http.MethodPost, "/internal/deepseek-web/pairings/"+ticket.Nonce, strings.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/internal/deepseek-web/pairings", strings.NewReader(body))
 	request.RemoteAddr = "127.0.0.1:43122"
 	request.Header.Set("Origin", testDeepSeekExtensionOrigin)
 	request.Header.Set("Content-Type", "application/json")
-	request.SetPathValue("nonce", ticket.Nonce)
+	request.Header.Set("X-Omni-Pairing-Nonce", ticket.Nonce)
 	response := httptest.NewRecorder()
 
 	h.submitDeepSeekWebPairing(response, request)
@@ -123,7 +123,7 @@ func TestDeepSeekWebPairingSubmissionPersistsAndConsumesTicket(t *testing.T) {
 	replayRequest.RemoteAddr = "127.0.0.1:43122"
 	replayRequest.Header.Set("Origin", testDeepSeekExtensionOrigin)
 	replayRequest.Header.Set("Content-Type", "application/json")
-	replayRequest.SetPathValue("nonce", ticket.Nonce)
+	replayRequest.Header.Set("X-Omni-Pairing-Nonce", ticket.Nonce)
 	h.submitDeepSeekWebPairing(replay, replayRequest)
 	if replay.Code != http.StatusGone {
 		t.Fatalf("replayed ticket status=%d, want %d; body=%s", replay.Code, http.StatusGone, replay.Body.String())
@@ -147,7 +147,7 @@ func TestDeepSeekWebPairingRejectsNonLoopbackAndForeignOrigin(t *testing.T) {
 			request.RemoteAddr = test.remote
 			request.Header.Set("Origin", test.origin)
 			request.Header.Set("Content-Type", "application/json")
-			request.SetPathValue("nonce", ticket.Nonce)
+			request.Header.Set("X-Omni-Pairing-Nonce", ticket.Nonce)
 			response := httptest.NewRecorder()
 			h.submitDeepSeekWebPairing(response, request)
 			if response.Code != http.StatusForbidden {
@@ -159,11 +159,11 @@ func TestDeepSeekWebPairingRejectsNonLoopbackAndForeignOrigin(t *testing.T) {
 
 func TestDeepSeekWebPairingPreflightAllowsOnlyConfiguredExtension(t *testing.T) {
 	h := newDeepSeekWebPairingTestHandler(t)
-	request := httptest.NewRequest(http.MethodOptions, "/internal/deepseek-web/pairings/"+strings.Repeat("a", 64), nil)
+	request := httptest.NewRequest(http.MethodOptions, "/internal/deepseek-web/pairings", nil)
 	request.RemoteAddr = "127.0.0.1:43122"
 	request.Header.Set("Origin", testDeepSeekExtensionOrigin)
 	request.Header.Set("Access-Control-Request-Method", "POST")
-	request.Header.Set("Access-Control-Request-Headers", "content-type")
+	request.Header.Set("Access-Control-Request-Headers", "content-type, x-omni-pairing-nonce")
 	response := httptest.NewRecorder()
 	h.deepSeekWebPairingPreflight(response, request)
 	if response.Code != http.StatusNoContent {
