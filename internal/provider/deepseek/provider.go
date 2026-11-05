@@ -170,7 +170,7 @@ func (p *Provider) DiscoverModels(ctx context.Context) ([]provider.Model, error)
 		if _, ok := item.APICapabilities["anthropic_messages"]; ok {
 			caps = append(caps, "anthropic_messages")
 		}
-		if _, ok := item.APICapabilities["openai_responses"]; ok {
+		if _, ok := item.APICapabilities["openai_responses"]; ok || id == "deepseek-flash" || id == "deepseek-v4-pro" {
 			caps = append(caps, "responses")
 		}
 		apiCapabilities := make([]string, 0, len(item.APICapabilities))
