@@ -218,6 +218,16 @@ function removeAccount(a: Row) {
     return mutate(`/admin/accounts/${encodeURIComponent(a.id)}`, "DELETE", undefined, "账户已删除");
   }
 }
+
+function isDeepSeekWebAccount(a: Row) {
+  return providers.value.some((item) => item.id === a.provider_id && item.kind === "deepseek-web");
+}
+
+function revokeDeepSeekWebAccount(a: Row) {
+  if (window.confirm(`确定撤销 DeepSeek Web 账户 ${a.name || a.id}？其访问令牌、Cookie 和所有会话将被永久撤销。`)) {
+    return mutate(`/admin/deepseek-web/accounts/${encodeURIComponent(a.id)}/revoke`, "POST", undefined, "DeepSeek Web 授权已撤销");
+  }
+}
 function isoDate(value: string): string | undefined {
   return value ? new Date(value).toISOString() : undefined;
 }
@@ -416,7 +426,7 @@ onMounted(refresh);
           </article>
           <article class="panel"><div class="panel-title"><h2>账户列表</h2></div>
             <div class="table-wrap"><table><thead><tr><th>名称 / ID</th><th>Provider</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="a in accounts" :key="a.id"><td><b>{{ a.name }}</b><small>{{ a.id }}</small></td><td>{{ a.provider_id }}</td><td><select :value="a.status" @change="setAccountStatus(a, eventValue($event))"><option>active</option><option>disabled</option><option>error</option></select></td><td>{{ shortTime(a.created_at) }}</td><td><button class="danger" @click="removeAccount(a)">删除</button></td></tr><tr v-if="!accounts.length"><td colspan="5" class="empty">暂无账户</td></tr></tbody>
+              <tbody><tr v-for="a in accounts" :key="a.id"><td><b>{{ a.name }}</b><small>{{ a.id }}</small></td><td>{{ a.provider_id }}</td><td><select :value="a.status" @change="setAccountStatus(a, eventValue($event))"><option>active</option><option>disabled</option><option>error</option></select></td><td>{{ shortTime(a.created_at) }}</td><td class="actions"><button v-if="isDeepSeekWebAccount(a)" class="secondary" @click="revokeDeepSeekWebAccount(a)">撤销网页授权</button><button class="danger" @click="removeAccount(a)">删除</button></td></tr><tr v-if="!accounts.length"><td colspan="5" class="empty">暂无账户</td></tr></tbody>
             </table></div>
           </article>
         </section>
