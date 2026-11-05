@@ -91,6 +91,9 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 			providerName = providerConfig.ID
 		}
 		kind := adapter.NormalizeKind(providerConfig.Kind)
+		if kind == adapter.KindDeepSeekWeb && (providerConfig.APIKey != "" || len(providerConfig.Models) > 0) {
+			return nil, fmt.Errorf("provider %q: DeepSeek Web registration does not accept API keys or models until its session transport is enabled", providerConfig.ID)
+		}
 		baseURL := providerConfig.BaseURL
 		if strings.TrimSpace(baseURL) == "" {
 			baseURL = adapter.DefaultBaseURL(kind)
