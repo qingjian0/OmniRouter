@@ -18,6 +18,7 @@ type Config struct {
 }
 
 type ProviderConfig struct {
+	Kind               string              `json:"kind"`
 	ID                 string              `json:"id"`
 	Name               string              `json:"name"`
 	BaseURL            string              `json:"base_url"`
@@ -105,6 +106,7 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("OMNI_PROVIDERS: %w", err)
 		}
 	} else {
+		cfg.Provider.Kind = env("OMNI_PROVIDER_KIND", "openai-compatible")
 		cfg.Provider.ID = env("OMNI_PROVIDER_ID", "openai-compatible")
 		cfg.Provider.Name = env("OMNI_PROVIDER_NAME", "OpenAI-compatible")
 		cfg.Provider.BaseURL = os.Getenv("OMNI_PROVIDER_BASE_URL")
