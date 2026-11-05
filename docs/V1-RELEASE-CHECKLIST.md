@@ -44,8 +44,9 @@ one category must not be represented as passing another.
 
 ## Provider acceptance
 
-- [x] An opt-in OpenAI-compatible live smoke script is provided at
-      `scripts/provider-smoke.sh`; its real-provider execution remains pending.
+- [x] An opt-in live smoke script is provided at `scripts/provider-smoke.sh`; it tests
+      OpenAI, Anthropic Messages, and Gemini text routes in non-streaming and SSE
+      modes through one OpenAI-compatible upstream. Real-provider execution remains pending.
 - [x] A manual GitHub Actions workflow is provided to run the live smoke test
       using repository secrets; it must be configured and executed before release.
 
@@ -63,8 +64,9 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
 - [x] Linux amd64/arm64, Windows amd64, and macOS amd64/arm64 binaries and archives all built successfully in CI run 41959344425.
 - [x] Release workflow is configured to generate SHA-256 checksums for every release asset; an actual tagged release is still pending.
 - [x] Fresh-install and upgrade instructions drafted in `docs/INSTALL.md`; fresh-machine execution remains pending.
-- [x] Release archives include the binary, README, installation guide, and secret-free environment template; archive creation is tested in CI run 41959344425.
-- [ ] Database backup/restore procedure documented and tested.
+- [x] Release archives include the binary, README, installation guide, secret-free environment template, acceptance guides, and operational scripts; archive creation is tested in the current CI.
+- [x] SQLite backup/restore documentation and scripts added (`docs/DATABASE-BACKUP-RESTORE.md`, `scripts/backup-sqlite.sh`, `scripts/restore-sqlite.sh`).
+- [ ] CI backup/restore script test and a real deployment restore acceptance must pass.
 - [ ] Release notes list supported protocol subsets and known limitations.
 - [x] Android/Termux runtime smoke script and device procedure are provided in `scripts/termux-smoke.sh` and `docs/ANDROID-TERMUX-ACCEPTANCE.md`.
 - [ ] Android/Termux arm64 runtime is tested on a real device: launch, SQLite
@@ -72,6 +74,19 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
       and process shutdown/restart. The Linux arm64 release binary is the
       intended Termux artifact; this is not an Android APK.
 - [ ] Do not publish V1 as supporting Android/Termux until the device gate above passes.
+
+## Product scope gaps requiring explicit V1 sign-off
+
+The implementation currently has an OpenAI-compatible outbound Provider adapter.
+Anthropic Messages and Gemini are inbound protocol adapters translated to that
+upstream; direct native Anthropic/Gemini outbound API adapters are not yet
+implemented. Independent web-session adapters are also not implemented.
+Scheduling currently provides priority/weight selection, health scoring, and
+cooldown/failover foundations, not full task/cost/latency adaptive optimization.
+
+Before tagging V1.0.0, either implement and accept these capabilities or
+explicitly approve moving them to V1.1. Do not infer that inbound protocol
+translation means native upstream API support.
 
 ## Publication
 

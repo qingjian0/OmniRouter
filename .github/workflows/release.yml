@@ -19,7 +19,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  frontend:
+    name: Build Vue admin assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build admin assets
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          test -s ../internal/admin/static/dist/index.html
+          test -n "$(find ../internal/admin/static/dist/assets -type f -print -quit)"
+
+      - name: Upload embedded admin assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnirouter-admin-static
+          path: internal/admin/static/dist/
+          if-no-files-found: error
+          retention-days: 1
+
   build:
+    needs: frontend
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ubuntu-latest
     strategy:
@@ -46,6 +77,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Download embedded admin assets
+        uses: actions/download-artifact@v4
+        with:
+          name: omnirouter-admin-static
+          path: internal/admin/static/dist/
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -75,14 +112,21 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           name="omnirouter-${VERSION}-${GOOS}-${GOARCH}"
-          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "dist/${name}${EXT}" ./cmd/omnirouter
+          COMMIT="$(git rev-parse HEAD)"
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X omnirouter/internal/version.Version=${VERSION} -X omnirouter/internal/version.Commit=${COMMIT}" -o "dist/${name}${EXT}" ./cmd/omnirouter
           cp README.md "dist/README.md"
           cp docs/INSTALL.md "dist/INSTALL.md"
           cp examples/omnirouter.env.example "dist/omnirouter.env.example"
+          cp docs/DATABASE-BACKUP-RESTORE.md "dist/DATABASE-BACKUP-RESTORE.md"
+          cp docs/PROVIDER-ACCEPTANCE.md "dist/PROVIDER-ACCEPTANCE.md"
+          cp docs/ANDROID-TERMUX-ACCEPTANCE.md "dist/ANDROID-TERMUX-ACCEPTANCE.md"
+          cp docs/V1-RELEASE-CHECKLIST.md "dist/V1-RELEASE-CHECKLIST.md"
+          mkdir -p dist/scripts
+          cp scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/termux-smoke.sh dist/scripts/
           if [ "${GOOS}" = "windows" ]; then
-            (cd dist && zip -j "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example)
+            (cd dist && zip -r "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts)
           else
-            tar -C dist -czf "dist/${name}.tar.gz" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example
+            tar -C dist -czf "dist/${name}.tar.gz" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/termux-smoke.sh
           fi
 
       - name: Upload release asset

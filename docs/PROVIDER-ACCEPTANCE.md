@@ -27,15 +27,21 @@ export OMNI_GATEWAY_API_KEY='your-gateway-key'
 bash scripts/provider-smoke.sh
 ```
 
-The script sends one short non-streaming request and one SSE request to
-`/v1/chat/completions`. It verifies that the non-streaming response contains
-a non-empty `choices` array and that the stream contains SSE data and the
-explicit `data: [DONE]` terminal marker. It does not print response bodies.
+The script sends six short requests through the same configured OpenAI-compatible
+upstream:
 
-A successful run proves only that the selected configured model works through
-the OpenAI-compatible gateway path at that time. It does not certify Anthropic
-or Gemini protocol translation, tool calls, vision, provider failover, long
-streams, cancellation, or every model capability. Those require separate
+- OpenAI Chat Completions: non-streaming and SSE.
+- Anthropic Messages: non-streaming and SSE.
+- Gemini `generateContent` / `streamGenerateContent`: non-streaming and SSE.
+
+It checks the expected response arrays for each non-streaming protocol and SSE
+data events for each streaming protocol. The OpenAI stream must also include the
+explicit `data: [DONE]` terminal marker. Response bodies are never printed.
+
+A successful run proves that the selected model can serve basic text requests
+through the three inbound protocol adapters at that time. It does not certify
+native Anthropic or Gemini upstream APIs, tool calls, vision, provider failover,
+long streams, cancellation, or every model capability. Those require separate
 acceptance cases and must be recorded independently.
 
 
@@ -54,9 +60,8 @@ Actions secrets:
 
 Then run **Actions → Live Provider Smoke → Run workflow** and enter one model ID
 that the upstream supports. The workflow builds OmniRouter, starts it with a
-temporary SQLite database, and executes the same non-streaming + SSE smoke test.
+temporary SQLite database, and executes all six non-streaming and SSE protocol smoke requests.
 It does not reveal the secret values or print response bodies.
 
-This workflow validates one real OpenAI-compatible upstream path only. It does
-not certify Anthropic/Gemini request translation or Android/Termux runtime.
+This workflow validates one real OpenAI-compatible upstream through all three inbound protocol adapters for basic text requests. It does not certify native Anthropic/Gemini upstream APIs, tools, vision, failover, cancellation, long-stream behavior, or Android/Termux runtime.
 Do not add credentials to workflow inputs, source files, or commit messages.

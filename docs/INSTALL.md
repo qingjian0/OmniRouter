@@ -1,5 +1,23 @@
 # OmniRouter V1 installation and first run
 
+## Build from source
+
+The Go server has no Node.js runtime dependency. The Vue 3 + TypeScript admin
+console is compiled into the Go binary at build time. Source builds therefore
+need Go 1.23+, Node.js 22+, and npm:
+
+```sh
+cd web
+npm install --no-audit --no-fund
+npm run build
+cd ..
+go test ./...
+go build -o omnirouter ./cmd/omnirouter
+```
+
+Prebuilt release binaries already contain the compiled admin console and do not
+require Node.js, npm, Python, or a Java runtime.
+
 ## Release artifacts
 
 Choose the binary for the target platform:
@@ -69,10 +87,19 @@ $env:OMNI_PROVIDER_NAME = "DeepSeek"
 $env:OMNI_PROVIDER_BASE_URL = "https://api.deepseek.com/v1"
 $env:OMNI_PROVIDER_API_KEY = "<provider-api-key>"
 $env:OMNI_PROVIDER_MODELS = "deepseek-chat,deepseek-reasoner"
+$env:OMNI_PROVIDER_MODEL_CAPABILITIES = '{"deepseek-chat":["chat","streaming","tools"],"deepseek-reasoner":["chat","streaming"]}'
 .\omnirouter.exe
 ```
 
 ## Verify the service
+
+Check the embedded version and build commit before starting:
+
+```sh
+./omnirouter --version
+```
+
+On Windows use `.\omnirouter.exe --version` in PowerShell. Then check the service:
 
 ```sh
 curl http://127.0.0.1:8080/healthz
@@ -81,7 +108,7 @@ curl http://127.0.0.1:8080/v1/models \
   -H "Authorization: Bearer $OMNI_GATEWAY_API_KEY"
 ```
 
-The gateway key protects `/v1/*` and `/admin/*` when configured. Health
+Model capabilities are explicit routing declarations. Declare `streaming` for every model that should receive SSE requests, and declare `tools`/`vision` only when the upstream model supports them. The gateway key protects `/v1/*` and `/admin/*` when configured. Health
 endpoints and the embedded admin page are intentionally separate. Do not
 expose the service directly to the public internet. For LAN access, use a
 trusted TLS reverse proxy and firewall allow-listing.
@@ -94,6 +121,16 @@ trusted TLS reverse proxy and firewall allow-listing.
 - Upgrade by backing up the database, replacing the binary, reviewing release
   notes and configuration changes, then starting the new binary.
 - Do not delete the database or encryption key as part of an ordinary upgrade.
+
+## Operational scripts
+
+The release archives include these optional Bash scripts:
+
+- `backup-sqlite.sh` and `restore-sqlite.sh`: consistent SQLite snapshot, checksum, integrity verification, and restore. See [DATABASE-BACKUP-RESTORE.md](DATABASE-BACKUP-RESTORE.md). Requires the `sqlite3` CLI.
+- `provider-smoke.sh`: tests OpenAI, Anthropic Messages, and Gemini text routes in non-streaming and SSE modes through one configured OpenAI-compatible upstream.
+- `termux-smoke.sh`: minimum loopback, SQLite, and graceful-shutdown check to run directly on a Termux device.
+
+Windows users can run these scripts under Git Bash or WSL; the prebuilt Windows binary itself does not require Bash.
 
 ## API surface
 
