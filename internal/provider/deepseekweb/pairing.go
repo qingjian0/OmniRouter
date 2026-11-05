@@ -17,7 +17,7 @@ var (
 )
 
 const (
-	PairingLifetime = 2 * time.Minute
+	PairingLifetime     = 2 * time.Minute
 	MaxPendingPairings = 128
 )
 
@@ -34,15 +34,15 @@ type PairingTarget struct {
 }
 
 type pairingEntry struct {
-	target PairingTarget
+	target  PairingTarget
 	expires time.Time
 }
 
 // PairingManager stores only ephemeral pairing metadata in process memory.
 // A restart invalidates every outstanding ticket by design.
 type PairingManager struct {
-	mu sync.Mutex
-	now func() time.Time
+	mu      sync.Mutex
+	now     func() time.Time
 	pending map[string]pairingEntry
 }
 
