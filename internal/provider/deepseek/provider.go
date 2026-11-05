@@ -134,6 +134,9 @@ func (p *Provider) DiscoverModels(ctx context.Context) ([]provider.Model, error)
 		if _, ok := item.APICapabilities["openai_responses"]; ok { caps = append(caps, "responses") }
 		out = append(out, provider.Model{ID:id, Name:item.Name, Provider:p.id, Capabilities:caps, ContextLimit:item.ContextWindow})
 	}
+	p.mu.Lock()
+	p.cached, p.cachedAt = cloneModels(out), time.Now()
+	p.mu.Unlock()
 	return out, nil
 }
 
