@@ -29,8 +29,8 @@ func TestSQLiteRuntimeMigratesAndPersistsRequestUsage(t *testing.T) {
 	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&migrationCount); err != nil {
 		t.Fatalf("read migration count: %v", err)
 	}
-	if migrationCount != 5 {
-		t.Fatalf("got %d migrations, want 5", migrationCount)
+	if migrationCount != 6 {
+		t.Fatalf("got %d migrations, want 6", migrationCount)
 	}
 
 	repo, err := NewRequestLogRepository(store.DB())
