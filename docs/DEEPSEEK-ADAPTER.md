@@ -93,5 +93,5 @@ Authorization: Bearer <OMNI_GATEWAY_API_KEY>
 ```
 
 A successful response returns the discovered model records and count. The route
-fails closed on upstream discovery errors and does not mark stale catalogue
-entries as refreshed.
+fails closed on upstream discovery errors, persists the new catalogue, removes
+stale model rows for that Provider, and replaces its scheduler routes.
