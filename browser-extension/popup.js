@@ -75,13 +75,13 @@ connectButton.addEventListener("click", async () => {
     payload = { token: encodeBase64UTF8(token), cookies };
     setStatus("Sending the one-time authorization to local OmniRouter…");
     const response = await fetch(
-      gateway + "/internal/deepseek-web/pairings/" + encodeURIComponent(nonce),
+      gateway + "/internal/deepseek-web/pairings",
       {
         method: "POST",
         mode: "cors",
         credentials: "omit",
         cache: "no-store",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Omni-Pairing-Nonce": nonce },
         body: JSON.stringify(payload)
       }
     );
