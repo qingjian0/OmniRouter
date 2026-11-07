@@ -940,10 +940,16 @@ func requiredCapabilities(body []byte) []string {
 					if child != nil {
 						found["json"] = true
 					}
+				case "format":
+					if settings, ok := child.(map[string]any); ok {
+						if formatType, ok := settings["type"].(string); ok && (formatType == "json_schema" || formatType == "json_object") {
+							found["json"] = true
+						}
+					}
 				case "image_url", "inline_data", "inlineData", "fileData":
 					found["vision"] = true
 				case "type":
-					if blockType, ok := child.(string); ok && blockType == "image" {
+					if blockType, ok := child.(string); ok && (blockType == "image" || blockType == "input_image") {
 						found["vision"] = true
 					}
 				case "stream":
