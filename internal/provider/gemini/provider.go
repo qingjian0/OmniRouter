@@ -144,12 +144,18 @@ func (p *Provider) StreamGemini(ctx context.Context, req *provider.Request, emit
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 64*1024), 4<<20)
 	var lines []string
+	seenData := false
 	flush := func() error {
 		if len(lines) == 0 {
 			return nil
 		}
 		frame := strings.Join(lines, "\n") + "\n\n"
 		lines = lines[:0]
+		for _, line := range strings.Split(frame, "\n") {
+			if strings.HasPrefix(line, "data:") && strings.TrimSpace(strings.TrimPrefix(line, "data:")) != "" {
+				seenData = true
+			}
+		}
 		if err := validateSSEFrame(frame); err != nil {
 			if emitErr := emit(provider.Event{Data: []byte(frame), Done: true}); emitErr != nil {
 				return emitErr
@@ -173,6 +179,9 @@ func (p *Provider) StreamGemini(ctx context.Context, req *provider.Request, emit
 	}
 	if err := flush(); err != nil {
 		return err
+	}
+	if !seenData {
+		return fmt.Errorf("Gemini stream ended without any response data")
 	}
 	return emit(provider.Event{Done: true, ExplicitDone: true})
 }
@@ -221,6 +230,10 @@ func (p *Provider) do(ctx context.Context, model string, input []byte, stream bo
 		defer resp.Body.Close()
 		message, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return nil, fmt.Errorf("Gemini API returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
+	}
+	if stream && !strings.HasPrefix(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		defer resp.Body.Close()
+		return nil, fmt.Errorf("Gemini streaming endpoint returned unexpected content type %q", resp.Header.Get("Content-Type"))
 	}
 	return resp.Body, nil
 }
