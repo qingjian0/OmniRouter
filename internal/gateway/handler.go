@@ -167,11 +167,8 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 		requirements := append(requiredCapabilities(body), "responses")
 		upstream, err = h.selectProviderFor(r.Context(), request.Model, requirements)
 	} else {
-		var ok bool
-		upstream, ok = h.registry.ResolveModel(request.Model)
-		if !ok {
-			err = http.ErrNoLocation
-		}
+		requirements := append(requiredCapabilities(body), "responses")
+		upstream, err = h.resolveResponsesProvider(r.Context(), request.Model, requirements)
 	}
 	if err != nil || upstream == nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = request.Model })
@@ -244,6 +241,37 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 	} else {
 		completeStreamRequest(r)
 	}
+}
+
+func (h *Handler) resolveResponsesProvider(ctx context.Context, model string, required []string) (provider.Provider, error) {
+	for _, candidate := range h.registry.List() {
+		if _, ok := candidate.(provider.ResponsesProvider); !ok {
+			continue
+		}
+		models, err := candidate.ListModels(ctx)
+		if err != nil {
+			continue
+		}
+		for _, item := range models {
+			if item.ID == model && supportsCapabilities(item.Capabilities, required) {
+				return candidate, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no provider declares native Responses support for model %q with capabilities %v", model, required)
+}
+
+func supportsCapabilities(declared, required []string) bool {
+	available := make(map[string]struct{}, len(declared))
+	for _, capability := range declared {
+		available[capability] = struct{}{}
+	}
+	for _, capability := range required {
+		if _, ok := available[capability]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
