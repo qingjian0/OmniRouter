@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -231,9 +232,12 @@ func (p *Provider) do(ctx context.Context, model string, input []byte, stream bo
 		message, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return nil, fmt.Errorf("Gemini API returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
 	}
-	if stream && !strings.HasPrefix(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
-		defer resp.Body.Close()
-		return nil, fmt.Errorf("Gemini streaming endpoint returned unexpected content type %q", resp.Header.Get("Content-Type"))
+	if stream {
+		mediaType, _, parseErr := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+		if parseErr != nil || !strings.EqualFold(mediaType, "text/event-stream") {
+			defer resp.Body.Close()
+			return nil, fmt.Errorf("Gemini streaming endpoint returned unexpected content type %q", resp.Header.Get("Content-Type"))
+		}
 	}
 	return resp.Body, nil
 }
