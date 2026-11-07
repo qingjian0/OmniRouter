@@ -7,7 +7,7 @@ import (
 
 	"omnirouter/internal/provider"
 	"omnirouter/internal/provider/deepseek"
-	openairesponses openai "omnirouter/internal/provider/openai"
+	openai "omnirouter/internal/provider/openai"
 	openairesponses "omnirouter/internal/provider/openairesponses"
 )
 
