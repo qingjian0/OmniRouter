@@ -99,7 +99,7 @@ func TestNativeAnthropicStreamingFailureDoesNotRetryAfterHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 	selector := &nativeFallbackSelectorTest{providers: []provider.Provider{first, second}}
-	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, selector)
+	handler := NewHandlerWithFullRepositories(registry, "", selector, nil, nil, nil, nil, nil, nil)
 
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(
