@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -465,6 +466,9 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 			response, callErr := nativeGemini.GenerateGemini(r.Context(), &provider.Request{Model: model, Input: body})
+			if callErr == nil && response == nil {
+				callErr = fmt.Errorf("native Gemini provider returned an empty response")
+			}
 			if callErr != nil {
 				setRequestError(r, classifyRequestError(r, callErr, false))
 				if h.selector != nil {
@@ -583,7 +587,11 @@ func captureGeminiUsage(r *http.Request, raw []byte) {
 }
 
 func mergeGeminiStreamUsage(r *http.Request, current *tokenusage.Usage, raw []byte, final bool) *tokenusage.Usage {
-	usage, err := tokenusage.ParseGemini(eventData(raw), final)
+	data := eventData(raw)
+	if len(bytes.TrimSpace(data)) == 0 {
+		return current
+	}
+	usage, err := tokenusage.ParseGemini(data, final)
 	if err != nil {
 		setRequestError(r, "usage_parse_error")
 		return current
