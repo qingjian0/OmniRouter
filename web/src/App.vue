@@ -130,13 +130,15 @@ function applyProviderKindDefaults() {
     if (!providerForm.models) providerForm.models = "deepseek-flash,deepseek-v4-pro";
     providerForm.capabilities = "";
   } else if (providerForm.kind === "openai-responses") {
-    if (!providerForm.id || providerForm.id === "openai-compatible") providerForm.id = "openai-responses";
-    if (!providerForm.name || providerForm.name === "OpenAI-compatible") providerForm.name = "OpenAI Responses";
+    if (!providerForm.id || providerForm.id === "openai-compatible" || providerForm.id === "deepseek") providerForm.id = "openai-responses";
+    if (!providerForm.name || providerForm.name === "OpenAI-compatible" || providerForm.name === "DeepSeek") providerForm.name = "OpenAI Responses";
     if (!providerForm.base_url || providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "https://api.openai.com/v1";
     if (!providerForm.models || providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "gpt-4.1";
     providerForm.capabilities = "";
   } else {
     if (providerForm.base_url === "https://api.deepseek.com" || providerForm.base_url === "https://api.openai.com/v1") providerForm.base_url = "";
+    if (providerForm.id === "openai-responses") providerForm.id = "";
+    if (providerForm.name === "OpenAI Responses") providerForm.name = "";
     if (providerForm.models === "deepseek-flash,deepseek-v4-pro" || providerForm.models === "gpt-4.1") providerForm.models = "";
   }
 }
