@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"testing"
 
 	"omnirouter/internal/provider/deepseek"
@@ -31,7 +32,7 @@ func TestNewOpenAIResponsesUsesNativeAdapter(t *testing.T) {
 	if _, ok := upstream.(*openairesponses.Provider); !ok {
 		t.Fatalf("unexpected adapter type %T", upstream)
 	}
-	models, err := upstream.ListModels(t.Context())
+	models, err := upstream.ListModels(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
