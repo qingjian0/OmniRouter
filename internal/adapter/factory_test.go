@@ -3,7 +3,9 @@ package adapter
 import (
 	"testing"
 
-	"omnirouter/internal/provider/deepseek"\n\t"omnirouter/internal/provider"\n\tanthropicprovider "omnirouter/internal/provider/anthropic"
+	"omnirouter/internal/provider/deepseek"
+	"omnirouter/internal/provider"
+	anthropicprovider "omnirouter/internal/provider/anthropic"
 )
 
 func TestNewDeepSeekUsesOfficialDefaults(t *testing.T) {
