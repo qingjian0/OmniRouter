@@ -419,3 +419,47 @@ func TestRequiredCapabilitiesDoesNotTreatAudioOrVideoAsVision(t *testing.T) {
 		})
 	}
 }
+
+
+type legacySelectorTest struct {
+	selected provider.Provider
+}
+
+func (s *legacySelectorTest) Select(context.Context, string) (provider.Provider, error) {
+	return s.selected, nil
+}
+func (s *legacySelectorTest) ReportFailure(string) {}
+
+func TestSelectProviderForWithoutSelectorRequiresDeclaredCapabilities(t *testing.T) {
+	p := &usageTestProvider{capabilities: []string{"streaming"}}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	h := &Handler{registry: registry}
+	if _, err := h.selectProviderFor(context.Background(), "model-test", []string{"gemini_generate_content"}); err == nil {
+		t.Fatal("provider without required capability was selected")
+	}
+	selected, err := h.selectProviderFor(context.Background(), "model-test", []string{"streaming"})
+	if err != nil {
+		t.Fatalf("provider declaring required capability was rejected: %v", err)
+	}
+	if selected.ID() != p.ID() {
+		t.Fatalf("selected provider %q, want %q", selected.ID(), p.ID())
+	}
+}
+
+func TestSelectProviderForRejectsLegacySelectorForCapabilityConstrainedRequest(t *testing.T) {
+	p := &usageTestProvider{capabilities: []string{"streaming"}}
+	h := &Handler{selector: &legacySelectorTest{selected: p}}
+	if _, err := h.selectProviderFor(context.Background(), "model-test", []string{"vision"}); err == nil {
+		t.Fatal("legacy selector silently bypassed capability requirements")
+	}
+	selected, err := h.selectProviderFor(context.Background(), "model-test", nil)
+	if err != nil {
+		t.Fatalf("legacy selector should remain usable without capability requirements: %v", err)
+	}
+	if selected.ID() != p.ID() {
+		t.Fatalf("selected provider %q, want %q", selected.ID(), p.ID())
+	}
+}
