@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -43,9 +44,15 @@ func TestClassifyRequestError(t *testing.T) {
 type usageTestProvider struct {
 	stream       func(context.Context, *provider.Request, func(provider.Event) error) error
 	capabilities []string
+	id           string
 }
 
-func (p *usageTestProvider) ID() string   { return "provider-test" }
+func (p *usageTestProvider) ID() string {
+	if p.id != "" {
+		return p.id
+	}
+	return "provider-test"
+}
 func (p *usageTestProvider) Name() string { return "test" }
 func (p *usageTestProvider) ListModels(context.Context) ([]provider.Model, error) {
 	return []provider.Model{{ID: "model-test", Provider: p.ID(), Capabilities: append([]string(nil), p.capabilities...)}}, nil
@@ -504,8 +511,8 @@ func (p *failingNativeGeminiTestProvider) GenerateGemini(context.Context, *provi
 }
 
 func TestNativeGeminiNonStreamingRetriesAnotherCapabilityCompatibleProvider(t *testing.T) {
-	first := &failingNativeGeminiTestProvider{nativeGeminiTestProvider: &nativeGeminiTestProvider{usageTestProvider: &usageTestProvider{capabilities: []string{"gemini_generate_content"}}}}
-	second := &nativeGeminiTestProvider{usageTestProvider: &usageTestProvider{capabilities: []string{"gemini_generate_content"}}}
+	first := &failingNativeGeminiTestProvider{nativeGeminiTestProvider: &nativeGeminiTestProvider{usageTestProvider: &usageTestProvider{id: "gemini-failing", capabilities: []string{"gemini_generate_content"}}}}
+	second := &nativeGeminiTestProvider{usageTestProvider: &usageTestProvider{id: "gemini-backup", capabilities: []string{"gemini_generate_content"}}}
 	registry := provider.NewRegistry()
 	if err := registry.Register(first); err != nil {
 		t.Fatal(err)
