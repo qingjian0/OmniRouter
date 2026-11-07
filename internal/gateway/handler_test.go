@@ -420,7 +420,6 @@ func TestRequiredCapabilitiesDoesNotTreatAudioOrVideoAsVision(t *testing.T) {
 	}
 }
 
-
 type legacySelectorTest struct {
 	selected provider.Provider
 }
