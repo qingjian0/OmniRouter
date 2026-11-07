@@ -132,8 +132,8 @@ function applyProviderKindDefaults() {
   } else if (providerForm.kind === "gemini") {
     if (!providerForm.id || providerForm.id === "openai-compatible" || providerForm.id === "deepseek") providerForm.id = "gemini";
     if (!providerForm.name || providerForm.name === "OpenAI-compatible" || providerForm.name === "DeepSeek") providerForm.name = "Google Gemini";
-    if (providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "";
-    if (providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "";
+    if (!providerForm.base_url || providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "https://generativelanguage.googleapis.com/v1beta";
+    if (!providerForm.models || providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "gemini-2.5-flash";
   } else {
     if (providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "";
     if (providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "";
