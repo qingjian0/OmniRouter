@@ -357,12 +357,16 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 				h.streamNativeAnthropic(w, r, nativeAnthropic, native, model, body)
 				return
 			}
-			response, callErr := nativeAnthropic.GenerateAnthropic(r.Context(), &provider.Request{Model: model, Input: body})
+			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, func(candidate provider.Provider) (*provider.Response, error) {
+				candidateAnthropic, ok := candidate.(provider.AnthropicProvider)
+				if !ok {
+					return nil, fmt.Errorf("provider %q declares Anthropic capability but does not implement AnthropicProvider", candidate.ID())
+				}
+				return candidateAnthropic.GenerateAnthropic(r.Context(), &provider.Request{Model: model, Input: body})
+			})
+			setRequestRoute(r, selected, model)
 			if callErr != nil {
 				setRequestError(r, classifyRequestError(r, callErr, false))
-				if h.selector != nil {
-					h.selector.ReportFailure(native.ID())
-				}
 				writeError(w, http.StatusBadGateway, "upstream_error", "native Anthropic upstream request failed")
 				return
 			}
@@ -447,15 +451,16 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 				h.streamNativeGemini(w, r, nativeGemini, native, model, body)
 				return
 			}
-			response, callErr := nativeGemini.GenerateGemini(r.Context(), &provider.Request{Model: model, Input: body})
-			if callErr == nil && response == nil {
-				callErr = fmt.Errorf("native Gemini provider returned an empty response")
-			}
+			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, func(candidate provider.Provider) (*provider.Response, error) {
+				candidateGemini, ok := candidate.(provider.GeminiProvider)
+				if !ok {
+					return nil, fmt.Errorf("provider %q declares Gemini capability but does not implement GeminiProvider", candidate.ID())
+				}
+				return candidateGemini.GenerateGemini(r.Context(), &provider.Request{Model: model, Input: body})
+			})
+			setRequestRoute(r, selected, model)
 			if callErr != nil {
 				setRequestError(r, classifyRequestError(r, callErr, false))
-				if h.selector != nil {
-					h.selector.ReportFailure(native.ID())
-				}
 				writeError(w, http.StatusBadGateway, "upstream_error", "native Gemini upstream request failed")
 				return
 			}
@@ -579,6 +584,51 @@ func mergeGeminiStreamUsage(r *http.Request, current *tokenusage.Usage, raw []by
 		return current
 	}
 	return tokenusage.Merge(current, usage)
+}
+
+// generateNativeWithFallback retries a failed non-streaming native-protocol
+// request only on another provider that declares the same required capabilities.
+func (h *Handler) generateNativeWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, generate func(provider.Provider) (*provider.Response, error)) (*provider.Response, provider.Provider, error) {
+	if initial == nil {
+		return nil, nil, fmt.Errorf("no native provider selected")
+	}
+	maxAttempts := 1
+	if h.registry != nil && h.registry.Count() > 1 {
+		maxAttempts = h.registry.Count()
+	}
+	attempted := make(map[string]struct{}, maxAttempts)
+	current := initial
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if current == nil {
+			break
+		}
+		if _, exists := attempted[current.ID()]; exists {
+			break
+		}
+		attempted[current.ID()] = struct{}{}
+		response, err := generate(current)
+		if err == nil && response == nil {
+			err = fmt.Errorf("provider %q returned an empty native response", current.ID())
+		}
+		if err == nil {
+			return response, current, nil
+		}
+		lastErr = err
+		if h.selector == nil || ctx.Err() != nil || attempt+1 >= maxAttempts {
+			break
+		}
+		h.selector.ReportFailure(current.ID())
+		next, selectErr := h.selectProviderFor(ctx, model, required)
+		if selectErr != nil {
+			break
+		}
+		current = next
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no alternate native provider is available")
+	}
+	return nil, current, lastErr
 }
 
 func (h *Handler) streamNativeGemini(w http.ResponseWriter, r *http.Request, native provider.GeminiProvider, upstream provider.Provider, model string, body []byte) {
