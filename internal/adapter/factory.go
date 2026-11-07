@@ -63,7 +63,7 @@ func New(cfg Config) (provider.Provider, error) {
 		})
 	case KindAnthropic:
 		return anthropicprovider.New(anthropicprovider.Config{
-			ID: cfg.ID, Name: cfg.Name, BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Models: cfg.Models,
+			ID: cfg.ID, Name: cfg.Name, BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Models: cfg.Models, ModelCapabilities: cfg.ModelCapabilities,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported provider kind %q", kind)
