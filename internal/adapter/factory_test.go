@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"testing"
 
 	"omnirouter/internal/provider"
@@ -41,7 +42,7 @@ func TestNewAnthropicUsesNativeDefaults(t *testing.T) {
 	if _, ok := upstream.(provider.AnthropicProvider); !ok {
 		t.Fatal("Anthropic adapter must implement native Messages capability")
 	}
-	models, err := upstream.ListModels(t.Context())
+	models, err := upstream.ListModels(context.Background())
 	if err != nil || len(models) != 1 {
 		t.Fatalf("models=%v err=%v", models, err)
 	}
