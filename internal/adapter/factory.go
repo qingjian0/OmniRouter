@@ -37,10 +37,14 @@ func NormalizeKind(kind string) string {
 }
 
 func DefaultBaseURL(kind string) string {
-	if NormalizeKind(kind) == KindDeepSeek {
+	switch NormalizeKind(kind) {
+	case KindDeepSeek:
 		return deepseek.DefaultBaseURL
+	case KindAnthropic:
+		return anthropicprovider.DefaultBaseURL
+	default:
+		return ""
 	}
-	return ""
 }
 
 func New(cfg Config) (provider.Provider, error) {
@@ -56,6 +60,10 @@ func New(cfg Config) (provider.Provider, error) {
 		return deepseek.New(deepseek.Config{
 			ID: cfg.ID, Name: cfg.Name, BaseURL: cfg.BaseURL, APIKey: cfg.APIKey,
 			Models: cfg.Models,
+		})
+	case KindAnthropic:
+		return anthropicprovider.New(anthropicprovider.Config{
+			ID: cfg.ID, Name: cfg.Name, BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Models: cfg.Models,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported provider kind %q", kind)
