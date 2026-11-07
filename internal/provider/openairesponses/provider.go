@@ -85,7 +85,7 @@ func (p *Provider) Name() string {
 func (p *Provider) ListModels(context.Context) ([]provider.Model, error) {
 	out := make([]provider.Model, 0, len(p.models))
 	for _, id := range p.models {
-		caps := append([]string(nil), p.capabilities[id]...)
+		caps := withoutCapability(p.capabilities[id], "chat")
 		caps = appendUnique(caps, "responses", "streaming")
 		out = append(out, provider.Model{
 			ID: id, Name: id, Provider: p.id, Capabilities: caps,
@@ -162,6 +162,9 @@ func (p *Provider) StreamResponses(ctx context.Context, req *provider.Request, e
 			return nil
 		}
 		data := strings.Join(dataLines, "\n")
+		if !json.Valid([]byte(data)) {
+			return fmt.Errorf("Responses API emitted malformed SSE JSON")
+		}
 		sawData = true
 		if eventType == "" {
 			var envelope struct { Type string `json:"type"` }
@@ -298,5 +301,15 @@ func cloneCapabilities(input map[string][]string) map[string][]string {
 func cloneIntMap(input map[string]int) map[string]int {
 	out := make(map[string]int, len(input))
 	for key, value := range input { out[key] = value }
+	return out
+}
+
+func withoutCapability(values []string, excluded string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != excluded {
+			out = appendUnique(out, value)
+		}
+	}
 	return out
 }
