@@ -124,6 +124,16 @@ func (p *Provider) GenerateResponses(ctx context.Context, req *provider.Request)
 	if !json.Valid(data) {
 		return nil, fmt.Errorf("Responses API returned invalid JSON")
 	}
+	var envelope struct {
+		Status string `json:"status"`
+		Error  json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return nil, fmt.Errorf("decode Responses API response: %w", err)
+	}
+	if envelope.Status != "completed" {
+		return nil, fmt.Errorf("Responses API returned non-completed status %q", envelope.Status)
+	}
 	return &provider.Response{Model: req.Model, Output: data}, nil
 }
 
@@ -166,13 +176,16 @@ func (p *Provider) StreamResponses(ctx context.Context, req *provider.Request, e
 			return fmt.Errorf("Responses API emitted malformed SSE JSON")
 		}
 		sawData = true
+		var envelope struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal([]byte(data), &envelope); err != nil {
+			return fmt.Errorf("Responses API emitted malformed SSE JSON: %w", err)
+		}
+		if eventType != "" && envelope.Type != "" && eventType != envelope.Type {
+			return fmt.Errorf("Responses API SSE event type %q conflicts with payload type %q", eventType, envelope.Type)
+		}
 		if eventType == "" {
-			var envelope struct {
-				Type string `json:"type"`
-			}
-			if err := json.Unmarshal([]byte(data), &envelope); err != nil {
-				return fmt.Errorf("Responses API emitted malformed SSE JSON: %w", err)
-			}
 			eventType = envelope.Type
 		}
 		switch eventType {
