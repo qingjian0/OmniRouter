@@ -320,3 +320,36 @@ func TestGatewayStreamsNativeAnthropicEvents(t *testing.T) {
 		t.Fatalf("native message_stop was not forwarded: %s", response.Body.String())
 	}
 }
+
+type legacySelectorTest struct {
+	upstream provider.Provider
+}
+
+func (s legacySelectorTest) Select(context.Context, string) (provider.Provider, error) {
+	return s.upstream, nil
+}
+func (legacySelectorTest) ReportFailure(string) {}
+
+func TestSelectProviderForFailsClosedWithoutCapabilityAwareSelector(t *testing.T) {
+	registry := provider.NewRegistry()
+	p := &usageTestProvider{}
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	h := &Handler{registry: registry, selector: legacySelectorTest{upstream: p}}
+	if _, err := h.selectProviderFor(context.Background(), "model-test", []string{"responses"}); err == nil {
+		t.Fatal("expected capability filtering error")
+	}
+}
+
+func TestSelectProviderForAllowsLegacySelectorWithoutRequirements(t *testing.T) {
+	p := &usageTestProvider{}
+	h := &Handler{registry: provider.NewRegistry(), selector: legacySelectorTest{upstream: p}}
+	got, err := h.selectProviderFor(context.Background(), "model-test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID() != p.ID() {
+		t.Fatalf("selected %q, want %q", got.ID(), p.ID())
+	}
+}
