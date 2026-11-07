@@ -20,13 +20,13 @@ const DefaultBaseURL = "https://api.anthropic.com/v1"
 const DefaultVersion = "2023-06-01"
 
 type Config struct {
-	ID                 string
-	Name               string
-	BaseURL            string
-	APIKey             string
-	Models             []string
-	ModelCapabilities  map[string][]string
-	Client             *http.Client
+	ID                string
+	Name              string
+	BaseURL           string
+	APIKey            string
+	Models            []string
+	ModelCapabilities map[string][]string
+	Client            *http.Client
 }
 
 type Provider struct {
