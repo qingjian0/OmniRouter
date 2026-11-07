@@ -373,3 +373,20 @@ func TestSelectProviderForAllowsLegacySelectorWithoutRequirements(t *testing.T) 
 		t.Fatalf("selected %q, want %q", got.ID(), p.ID())
 	}
 }
+
+func TestRequiredCapabilitiesDetectsResponsesJSONAndImageInputs(t *testing.T) {
+	got := requiredCapabilities([]byte(`{
+		"model":"gpt-4.1",
+		"text":{"format":{"type":"json_schema","name":"answer","schema":{"type":"object"}}},
+		"input":[{"role":"user","content":[{"type":"input_image","image_url":"https://example.test/image.png"}]}]
+	}`))
+	found := map[string]bool{}
+	for _, capability := range got {
+		found[capability] = true
+	}
+	for _, capability := range []string{"json", "vision"} {
+		if !found[capability] {
+			t.Errorf("missing required capability %q in %v", capability, got)
+		}
+	}
+}
