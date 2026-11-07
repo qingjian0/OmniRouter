@@ -327,7 +327,7 @@ onMounted(refresh);
           <article class="panel">
             <div class="panel-title"><h2>添加 Provider</h2><span class="muted">官方 API / OpenAI-compatible</span></div>
             <form class="form-grid" @submit.prevent="createProvider">
-              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible</option><option value="deepseek">DeepSeek 官方 API</option></select></label>
+              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="deepseek">DeepSeek 官方 API</option></select></label>
               <label>ID<input v-model="providerForm.id" required placeholder="deepseek-primary" /></label>
               <label>名称<input v-model="providerForm.name" placeholder="DeepSeek Primary" /></label>
               <label class="wide">Base URL<input v-model="providerForm.base_url" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : 'https://api.example.com/v1'" /></label>
@@ -339,7 +339,7 @@ onMounted(refresh);
               <label class="check"><input v-model="providerForm.enabled" type="checkbox" />启用</label>
               <div class="form-actions"><button class="primary" type="submit">保存 Provider</button></div>
             </form>
-            <p class="hint">配置上游密钥前，必须设置 OMNI_CREDENTIAL_ENCRYPTION_KEY。列表不会返回密钥明文。</p>
+            <p class="hint">OpenAI Responses 类型直接请求 Base URL + /responses，只声明 Responses 与 Streaming 能力，不会伪装成 Chat Completions。配置上游密钥前，必须设置 OMNI_CREDENTIAL_ENCRYPTION_KEY。</p>
           </article>
           <article class="panel">
             <div class="panel-title"><h2>Provider 列表</h2><span class="muted">{{ providers.length }} 项</span></div>
