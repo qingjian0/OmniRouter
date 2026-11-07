@@ -37,10 +37,14 @@ func NormalizeKind(kind string) string {
 }
 
 func DefaultBaseURL(kind string) string {
-	if NormalizeKind(kind) == KindDeepSeek {
+	switch NormalizeKind(kind) {
+	case KindDeepSeek:
 		return deepseek.DefaultBaseURL
+	case KindGemini:
+		return geminiprovider.DefaultBaseURL
+	default:
+		return ""
 	}
-	return ""
 }
 
 func New(cfg Config) (provider.Provider, error) {
