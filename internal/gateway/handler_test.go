@@ -321,7 +321,6 @@ func TestGatewayStreamsNativeAnthropicEvents(t *testing.T) {
 	}
 }
 
-
 type nativeGeminiTestProvider struct {
 	*usageTestProvider
 }
