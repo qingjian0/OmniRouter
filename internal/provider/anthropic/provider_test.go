@@ -88,3 +88,24 @@ func TestNewRejectsInvalidBaseURL(t *testing.T) {
 		t.Fatal("expected invalid URL error")
 	}
 }
+
+
+func TestGenerateAnthropicRejectsOversizedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.Copy(w, strings.NewReader(strings.Repeat("x", (32<<20)+1)))
+	}))
+	defer server.Close()
+
+	p, err := New(Config{ID: "anthropic", BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.GenerateAnthropic(context.Background(), &provider.Request{
+		Model: "m",
+		Input: []byte(`{"model":"m","max_tokens":8}`),
+	})
+	if err == nil || !strings.Contains(err.Error(), "exceeds 32 MiB") {
+		t.Fatalf("expected oversized response error, got %v", err)
+	}
+}
