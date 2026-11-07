@@ -126,7 +126,6 @@ func (p *Provider) GenerateResponses(ctx context.Context, req *provider.Request)
 	}
 	var envelope struct {
 		Status string `json:"status"`
-		Error  json.RawMessage `json:"error"`
 	}
 	if err := json.Unmarshal(data, &envelope); err != nil {
 		return nil, fmt.Errorf("decode Responses API response: %w", err)
