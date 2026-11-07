@@ -89,7 +89,6 @@ func TestNewRejectsInvalidBaseURL(t *testing.T) {
 	}
 }
 
-
 func TestGenerateAnthropicRejectsOversizedResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
