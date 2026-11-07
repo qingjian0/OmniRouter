@@ -108,14 +108,22 @@ func Load() (Config, error) {
 	} else {
 		cfg.Provider.Kind = env("OMNI_PROVIDER_KIND", "openai-compatible")
 		defaultID, defaultName := "openai-compatible", "OpenAI-compatible"
-		if strings.EqualFold(cfg.Provider.Kind, "deepseek") {
+		switch strings.ToLower(strings.TrimSpace(cfg.Provider.Kind)) {
+		case "deepseek":
 			defaultID, defaultName = "deepseek", "DeepSeek"
+		case "anthropic":
+			defaultID, defaultName = "anthropic", "Anthropic"
 		}
 		cfg.Provider.ID = env("OMNI_PROVIDER_ID", defaultID)
 		cfg.Provider.Name = env("OMNI_PROVIDER_NAME", defaultName)
 		cfg.Provider.BaseURL = strings.TrimSpace(os.Getenv("OMNI_PROVIDER_BASE_URL"))
-		if cfg.Provider.BaseURL == "" && strings.EqualFold(cfg.Provider.Kind, "deepseek") {
-			cfg.Provider.BaseURL = "https://api.deepseek.com"
+		if cfg.Provider.BaseURL == "" {
+			switch strings.ToLower(strings.TrimSpace(cfg.Provider.Kind)) {
+			case "deepseek":
+				cfg.Provider.BaseURL = "https://api.deepseek.com"
+			case "anthropic":
+				cfg.Provider.BaseURL = "https://api.anthropic.com/v1"
+			}
 		}
 		cfg.Provider.APIKey = os.Getenv("OMNI_PROVIDER_API_KEY")
 		if model := strings.TrimSpace(os.Getenv("OMNI_PROVIDER_MODELS")); model != "" {
