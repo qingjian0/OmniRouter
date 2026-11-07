@@ -1010,8 +1010,12 @@ func requiredCapabilities(body []byte) []string {
 					if settings, ok := child.(map[string]any); ok && len(settings) > 0 {
 						found["reasoning"] = true
 					}
-				case "image_url", "inline_data", "inlineData", "fileData":
+				case "image_url":
 					found["vision"] = true
+				case "inline_data", "inlineData", "fileData":
+					if isImagePayload(child) {
+						found["vision"] = true
+					}
 				case "type":
 					if blockType, ok := child.(string); ok && blockType == "image" {
 						found["vision"] = true
@@ -1037,6 +1041,21 @@ func requiredCapabilities(body []byte) []string {
 		}
 	}
 	return out
+}
+
+// isImagePayload checks the declared media type instead of assuming that
+// every inline or uploaded file is an image; Gemini also carries audio/video.
+func isImagePayload(value any) bool {
+	payload, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	for _, key := range []string{"mimeType", "mime_type"} {
+		if mediaType, ok := payload[key].(string); ok && strings.HasPrefix(strings.ToLower(strings.TrimSpace(mediaType)), "image/") {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) selectProvider(ctx context.Context, model string) (provider.Provider, error) {
