@@ -70,7 +70,6 @@ func TestLoadDeepSeekProviderDefaults(t *testing.T) {
 	}
 }
 
-
 func TestLoadAnthropicProviderDefaults(t *testing.T) {
 	t.Setenv("OMNI_PROVIDERS", "")
 	t.Setenv("OMNI_PROVIDER_KIND", "anthropic")
