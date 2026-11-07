@@ -124,14 +124,20 @@ async function mutate(path: string, method: string, payload: unknown, success: s
 
 function applyProviderKindDefaults() {
   if (providerForm.kind === "deepseek") {
-    if (!providerForm.id || providerForm.id === "openai-compatible") providerForm.id = "deepseek";
-    if (!providerForm.name || providerForm.name === "OpenAI-compatible") providerForm.name = "DeepSeek";
+    if (!providerForm.id || providerForm.id === "openai-compatible" || providerForm.id === "openai-responses") providerForm.id = "deepseek";
+    if (!providerForm.name || providerForm.name === "OpenAI-compatible" || providerForm.name === "OpenAI Responses") providerForm.name = "DeepSeek";
     if (!providerForm.base_url) providerForm.base_url = "https://api.deepseek.com";
     if (!providerForm.models) providerForm.models = "deepseek-flash,deepseek-v4-pro";
     providerForm.capabilities = "";
+  } else if (providerForm.kind === "openai-responses") {
+    if (!providerForm.id || providerForm.id === "openai-compatible") providerForm.id = "openai-responses";
+    if (!providerForm.name || providerForm.name === "OpenAI-compatible") providerForm.name = "OpenAI Responses";
+    if (!providerForm.base_url || providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "https://api.openai.com/v1";
+    if (!providerForm.models || providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "gpt-4.1";
+    providerForm.capabilities = "";
   } else {
-    if (providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "";
-    if (providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "";
+    if (providerForm.base_url === "https://api.deepseek.com" || providerForm.base_url === "https://api.openai.com/v1") providerForm.base_url = "";
+    if (providerForm.models === "deepseek-flash,deepseek-v4-pro" || providerForm.models === "gpt-4.1") providerForm.models = "";
   }
 }
 
