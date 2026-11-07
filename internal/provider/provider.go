@@ -66,3 +66,9 @@ type AnthropicProvider interface {
 	GenerateAnthropic(context.Context, *Request) (*Response, error)
 	StreamAnthropic(context.Context, *Request, func(Event) error) error
 }
+
+// GeminiProvider is an optional native generateContent API capability.
+type GeminiProvider interface {
+	GenerateGemini(context.Context, *Request) (*Response, error)
+	StreamGemini(context.Context, *Request, func(Event) error) error
+}
