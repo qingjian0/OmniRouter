@@ -320,3 +320,55 @@ func TestGatewayStreamsNativeAnthropicEvents(t *testing.T) {
 		t.Fatalf("native message_stop was not forwarded: %s", response.Body.String())
 	}
 }
+
+
+type nativeGeminiTestProvider struct {
+	*usageTestProvider
+}
+
+func (p *nativeGeminiTestProvider) GenerateGemini(context.Context, *provider.Request) (*provider.Response, error) {
+	return &provider.Response{Model: "model-test", Output: []byte(`{"candidates":[{"content":{"role":"model","parts":[{"text":"native gemini"}]}}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":4,"totalTokenCount":7}}`)}, nil
+}
+
+func (p *nativeGeminiTestProvider) StreamGemini(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
+	if err := emit(provider.Event{Data: []byte("data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"native gemini\"}]}}]}\n\n")}); err != nil {
+		return err
+	}
+	return emit(provider.Event{Done: true, ExplicitDone: true})
+}
+
+func TestGatewayUsesNativeGeminiProviderWhenAvailable(t *testing.T) {
+	p := &nativeGeminiTestProvider{usageTestProvider: &usageTestProvider{}}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1beta/models/model-test:generateContent", strings.NewReader(`{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}`))
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "native gemini") {
+		t.Fatalf("native Gemini response was not forwarded: %s", response.Body.String())
+	}
+}
+
+func TestGatewayStreamsNativeGeminiEvents(t *testing.T) {
+	p := &nativeGeminiTestProvider{usageTestProvider: &usageTestProvider{}}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1beta/models/model-test:streamGenerateContent", strings.NewReader(`{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}`))
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "native gemini") || !strings.Contains(response.Header().Get("Content-Type"), "text/event-stream") {
+		t.Fatalf("native Gemini SSE was not forwarded: headers=%v body=%s", response.Header(), response.Body.String())
+	}
+}
