@@ -27,7 +27,7 @@ func TestGenerateResponsesUsesNativeEndpointAndBearerAuth(t *testing.T) {
 }
 
 func TestListModelsDeclaresOnlyNativeResponsesCapabilities(t *testing.T) {
-	p, err := New(Config{ID:"responses", BaseURL:"https://example.test/v1", Models:[]string{"gpt-x"}, ModelCapabilities:map[string][]string{"gpt-x":{"tools","vision"}}})
+	p, err := New(Config{ID:"responses", BaseURL:"https://example.test/v1", Models:[]string{"gpt-x"}, ModelCapabilities:map[string][]string{"gpt-x":{"chat","tools","vision"}}})
 	if err != nil { t.Fatal(err) }
 	models, err := p.ListModels(context.Background())
 	if err != nil { t.Fatal(err) }
