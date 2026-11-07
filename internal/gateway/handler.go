@@ -962,9 +962,6 @@ func (h *Handler) selectProviderFor(ctx context.Context, model string, required 
 			if candidateModel.ID != model || !hasDeclaredCapabilities(candidateModel.Capabilities, required) {
 				continue
 			}
-			if err := candidate.HealthCheck(ctx); err != nil {
-				continue
-			}
 			return candidate, nil
 		}
 	}
