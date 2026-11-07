@@ -59,9 +59,13 @@ func New(cfg Config) (*Provider, error) {
 		cfg.Client = openai.NewStreamingClient()
 	}
 	return &Provider{
-		id: cfg.ID, name: cfg.Name, baseURL: cfg.BaseURL, apiKey: cfg.APIKey,
-		models: append([]string(nil), cfg.Models...),
-		modelCapabilities: cloneCapabilities(cfg.ModelCapabilities), client: cfg.Client,
+		id:                cfg.ID,
+		name:              cfg.Name,
+		baseURL:           cfg.BaseURL,
+		apiKey:            cfg.APIKey,
+		models:            append([]string(nil), cfg.Models...),
+		modelCapabilities: cloneCapabilities(cfg.ModelCapabilities),
+		client:            cfg.Client,
 	}, nil
 }
 
