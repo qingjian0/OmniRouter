@@ -1002,6 +1002,14 @@ func requiredCapabilities(body []byte) []string {
 					if child != nil {
 						found["json"] = true
 					}
+				case "responseMimeType":
+					if mimeType, ok := child.(string); ok && strings.EqualFold(mimeType, "application/json") {
+						found["json"] = true
+					}
+				case "thinkingConfig":
+					if settings, ok := child.(map[string]any); ok && len(settings) > 0 {
+						found["reasoning"] = true
+					}
 				case "image_url", "inline_data", "inlineData", "fileData":
 					found["vision"] = true
 				case "type":
