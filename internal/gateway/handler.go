@@ -452,14 +452,39 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusRequestEntityTooLarge, "invalid_request_error", "request body exceeds 8 MiB")
 		return
 	}
+	required := requiredCapabilities(body)
+	if stream {
+		required = append(required, "streaming")
+	}
+	nativeRequirements := append(append([]string(nil), required...), "gemini_generate_content")
+	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements); nativeErr == nil {
+		if nativeGemini, ok := native.(provider.GeminiProvider); ok {
+			setRequestRoute(r, native, model)
+			if stream {
+				h.streamNativeGemini(w, r, nativeGemini, native, model, body)
+				return
+			}
+			response, callErr := nativeGemini.GenerateGemini(r.Context(), &provider.Request{Model: model, Input: body})
+			if callErr != nil {
+				setRequestError(r, classifyRequestError(r, callErr, false))
+				if h.selector != nil {
+					h.selector.ReportFailure(native.ID())
+				}
+				writeError(w, http.StatusBadGateway, "upstream_error", "native Gemini upstream request failed")
+				return
+			}
+			captureGeminiUsage(r, response.Output)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(response.Output)
+			return
+		}
+	}
+
 	payload, err := gemini.ToOpenAIStream(body, model, stream)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
-	}
-	required := requiredCapabilities(body)
-	if stream {
-		required = append(required, "streaming")
 	}
 	p, err := h.selectProviderFor(r.Context(), model, required)
 	if err != nil {
@@ -546,6 +571,68 @@ func captureAnthropicUsage(r *http.Request, raw []byte) {
 		return
 	}
 	storeRequestUsage(r, usage)
+}
+
+func captureGeminiUsage(r *http.Request, raw []byte) {
+	usage, err := tokenusage.ParseGemini(raw, true)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return
+	}
+	storeRequestUsage(r, usage)
+}
+
+func mergeGeminiStreamUsage(r *http.Request, current *tokenusage.Usage, raw []byte, final bool) *tokenusage.Usage {
+	usage, err := tokenusage.ParseGemini(eventData(raw), final)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return current
+	}
+	return tokenusage.Merge(current, usage)
+}
+
+func (h *Handler) streamNativeGemini(w http.ResponseWriter, r *http.Request, native provider.GeminiProvider, upstream provider.Provider, model string, body []byte) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "server_error", "streaming is not supported by this server")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	beginStreamRequest(r)
+	var usage *tokenusage.Usage
+	terminal := false
+	err := native.StreamGemini(r.Context(), &provider.Request{Model: model, Input: body, Stream: true}, func(event provider.Event) error {
+		if len(event.Data) > 0 {
+			usage = mergeGeminiStreamUsage(r, usage, event.Data, false)
+			if _, writeErr := w.Write(event.Data); writeErr != nil {
+				return downstreamWriteError{err: writeErr}
+			}
+			flusher.Flush()
+		}
+		if event.Done {
+			terminal = event.ExplicitDone
+			if usage != nil {
+				usage.Final = event.ExplicitDone
+			}
+			storeRequestUsage(r, usage)
+		}
+		return nil
+	})
+	if err != nil {
+		storeRequestUsage(r, usage)
+		setRequestError(r, classifyRequestError(r, err, true))
+		if h.selector != nil {
+			h.selector.ReportFailure(upstream.ID())
+		}
+	} else if !terminal {
+		storeRequestUsage(r, usage)
+		setRequestError(r, "stream_incomplete")
+	} else {
+		completeStreamRequest(r)
+	}
 }
 
 func mergeAnthropicStreamUsage(r *http.Request, current *tokenusage.Usage, raw []byte, final bool) *tokenusage.Usage {
