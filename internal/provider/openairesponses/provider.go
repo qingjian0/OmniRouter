@@ -287,20 +287,29 @@ func appendUnique(values []string, additions ...string) []string {
 	for _, addition := range additions {
 		found := false
 		for _, value := range values {
-			if value == addition {\n\t\t\t\tfound = true\n\t\t\t\tbreak\n\t\t\t}
+			if value == addition {
+				found = true
+				break
+			}
 		}
-		if !found {\n\t\t\tvalues = append(values, addition)\n\t\t}
+		if !found {
+			values = append(values, addition)
+		}
 	}
 	return values
 }
 func cloneCapabilities(input map[string][]string) map[string][]string {
 	out := make(map[string][]string, len(input))
-	for key, values := range input {\n\t\tout[key] = append([]string(nil), values...)\n\t}
+	for key, values := range input {
+		out[key] = append([]string(nil), values...)
+	}
 	return out
 }
 func cloneIntMap(input map[string]int) map[string]int {
 	out := make(map[string]int, len(input))
-	for key, value := range input {\n\t\tout[key] = value\n\t}
+	for key, value := range input {
+		out[key] = value
+	}
 	return out
 }
 
