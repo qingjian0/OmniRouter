@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"omnirouter/internal/provider"
-	"omnirouter/internal/provider/deepseek"
 	anthropicprovider "omnirouter/internal/provider/anthropic"
+	"omnirouter/internal/provider/deepseek"
 	openai "omnirouter/internal/provider/openai"
 )
 
