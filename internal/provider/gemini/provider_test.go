@@ -163,3 +163,53 @@ func TestStreamGeminiRejectsNonSSEContentType(t *testing.T) {
 		t.Fatalf("expected non-SSE content type error, got %v", err)
 	}
 }
+
+
+func TestHealthCheckUsesGeminiModelsEndpointAndAPIKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1beta/models" || r.URL.Query().Get("pageSize") != "1" {
+			t.Fatalf("unexpected health request: %s %s", r.Method, r.URL.String())
+		}
+		if r.Header.Get("x-goog-api-key") != "secret" {
+			t.Fatal("Gemini API key header missing from health check")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	p, err := New(Config{ID: "gemini", BaseURL: server.URL + "/v1beta", APIKey: "secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.HealthCheck(context.Background()); err != nil {
+		t.Fatalf("HealthCheck: %v", err)
+	}
+}
+
+func TestHealthCheckRejectsUnauthorizedUpstream(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	p, err := New(Config{ID: "gemini", BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.HealthCheck(context.Background()); err == nil {
+		t.Fatal("expected unauthorized health check error")
+	}
+}
+
+func TestNewRejectsUnsafeBaseURL(t *testing.T) {
+	for _, baseURL := range []string{
+		"ftp://example.com/v1beta",
+		"https://user:password@example.com/v1beta",
+		"https://example.com/v1beta?key=secret",
+		"https://example.com/v1beta#fragment",
+	} {
+		if _, err := New(Config{ID: "gemini", BaseURL: baseURL}); err == nil {
+			t.Errorf("expected invalid base URL %q to be rejected", baseURL)
+		}
+	}
+}
