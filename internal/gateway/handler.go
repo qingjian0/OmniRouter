@@ -862,10 +862,15 @@ func eventData(raw []byte) []byte {
 }
 
 func (h *Handler) selectProviderFor(ctx context.Context, model string, required []string) (provider.Provider, error) {
-	if selector, ok := h.selector.(interface {
-		SelectWithRequirements(context.Context, string, []string) (provider.Provider, error)
-	}); ok {
-		return selector.SelectWithRequirements(ctx, model, required)
+	if h.selector != nil {
+		if selector, ok := h.selector.(interface {
+			SelectWithRequirements(context.Context, string, []string) (provider.Provider, error)
+		}); ok {
+			return selector.SelectWithRequirements(ctx, model, required)
+		}
+		if len(required) > 0 {
+			return nil, fmt.Errorf("configured selector does not support required capability filtering: %v", required)
+		}
 	}
 	return h.selectProvider(ctx, model)
 }
