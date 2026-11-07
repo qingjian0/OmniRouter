@@ -167,7 +167,9 @@ func (p *Provider) StreamResponses(ctx context.Context, req *provider.Request, e
 		}
 		sawData = true
 		if eventType == "" {
-			var envelope struct {\n\t\t\t\tType string `json:"type"`\n\t\t\t}
+			var envelope struct {
+				Type string `json:"type"`
+			}
 			if err := json.Unmarshal([]byte(data), &envelope); err != nil {
 				return fmt.Errorf("Responses API emitted malformed SSE JSON: %w", err)
 			}
