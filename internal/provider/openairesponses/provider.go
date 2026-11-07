@@ -167,7 +167,7 @@ func (p *Provider) StreamResponses(ctx context.Context, req *provider.Request, e
 		}
 		sawData = true
 		if eventType == "" {
-			var envelope struct { Type string `json:"type"` }
+			var envelope struct {\n\t\t\t\tType string `json:"type"`\n\t\t\t}
 			if err := json.Unmarshal([]byte(data), &envelope); err != nil {
 				return fmt.Errorf("Responses API emitted malformed SSE JSON: %w", err)
 			}
@@ -287,20 +287,20 @@ func appendUnique(values []string, additions ...string) []string {
 	for _, addition := range additions {
 		found := false
 		for _, value := range values {
-			if value == addition { found = true; break }
+			if value == addition {\n\t\t\t\tfound = true\n\t\t\t\tbreak\n\t\t\t}
 		}
-		if !found { values = append(values, addition) }
+		if !found {\n\t\t\tvalues = append(values, addition)\n\t\t}
 	}
 	return values
 }
 func cloneCapabilities(input map[string][]string) map[string][]string {
 	out := make(map[string][]string, len(input))
-	for key, values := range input { out[key] = append([]string(nil), values...) }
+	for key, values := range input {\n\t\tout[key] = append([]string(nil), values...)\n\t}
 	return out
 }
 func cloneIntMap(input map[string]int) map[string]int {
 	out := make(map[string]int, len(input))
-	for key, value := range input { out[key] = value }
+	for key, value := range input {\n\t\tout[key] = value\n\t}
 	return out
 }
 
