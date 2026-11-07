@@ -163,17 +163,8 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "valid JSON with a model is required")
 		return
 	}
-	var upstream provider.Provider
-	if h.selector != nil {
-		requirements := append(requiredCapabilities(body), "responses")
-		upstream, err = h.selectProviderFor(r.Context(), request.Model, requirements)
-	} else {
-		var ok bool
-		upstream, ok = h.registry.ResolveModel(request.Model)
-		if !ok {
-			err = http.ErrNoLocation
-		}
-	}
+	requirements := append(requiredCapabilities(body), "responses")
+	upstream, err := h.selectProviderFor(r.Context(), request.Model, requirements)
 	if err != nil || upstream == nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = request.Model })
 		setRequestError(r, "provider_unavailable")
@@ -265,16 +256,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "valid JSON with a model is required")
 		return
 	}
-	var p provider.Provider
-	if h.selector != nil {
-		p, err = h.selectProviderFor(r.Context(), request.Model, requiredCapabilities(body))
-	} else {
-		var ok bool
-		p, ok = h.registry.ResolveModel(request.Model)
-		if !ok {
-			err = http.ErrNoLocation
-		}
-	}
+	p, err := h.selectProviderFor(r.Context(), request.Model, requiredCapabilities(body))
 	if err != nil || p == nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = request.Model })
 		setRequestError(r, "provider_unavailable")
@@ -962,7 +944,44 @@ func (h *Handler) selectProviderFor(ctx context.Context, model string, required 
 	}); ok {
 		return selector.SelectWithRequirements(ctx, model, required)
 	}
-	return h.selectProvider(ctx, model)
+	if len(required) == 0 {
+		return h.selectProvider(ctx, model)
+	}
+	if h.selector != nil {
+		return nil, fmt.Errorf("configured selector does not support capability-aware selection")
+	}
+	if h.registry == nil {
+		return nil, fmt.Errorf("provider registry is unavailable")
+	}
+	for _, candidate := range h.registry.List() {
+		models, err := candidate.ListModels(ctx)
+		if err != nil {
+			continue
+		}
+		for _, candidateModel := range models {
+			if candidateModel.ID != model || !hasDeclaredCapabilities(candidateModel.Capabilities, required) {
+				continue
+			}
+			if err := candidate.HealthCheck(ctx); err != nil {
+				continue
+			}
+			return candidate, nil
+		}
+	}
+	return nil, fmt.Errorf("no healthy provider for model %q declares required capabilities: %v", model, required)
+}
+
+func hasDeclaredCapabilities(available, required []string) bool {
+	set := make(map[string]struct{}, len(available))
+	for _, capability := range available {
+		set[capability] = struct{}{}
+	}
+	for _, capability := range required {
+		if _, ok := set[capability]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // requiredCapabilities performs conservative structural detection. It does not
