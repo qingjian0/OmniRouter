@@ -174,7 +174,7 @@ func TestGenerateResponsesRejectsNonCompletedStatus(t *testing.T) {
 func TestStreamRejectsConflictingSSEEventAndPayloadTypes(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = w.Write([]byte("event: response.completed\\ndata: {\\"type\\":\\"response.failed\\"}\\n\\n"))
+		_, _ = w.Write([]byte("event: response.completed\ndata: {\"type\":\"response.failed\"}\n\n"))
 	}))
 	defer server.Close()
 
