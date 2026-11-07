@@ -391,3 +391,30 @@ func TestRequiredCapabilitiesIncludesGeminiSpecificFeatures(t *testing.T) {
 		}
 	}
 }
+
+func TestRequiredCapabilitiesDoesNotTreatAudioOrVideoAsVision(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{name: "inline image", body: `{"contents":[{"parts":[{"inlineData":{"mimeType":"image/png","data":"AA=="}}]}]}`, want: true},
+		{name: "uploaded image", body: `{"contents":[{"parts":[{"fileData":{"mimeType":"image/jpeg","fileUri":"gs://bucket/image.jpg"}}]}]}`, want: true},
+		{name: "inline audio", body: `{"contents":[{"parts":[{"inlineData":{"mimeType":"audio/ogg","data":"AA=="}}]}]}`},
+		{name: "uploaded video", body: `{"contents":[{"parts":[{"fileData":{"mimeType":"video/mp4","fileUri":"gs://bucket/video.mp4"}}]}]}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := requiredCapabilities([]byte(test.body))
+			found := false
+			for _, capability := range got {
+				if capability == "vision" {
+					found = true
+				}
+			}
+			if found != test.want {
+				t.Fatalf("vision capability = %v, want %v; all capabilities: %v", found, test.want, got)
+			}
+		})
+	}
+}
