@@ -131,7 +131,7 @@ func (p *Provider) StreamAnthropic(ctx context.Context, req *provider.Request, e
 		lines = lines[:0]
 		if eventType == "" && len(dataLines) > 0 {
 			var envelope struct {
-				Type string \`json:"type"\`
+				Type string `json:"type"`
 			}
 			_ = json.Unmarshal([]byte(strings.Join(dataLines, "\n")), &envelope)
 			eventType = envelope.Type
