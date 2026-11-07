@@ -30,15 +30,20 @@ model IDs are the routing catalogue; this adapter does not currently discover
 models automatically.
 
 For `OMNI_PROVIDERS` JSON configuration, use the same `kind`, `id`,
-`base_url`, `api_key`, and `models` fields as other providers. Provider
+`base_url`, `api_key`, and `models` fields as other providers. Optional
+per-model features can be declared with `model_capabilities`, for example
+`{"claude-model-id":["tools","vision"]}` after verifying the selected model supports them. Provider
 credentials are persisted through the encrypted credential vault when an API
 key is configured; do not put secrets in source-controlled configuration.
 
 ## Capability boundary
 
-The adapter declares native `anthropic_messages`, streaming, tools, and image
-input capabilities for its configured models. It deliberately does **not**
-declare OpenAI Chat Completions support: its `Generate` and `Stream` methods
+The adapter declares native `anthropic_messages` and streaming capabilities by
+default. Optional model features such as `tools`, `vision`, `reasoning`, and
+`json` must be declared per model through `model_capabilities`; the adapter
+filters out `chat`, `anthropic_messages`, and `streaming` from that optional
+list so a configuration cannot accidentally claim OpenAI Chat Completions.
+It deliberately does **not** declare OpenAI Chat Completions support: its `Generate` and `Stream` methods
 return explicit unsupported-operation errors. The gateway's native
 `POST /v1/messages` route selects it through the optional
 `provider.AnthropicProvider` interface.
