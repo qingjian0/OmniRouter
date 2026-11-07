@@ -371,3 +371,24 @@ func TestGatewayStreamsNativeGeminiEvents(t *testing.T) {
 		t.Fatalf("native Gemini SSE was not forwarded: headers=%v body=%s", response.Header(), response.Body.String())
 	}
 }
+
+
+func TestRequiredCapabilitiesIncludesGeminiSpecificFeatures(t *testing.T) {
+	got := requiredCapabilities([]byte(`{
+		"generationConfig": {
+			"responseMimeType": "application/json",
+			"thinkingConfig": {"thinkingBudget": 1024}
+		},
+		"tools": [{"functionDeclarations": [{"name": "lookup"}]}],
+		"contents": [{"parts": [{"inlineData": {"mimeType": "image/png", "data": "AA=="}}]}]
+	}`))
+	found := map[string]bool{}
+	for _, capability := range got {
+		found[capability] = true
+	}
+	for _, capability := range []string{"json", "reasoning", "tools", "vision"} {
+		if !found[capability] {
+			t.Errorf("missing Gemini required capability %q in %v", capability, got)
+		}
+	}
+}
