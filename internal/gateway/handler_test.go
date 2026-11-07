@@ -55,7 +55,8 @@ func (p *usageTestProvider) ID() string {
 }
 func (p *usageTestProvider) Name() string { return "test" }
 func (p *usageTestProvider) ListModels(context.Context) ([]provider.Model, error) {
-	return []provider.Model{{ID: "model-test", Provider: p.ID(), Capabilities: append([]string(nil), p.capabilities...)}}, nil
+	capabilities := append([]string{"streaming"}, p.capabilities...)
+	return []provider.Model{{ID: "model-test", Provider: p.ID(), Capabilities: capabilities}}, nil
 }
 func (p *usageTestProvider) Generate(context.Context, *provider.Request) (*provider.Response, error) {
 	return &provider.Response{Model: "model-test", Output: []byte(`{"id":"x","choices":[],"usage":{"prompt_tokens":7,"completion_tokens":5,"total_tokens":12}}`)}, nil
