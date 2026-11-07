@@ -124,14 +124,20 @@ async function mutate(path: string, method: string, payload: unknown, success: s
 
 function applyProviderKindDefaults() {
   if (providerForm.kind === "deepseek") {
-    if (!providerForm.id || providerForm.id === "openai-compatible") providerForm.id = "deepseek";
-    if (!providerForm.name || providerForm.name === "OpenAI-compatible") providerForm.name = "DeepSeek";
-    if (!providerForm.base_url) providerForm.base_url = "https://api.deepseek.com";
-    if (!providerForm.models) providerForm.models = "deepseek-flash,deepseek-v4-pro";
+    if (!providerForm.id || providerForm.id === "openai-compatible" || providerForm.id === "anthropic") providerForm.id = "deepseek";
+    if (!providerForm.name || providerForm.name === "OpenAI-compatible" || providerForm.name === "Anthropic") providerForm.name = "DeepSeek";
+    if (!providerForm.base_url || providerForm.base_url === "https://api.anthropic.com/v1") providerForm.base_url = "https://api.deepseek.com";
+    if (!providerForm.models || providerForm.models === "claude-model-id") providerForm.models = "deepseek-flash,deepseek-v4-pro";
+    providerForm.capabilities = "";
+  } else if (providerForm.kind === "anthropic") {
+    if (!providerForm.id || providerForm.id === "openai-compatible" || providerForm.id === "deepseek") providerForm.id = "anthropic";
+    if (!providerForm.name || providerForm.name === "OpenAI-compatible" || providerForm.name === "DeepSeek") providerForm.name = "Anthropic";
+    if (!providerForm.base_url || providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "https://api.anthropic.com/v1";
+    if (providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "";
     providerForm.capabilities = "";
   } else {
-    if (providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "";
-    if (providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "";
+    if (providerForm.base_url === "https://api.deepseek.com" || providerForm.base_url === "https://api.anthropic.com/v1") providerForm.base_url = "";
+    if (providerForm.models === "deepseek-flash,deepseek-v4-pro" || providerForm.models === "claude-model-id") providerForm.models = "";
   }
 }
 
@@ -327,15 +333,15 @@ onMounted(refresh);
           <article class="panel">
             <div class="panel-title"><h2>添加 Provider</h2><span class="muted">官方 API / OpenAI-compatible</span></div>
             <form class="form-grid" @submit.prevent="createProvider">
-              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible</option><option value="deepseek">DeepSeek 官方 API</option></select></label>
+              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible</option><option value="deepseek">DeepSeek 官方 API</option><option value="anthropic">Anthropic Messages API</option></select></label>
               <label>ID<input v-model="providerForm.id" required placeholder="deepseek-primary" /></label>
               <label>名称<input v-model="providerForm.name" placeholder="DeepSeek Primary" /></label>
-              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : 'https://api.example.com/v1'" /></label>
+              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="providerForm.kind !== 'deepseek'"  :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'anthropic' ? 'https://api.anthropic.com/v1' : 'https://api.example.com/v1'" /></label>
               <label class="wide">上游 API Key<input v-model="providerForm.api_key" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
               <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : 'model-a,model-b'" /></label>
               <label>优先级<input v-model.number="providerForm.priority" type="number" min="0" /></label>
               <label>权重<input v-model.number="providerForm.weight" type="number" min="0" max="1000000" /></label>
-              <label v-if="providerForm.kind !== 'deepseek'" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
+              <label v-if="providerForm.kind === 'openai-compatible'" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
               <label class="check"><input v-model="providerForm.enabled" type="checkbox" />启用</label>
               <div class="form-actions"><button class="primary" type="submit">保存 Provider</button></div>
             </form>
