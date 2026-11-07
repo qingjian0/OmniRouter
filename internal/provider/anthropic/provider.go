@@ -57,7 +57,7 @@ func (p *Provider) Name() string { if p.name == "" { return "Anthropic" }; retur
 func (p *Provider) ListModels(context.Context) ([]provider.Model, error) {
 	out := make([]provider.Model, 0, len(p.models))
 	for _, id := range p.models {
-		out = append(out, provider.Model{ID:id, Name:id, Provider:p.id, Capabilities:[]string{"anthropic_messages", "streaming", "tools"}, APICapabilities:[]string{"anthropic_messages"}})
+		out = append(out, provider.Model{ID:id, Name:id, Provider:p.id, Capabilities:[]string{"anthropic_messages", "streaming", "tools", "vision"}, APICapabilities:[]string{"anthropic_messages"}})
 	}
 	return out, nil
 }
