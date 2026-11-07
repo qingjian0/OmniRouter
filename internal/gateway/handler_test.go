@@ -66,6 +66,23 @@ func (p *usageTestProvider) StreamResponses(_ context.Context, _ *provider.Reque
 
 func (p *usageTestProvider) HealthCheck(context.Context) error { return nil }
 
+type chatOnlyTestProvider struct {
+	id string
+}
+
+func (p *chatOnlyTestProvider) ID() string   { return p.id }
+func (p *chatOnlyTestProvider) Name() string { return p.id }
+func (p *chatOnlyTestProvider) ListModels(context.Context) ([]provider.Model, error) {
+	return []provider.Model{{ID: "model-test", Provider: p.id, Capabilities: []string{"chat", "streaming"}}}, nil
+}
+func (p *chatOnlyTestProvider) Generate(context.Context, *provider.Request) (*provider.Response, error) {
+	return &provider.Response{Model: "model-test", Output: []byte(`{"choices":[]}`)}, nil
+}
+func (p *chatOnlyTestProvider) Stream(context.Context, *provider.Request, func(provider.Event) error) error {
+	return nil
+}
+func (p *chatOnlyTestProvider) HealthCheck(context.Context) error { return nil }
+
 func newUsageTestHandler(p provider.Provider) (*Handler, http.Handler) {
 	registry := provider.NewRegistry()
 	_ = registry.Register(p)
@@ -224,6 +241,9 @@ func TestStreamingUsageParseFailureDoesNotPersistInvalidCounts(t *testing.T) {
 func TestGatewayResponsesAPIRecordsUsage(t *testing.T) {
 	p := &usageTestProvider{}
 	registry := provider.NewRegistry()
+	if err := registry.Register(&chatOnlyTestProvider{id: "aaa-chat"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := registry.Register(p); err != nil {
 		t.Fatal(err)
 	}
