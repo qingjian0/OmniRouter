@@ -7,12 +7,14 @@ import (
 
 	"omnirouter/internal/provider"
 	"omnirouter/internal/provider/deepseek"
+	geminiprovider "omnirouter/internal/provider/gemini"
 	openai "omnirouter/internal/provider/openai"
 )
 
 const (
 	KindOpenAICompatible = "openai-compatible"
 	KindDeepSeek         = "deepseek"
+	KindGemini           = "gemini"
 )
 
 type Config struct {
@@ -54,6 +56,11 @@ func New(cfg Config) (provider.Provider, error) {
 		return deepseek.New(deepseek.Config{
 			ID: cfg.ID, Name: cfg.Name, BaseURL: cfg.BaseURL, APIKey: cfg.APIKey,
 			Models: cfg.Models,
+		})
+	case KindGemini:
+		return geminiprovider.New(geminiprovider.Config{
+			ID: cfg.ID, Name: cfg.Name, BaseURL: cfg.BaseURL, APIKey: cfg.APIKey,
+			Models: cfg.Models, ModelCapabilities: cfg.ModelCapabilities,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported provider kind %q", kind)
