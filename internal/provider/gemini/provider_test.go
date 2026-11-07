@@ -164,7 +164,6 @@ func TestStreamGeminiRejectsNonSSEContentType(t *testing.T) {
 	}
 }
 
-
 func TestHealthCheckUsesGeminiModelsEndpointAndAPIKey(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/v1beta/models" || r.URL.Query().Get("pageSize") != "1" {
