@@ -68,8 +68,8 @@ func New(cfg Config) (*Provider, error) {
 	}
 	return &Provider{
 		id: cfg.ID, name: cfg.Name, baseURL: cfg.BaseURL, apiKey: cfg.APIKey,
-		models: append([]string(nil), cfg.Models...),
-		capabilities: cloneCapabilities(cfg.ModelCapabilities),
+		models:        append([]string(nil), cfg.Models...),
+		capabilities:  cloneCapabilities(cfg.ModelCapabilities),
 		contextLimits: cloneIntMap(cfg.ModelContextLimits), client: cfg.Client,
 	}, nil
 }
@@ -89,7 +89,7 @@ func (p *Provider) ListModels(context.Context) ([]provider.Model, error) {
 		caps = appendUnique(caps, "responses", "streaming")
 		out = append(out, provider.Model{
 			ID: id, Name: id, Provider: p.id, Capabilities: caps,
-			ContextLimit: p.contextLimits[id],
+			ContextLimit:    p.contextLimits[id],
 			APICapabilities: []string{"openai_responses"},
 		})
 	}
