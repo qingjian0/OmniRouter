@@ -20,22 +20,22 @@ func TestGenerateAnthropicUsesNativeHeadersAndPath(t *testing.T) {
 			t.Fatalf("native auth/version headers missing")
 		}
 		body, _ := io.ReadAll(r.Body)
-		if !strings.Contains(string(body), \`"max_tokens":32\`) {
+		if !strings.Contains(string(body), `"max_tokens":32`) {
 			t.Fatalf("payload was not preserved: %s", body)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, \`{"type":"message","content":[]}\`)
+		_, _ = io.WriteString(w, `{"type":"message","content":[]}`)
 	}))
 	defer server.Close()
 	p, err := New(Config{ID: "anthropic", BaseURL: server.URL + "/v1", APIKey: "secret", Models: []string{"claude-test"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := p.GenerateAnthropic(context.Background(), &provider.Request{Model: "claude-test", Input: []byte(\`{"model":"claude-test","max_tokens":32,"messages":[{"role":"user","content":"hi"}]}\`)})
+	got, err := p.GenerateAnthropic(context.Background(), &provider.Request{Model: "claude-test", Input: []byte(`{"model":"claude-test","max_tokens":32,"messages":[{"role":"user","content":"hi"}]}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got.Output) != \`{"type":"message","content":[]}\` {
+	if string(got.Output) != `{"type":"message","content":[]}` {
 		t.Fatalf("unexpected response: %s", got.Output)
 	}
 }
@@ -59,7 +59,7 @@ func TestStreamAnthropicRequiresMessageStop(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = p.StreamAnthropic(context.Background(), &provider.Request{Model: "m", Input: []byte(\`{"model":"m","max_tokens":8}\`)}, func(provider.Event) error { return nil })
+			err = p.StreamAnthropic(context.Background(), &provider.Request{Model: "m", Input: []byte(`{"model":"m","max_tokens":8}`)}, func(provider.Event) error { return nil })
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("err=%v wantErr=%v", err, tc.wantErr)
 			}
