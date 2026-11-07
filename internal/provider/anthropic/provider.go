@@ -24,13 +24,15 @@ type Config struct {
 	Name    string
 	BaseURL string
 	APIKey  string
-	Models  []string
-	Client  *http.Client
+	Models             []string
+	ModelCapabilities  map[string][]string
+	Client             *http.Client
 }
 
 type Provider struct {
 	id, name, baseURL, apiKey string
 	models                    []string
+	modelCapabilities         map[string][]string
 	client                    *http.Client
 }
 
@@ -56,7 +58,7 @@ func New(cfg Config) (*Provider, error) {
 	if cfg.Client == nil {
 		cfg.Client = openai.NewStreamingClient()
 	}
-	return &Provider{id: cfg.ID, name: cfg.Name, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, models: append([]string(nil), cfg.Models...), client: cfg.Client}, nil
+	return &Provider{id: cfg.ID, name: cfg.Name, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, models: append([]string(nil), cfg.Models...), modelCapabilities: cloneCapabilities(cfg.ModelCapabilities), client: cfg.Client}, nil
 }
 
 func (p *Provider) ID() string { return p.id }
@@ -70,7 +72,16 @@ func (p *Provider) Name() string {
 func (p *Provider) ListModels(context.Context) ([]provider.Model, error) {
 	out := make([]provider.Model, 0, len(p.models))
 	for _, id := range p.models {
-		out = append(out, provider.Model{ID: id, Name: id, Provider: p.id, Capabilities: []string{"anthropic_messages", "streaming", "tools", "vision"}, APICapabilities: []string{"anthropic_messages"}})
+		capabilities := []string{"anthropic_messages", "streaming"}
+		for _, capability := range p.modelCapabilities[id] {
+			switch capability {
+			case "chat", "anthropic_messages", "streaming":
+				continue
+			default:
+				capabilities = append(capabilities, capability)
+			}
+		}
+		out = append(out, provider.Model{ID: id, Name: id, Provider: p.id, Capabilities: capabilities, APICapabilities: []string{"anthropic_messages"}})
 	}
 	return out, nil
 }
@@ -230,4 +241,12 @@ func (p *Provider) HealthCheck(ctx context.Context) error {
 		return fmt.Errorf("Anthropic health check returned HTTP %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func cloneCapabilities(input map[string][]string) map[string][]string {
+	out := make(map[string][]string, len(input))
+	for modelID, capabilities := range input {
+		out[modelID] = append([]string(nil), capabilities...)
+	}
+	return out
 }
