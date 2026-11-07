@@ -372,7 +372,6 @@ func TestGatewayStreamsNativeGeminiEvents(t *testing.T) {
 	}
 }
 
-
 func TestRequiredCapabilitiesIncludesGeminiSpecificFeatures(t *testing.T) {
 	got := requiredCapabilities([]byte(`{
 		"generationConfig": {
