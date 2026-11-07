@@ -127,7 +127,6 @@ func TestNewRejectsInvalidModelID(t *testing.T) {
 	}
 }
 
-
 func TestStreamGeminiRejectsEmptySuccessfulResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
