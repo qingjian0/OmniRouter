@@ -153,3 +153,39 @@ func contains(values []string, wanted string) bool {
 	}
 	return false
 }
+
+func TestGenerateResponsesRejectsNonCompletedStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp_2","status":"incomplete"}`))
+	}))
+	defer server.Close()
+
+	p, err := New(Config{ID: "responses", BaseURL: server.URL, Client: server.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.GenerateResponses(context.Background(), &provider.Request{Model: "gpt-x", Input: []byte(`{"model":"gpt-x"}`)})
+	if err == nil || !strings.Contains(err.Error(), "non-completed status") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestStreamRejectsConflictingSSEEventAndPayloadTypes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("event: response.completed\\ndata: {\\"type\\":\\"response.failed\\"}\\n\\n"))
+	}))
+	defer server.Close()
+
+	p, err := New(Config{ID: "responses", BaseURL: server.URL, Client: server.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = p.StreamResponses(context.Background(), &provider.Request{Model: "gpt-x", Input: []byte(`{"model":"gpt-x"}`)}, func(provider.Event) error {
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "conflicts with payload type") {
+		t.Fatalf("err=%v", err)
+	}
+}
