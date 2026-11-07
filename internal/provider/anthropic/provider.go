@@ -104,9 +104,12 @@ func (p *Provider) GenerateAnthropic(ctx context.Context, req *provider.Request)
 		return nil, err
 	}
 	defer body.Close()
-	data, err := io.ReadAll(io.LimitReader(body, 32<<20))
+	data, err := io.ReadAll(io.LimitReader(body, (32<<20)+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(data) > 32<<20 {
+		return nil, fmt.Errorf("Anthropic Messages response exceeds 32 MiB")
 	}
 	return &provider.Response{Model: req.Model, Output: data}, nil
 }
