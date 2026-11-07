@@ -126,3 +126,41 @@ func TestNewRejectsInvalidModelID(t *testing.T) {
 		t.Fatal("expected invalid model ID error")
 	}
 }
+
+
+func TestStreamGeminiRejectsEmptySuccessfulResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+	}))
+	defer server.Close()
+
+	p, err := New(Config{ID: "gemini", BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = p.StreamGemini(context.Background(), &provider.Request{
+		Model: "m", Input: []byte(`{"contents":[{"parts":[{"text":"hi"}]}]}`), Stream: true,
+	}, func(provider.Event) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "without any response data") {
+		t.Fatalf("expected empty stream error, got %v", err)
+	}
+}
+
+func TestStreamGeminiRejectsNonSSEContentType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"candidates":[]}`)
+	}))
+	defer server.Close()
+
+	p, err := New(Config{ID: "gemini", BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = p.StreamGemini(context.Background(), &provider.Request{
+		Model: "m", Input: []byte(`{"contents":[{"parts":[{"text":"hi"}]}]}`), Stream: true,
+	}, func(provider.Event) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "unexpected content type") {
+		t.Fatalf("expected non-SSE content type error, got %v", err)
+	}
+}
