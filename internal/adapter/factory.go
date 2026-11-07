@@ -6,13 +6,13 @@ import (
 	"strings"
 
 	"omnirouter/internal/provider"
-	"omnirouter/internal/provider/deepseek"
+	"omnirouter/internal/provider/deepseek"\n\tanthropicprovider "omnirouter/internal/provider/anthropic"
 	openai "omnirouter/internal/provider/openai"
 )
 
 const (
 	KindOpenAICompatible = "openai-compatible"
-	KindDeepSeek         = "deepseek"
+	KindDeepSeek         = "deepseek"\n\tKindAnthropic        = "anthropic"
 )
 
 type Config struct {
