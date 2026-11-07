@@ -7,11 +7,13 @@ import (
 
 	"omnirouter/internal/provider"
 	"omnirouter/internal/provider/deepseek"
+	openairesponses "omnirouter/internal/provider/openairesponses"
 	openai "omnirouter/internal/provider/openai"
 )
 
 const (
 	KindOpenAICompatible = "openai-compatible"
+	KindOpenAIResponses  = "openai-responses"
 	KindDeepSeek         = "deepseek"
 )
 
@@ -35,10 +37,12 @@ func NormalizeKind(kind string) string {
 }
 
 func DefaultBaseURL(kind string) string {
-	if NormalizeKind(kind) == KindDeepSeek {
+	switch NormalizeKind(kind) {
+	case KindDeepSeek:
 		return deepseek.DefaultBaseURL
+	default:
+		return ""
 	}
-	return ""
 }
 
 func New(cfg Config) (provider.Provider, error) {
@@ -46,6 +50,12 @@ func New(cfg Config) (provider.Provider, error) {
 	switch kind {
 	case KindOpenAICompatible:
 		return openai.New(openai.Config{
+			ID: cfg.ID, Name: cfg.Name, BaseURL: cfg.BaseURL, APIKey: cfg.APIKey,
+			Models: cfg.Models, ModelCapabilities: cfg.ModelCapabilities,
+			ModelContextLimits: cfg.ModelContextLimits,
+		})
+	case KindOpenAIResponses:
+		return openairesponses.New(openairesponses.Config{
 			ID: cfg.ID, Name: cfg.Name, BaseURL: cfg.BaseURL, APIKey: cfg.APIKey,
 			Models: cfg.Models, ModelCapabilities: cfg.ModelCapabilities,
 			ModelContextLimits: cfg.ModelContextLimits,
