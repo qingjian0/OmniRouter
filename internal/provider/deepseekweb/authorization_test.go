@@ -11,7 +11,6 @@ func validInput() AuthorizationInput {
 		Token: []byte("user-token-value"),
 		Cookies: []BrowserCookie{
 			{Name: "ds_session_id", Value: "session-123", Domain: ".chat.deepseek.com", Path: "/", Secure: true},
-			{Name: "other", Value: "value", Domain: "chat.deepseek.com", Path: "/", Secure: true},
 		},
 	}
 }
@@ -24,7 +23,7 @@ func TestValidateAuthorizationBuildsDeterministicCookieHeader(t *testing.T) {
 	if string(got.Token) != "user-token-value" {
 		t.Fatalf("unexpected token copy: %q", got.Token)
 	}
-	if string(got.CookieHeader) != "ds_session_id=session-123; other=value" {
+	if string(got.CookieHeader) != "ds_session_id=session-123" {
 		t.Fatalf("unexpected cookie header: %q", got.CookieHeader)
 	}
 }
@@ -38,6 +37,7 @@ func TestValidateAuthorizationRejectsUntrustedInput(t *testing.T) {
 		"insecure cookie":        func(in *AuthorizationInput) { in.Cookies[0].Secure = false },
 		"cookie injection":       func(in *AuthorizationInput) { in.Cookies[0].Value = "x; admin=true" },
 		"duplicate cookie":       func(in *AuthorizationInput) { in.Cookies = append(in.Cookies, in.Cookies[0]) },
+		"unapproved cookie":       func(in *AuthorizationInput) { in.Cookies = append(in.Cookies, BrowserCookie{Name: "analytics", Value: "tracking", Domain: "chat.deepseek.com", Path: "/", Secure: true}) },
 		"wrong path":             func(in *AuthorizationInput) { in.Cookies[0].Path = "/other" },
 	}
 	for name, mutate := range tests {
