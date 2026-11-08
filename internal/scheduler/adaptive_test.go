@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"math"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,6 +30,19 @@ func (p adaptiveTestProvider) Stream(context.Context, *provider.Request, func(pr
 }
 
 func (p adaptiveTestProvider) HealthCheck(context.Context) error {
+	return nil
+}
+
+type blockingHealthProvider struct {
+	adaptiveTestProvider
+	started chan struct{}
+	release chan struct{}
+	once sync.Once
+}
+
+func (p *blockingHealthProvider) HealthCheck(context.Context) error {
+	p.once.Do(func() { close(p.started) })
+	<-p.release
 	return nil
 }
 
@@ -348,5 +362,48 @@ func TestSaturatingFailureIncrementAtUint32Maximum(t *testing.T) {
 	}
 	if got := saturatingFailureIncrement(0); got != 1 {
 		t.Fatalf("first failure count = %d, want 1", got)
+	}
+}
+
+
+func TestRemovedProviderCannotPublishStaleHealthAndProbeLockIsRetired(t *testing.T) {
+	s := New(time.Minute)
+	oldProvider := &blockingHealthProvider{
+		adaptiveTestProvider: adaptiveTestProvider{id: "shared-id"},
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	newProvider := adaptiveTestProvider{id: "shared-id"}
+	s.Replace("m", []Candidate{{Provider: oldProvider, Enabled: true, Weight: 1}})
+
+	selection := make(chan error, 1)
+	go func() {
+		_, err := s.Select(context.Background(), "m")
+		selection <- err
+	}()
+	<-oldProvider.started
+
+	// Replace the route while the old instance's health request is in flight.
+	s.Replace("m", []Candidate{{Provider: newProvider, Enabled: true, Weight: 1}})
+	close(oldProvider.release)
+	if err := <-selection; err == nil {
+		t.Fatal("selection based on the removed provider instance must fail")
+	}
+	if _, exists := s.health["shared-id"]; exists {
+		t.Fatal("removed provider's in-flight health result was published")
+	}
+	if len(s.probeLocks) != 0 {
+		t.Fatalf("idle probe locks were retained: %d", len(s.probeLocks))
+	}
+
+	got, err := s.Select(context.Background(), "m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != newProvider {
+		t.Fatalf("selected stale provider instance %T, want replacement", got)
+	}
+	if len(s.probeLocks) != 0 {
+		t.Fatalf("completed probe lock was not retired: %d", len(s.probeLocks))
 	}
 }
