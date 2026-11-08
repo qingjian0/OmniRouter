@@ -77,6 +77,15 @@ func (d *PatchDecoder) DecodeEvent(event string, raw []byte) (PatchUpdate, error
 		return PatchUpdate{Title: title.Content}, nil
 	case "close":
 		return PatchUpdate{Done: true}, nil
+	case "update_session":
+		// Session metadata is not a completion patch or terminal signal.
+		// Validate the JSON envelope, then leave lineage changes to the
+		// verified completion lifecycle rather than committing from metadata.
+		var metadata map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &metadata); err != nil || metadata == nil {
+			return PatchUpdate{}, ErrUnsupportedPatch
+		}
+		return PatchUpdate{}, nil
 	default:
 		return d.Decode(raw)
 	}
