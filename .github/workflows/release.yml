@@ -115,6 +115,7 @@ jobs:
           COMMIT="$(git rev-parse HEAD)"
           CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X omnirouter/internal/version.Version=${VERSION} -X omnirouter/internal/version.Commit=${COMMIT}" -o "dist/${name}${EXT}" ./cmd/omnirouter
           cp README.md "dist/README.md"
+          cp -R browser-extension "dist/browser-extension"
           cp docs/INSTALL.md "dist/INSTALL.md"
           cp examples/omnirouter.env.example "dist/omnirouter.env.example"
           cp docs/DATABASE-BACKUP-RESTORE.md "dist/DATABASE-BACKUP-RESTORE.md"
@@ -123,9 +124,9 @@ jobs:
           cp docs/ANDROID-TERMUX-ACCEPTANCE.md "dist/ANDROID-TERMUX-ACCEPTANCE.md"
           cp docs/V1-RELEASE-CHECKLIST.md "dist/V1-RELEASE-CHECKLIST.md"
           mkdir -p dist/scripts
-          cp scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/deepseek-smoke.sh scripts/termux-smoke.sh dist/scripts/
+          cp scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/deepseek-smoke.sh scripts/termux-smoke.sh browser-extension/README.md browser-extension/manifest.json browser-extension/popup.html browser-extension/popup.js browser-extension/popup.css dist/scripts/
           if [ "${GOOS}" = "windows" ]; then
-            (cd dist && zip -r "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md DEEPSEEK-ADAPTER.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts)
+            (cd dist && zip -r "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md DEEPSEEK-ADAPTER.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts browser-extension)
           else
             tar -C dist -czf "dist/${name}.tar.gz" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md DEEPSEEK-ADAPTER.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/deepseek-smoke.sh scripts/termux-smoke.sh
           fi
