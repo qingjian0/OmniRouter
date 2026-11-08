@@ -48,11 +48,11 @@ func (r *LineageRepository) Save(ctx context.Context, item Lineage) (Lineage, er
 		return Lineage{}, fmt.Errorf("provider, account, local conversation, and upstream conversation IDs are required")
 	}
 	for label, value := range map[string]string{
-		"provider_id": item.ProviderID,
-		"account_id": item.AccountID,
-		"local_conversation_id": item.LocalConversationID,
+		"provider_id":             item.ProviderID,
+		"account_id":              item.AccountID,
+		"local_conversation_id":    item.LocalConversationID,
 		"upstream_conversation_id": item.UpstreamConversationID,
-		"parent_message_id": item.ParentMessageID,
+		"parent_message_id":        item.ParentMessageID,
 	} {
 		if len(value) > maxLineageIDBytes {
 			return Lineage{}, fmt.Errorf("%s exceeds %d bytes", label, maxLineageIDBytes)
