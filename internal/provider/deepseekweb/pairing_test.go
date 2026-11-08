@@ -131,4 +131,3 @@ func TestPairingTicketConcurrentConsumeSucceedsExactlyOnce(t *testing.T) {
 		t.Fatalf("concurrent consumes: successes=%d rejected=%d, want 1 and %d", successes, rejected, consumers-1)
 	}
 }
-
