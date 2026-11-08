@@ -174,10 +174,7 @@ func (s *Scheduler) isHealthy(ctx context.Context, p provider.Provider) bool {
 		s.health[id] = healthRecord{checked: checkedAt, healthy: true}
 		return true
 	}
-	failures := previous.failures + 1
-	if failures == 0 {
-		failures = 1
-	}
+	failures := saturatingFailureIncrement(previous.failures)
 	s.health[id] = healthRecord{checked: checkedAt, healthy: false, failures: failures, unhealthyUntil: checkedAt.Add(failureCooldown(failures))}
 	return false
 }
@@ -199,6 +196,13 @@ func (s *Scheduler) cachedHealth(providerID string, now time.Time) (healthy, dec
 		return false, true
 	}
 	return false, false
+}
+
+func saturatingFailureIncrement(value uint32) uint32 {
+	if value == ^uint32(0) {
+		return value
+	}
+	return value + 1
 }
 
 func failureCooldown(failures uint32) time.Duration {
@@ -227,10 +231,7 @@ func (s *Scheduler) ReportFailure(providerID string) {
 	defer s.mu.Unlock()
 	now := time.Now()
 	previous := s.health[providerID]
-	failures := previous.failures + 1
-	if failures == 0 {
-		failures = 1
-	}
+	failures := saturatingFailureIncrement(previous.failures)
 	s.health[providerID] = healthRecord{checked: now, healthy: false, failures: failures, unhealthyUntil: now.Add(failureCooldown(failures))}
 }
 
