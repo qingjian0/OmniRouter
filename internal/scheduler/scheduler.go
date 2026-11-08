@@ -30,7 +30,12 @@ type Scheduler struct {
 	cursor     map[string]*atomic.Uint64
 	healthTTL  time.Duration
 	health     map[string]healthRecord
-	probeLocks map[string]*sync.Mutex
+	probeLocks map[string]*probeLockEntry
+}
+
+type probeLockEntry struct {
+	mu sync.Mutex
+	refs int
 }
 
 type healthRecord struct {
@@ -49,7 +54,7 @@ func New(healthTTL time.Duration) *Scheduler {
 		cursor:     make(map[string]*atomic.Uint64),
 		healthTTL:  healthTTL,
 		health:     make(map[string]healthRecord),
-		probeLocks: make(map[string]*sync.Mutex),
+		probeLocks: make(map[string]*probeLockEntry),
 	}
 }
 
@@ -147,15 +152,12 @@ func (s *Scheduler) isHealthy(ctx context.Context, p provider.Provider) bool {
 
 	// Only one half-open health probe may run per provider. Without this guard,
 	// a burst of requests after cooldown can stampede the upstream /models API.
-	s.mu.Lock()
-	probeLock := s.probeLocks[id]
-	if probeLock == nil {
-		probeLock = &sync.Mutex{}
-		s.probeLocks[id] = probeLock
-	}
-	s.mu.Unlock()
-	probeLock.Lock()
-	defer probeLock.Unlock()
+	probeLock, releaseProbeLock := s.acquireProbeLock(id)
+	probeLock.mu.Lock()
+	defer func() {
+		probeLock.mu.Unlock()
+		releaseProbeLock()
+	}()
 
 	// Another request may have completed the probe while this request waited.
 	if healthy, decided := s.cachedHealth(id, time.Now()); decided {
@@ -169,6 +171,11 @@ func (s *Scheduler) isHealthy(ctx context.Context, p provider.Provider) bool {
 	err := p.HealthCheck(ctx)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.hasProviderLocked(p) {
+		// The provider was removed or replaced while its health check was in
+		// flight. Never publish an old instance's result under the shared ID.
+		return false
+	}
 	previous := s.health[id]
 	if err == nil {
 		s.health[id] = healthRecord{checked: checkedAt, healthy: true}
@@ -176,6 +183,39 @@ func (s *Scheduler) isHealthy(ctx context.Context, p provider.Provider) bool {
 	}
 	failures := saturatingFailureIncrement(previous.failures)
 	s.health[id] = healthRecord{checked: checkedAt, healthy: false, failures: failures, unhealthyUntil: checkedAt.Add(failureCooldown(failures))}
+	return false
+}
+
+func (s *Scheduler) acquireProbeLock(providerID string) (*probeLockEntry, func()) {
+	s.mu.Lock()
+	entry := s.probeLocks[providerID]
+	if entry == nil {
+		entry = &probeLockEntry{}
+		s.probeLocks[providerID] = entry
+	}
+	entry.refs++
+	s.mu.Unlock()
+
+	return entry, func() {
+		s.mu.Lock()
+		entry.refs--
+		if entry.refs == 0 && s.probeLocks[providerID] == entry {
+			delete(s.probeLocks, providerID)
+		}
+		s.mu.Unlock()
+	}
+}
+
+// hasProviderLocked rejects health results from an instance no longer present
+// in any route. Caller must hold s.mu.
+func (s *Scheduler) hasProviderLocked(p provider.Provider) bool {
+	for _, candidates := range s.candidates {
+		for _, candidate := range candidates {
+			if candidate.Enabled && candidate.Provider == p {
+				return true
+			}
+		}
+	}
 	return false
 }
 
