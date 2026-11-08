@@ -389,7 +389,12 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 				h.streamNativeAnthropic(w, r, nativeAnthropic, native, model, body)
 				return
 			}
+			started := time.Now()
 			response, callErr := nativeAnthropic.GenerateAnthropic(r.Context(), &provider.Request{Model: model, Input: body})
+			if callErr == nil && response == nil {
+				callErr = fmt.Errorf("provider %q returned an empty Anthropic Messages response", native.ID())
+			}
+			h.reportProviderOutcome(native, time.Since(started), callErr == nil)
 			if callErr != nil {
 				setRequestError(r, classifyRequestError(r, callErr, false))
 				if h.selector != nil {
