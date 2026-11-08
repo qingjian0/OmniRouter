@@ -51,8 +51,9 @@ A further implementation was inspected after the initial source audit:
 - Patch decoding must track the active fragment channel. Content-only append operations inherit the active fragment type; THINK text must never be appended to normal assistant content.
 - Public implementations differ on fragment names: `RESPONSE` and `ANSWER` both appear. Treat them as answer-channel aliases only when covered by tests.
 - Batch updates may carry `accumulated_token_usage` and terminal status. Search fragments/results are preserved on a separate metadata channel; they must not be blindly concatenated into assistant text.
-- Session continuity requires the upstream `response_message_id` from the previous completed turn as the next `parent_message_id`. Do not infer or fabricate this ID.
-- Some references treat an explicit SSE `close` event as terminal. EOF or a generic `[DONE]` sentinel alone is not accepted as proof of successful completion until confirmed by current sanitized fixtures.
+- In explicit parent-lineage mode, session continuity requires the upstream `response_message_id` from the previous successfully completed turn as the next `parent_message_id`. Do not infer or fabricate this ID. Persistent-session plus rolling-prompt mode is a distinct alternative observed in other implementations; do not combine both strategies or select one until a current two-turn fixture establishes the upstream behavior.
+- `update_session` is session metadata, not a completion terminal. The decoder must not commit lineage or signal completion from this event alone.
+- Some references treat an explicit SSE `close` event as terminal. Other dated references report `response/status=FINISHED` or batch quasi-status. EOF or a generic `[DONE]` sentinel alone is not accepted as proof of successful completion until confirmed by current sanitized fixtures.
 - Chat2API is GPL-3.0. Its code is not copied into OmniRouter by default; its current adapter and stream handler are behavioral references only.
 - Reference projects contain implementation-specific tradeoffs and potential unsafe patterns. In particular, do not copy fake/synthetic cookie generation, raw credential logging, weak random identifiers, or unbounded session assumptions.
 
