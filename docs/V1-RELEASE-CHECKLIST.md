@@ -116,3 +116,18 @@ translation means native upstream API support.
 - [ ] Create annotated tag `v1.0.0`.
 - [ ] Publish binaries, source archive, and `SHA256SUMS`.
 - [ ] Verify public/private release visibility and asset downloads.
+
+## Current integration ledger (2026-11-08)
+
+The following PRs are open Draft branches. Their CI results are branch-local and must not be counted as merged dev functionality.
+
+| PR | Scope | Current evidence | Remaining gate |
+|---|---|---|---|
+| [#12](https://github.com/qingjian0/OmniRouter/pull/12) | Native OpenAI Responses, Anthropic Messages, Gemini outbound adapters | Run [42451617210](https://github.com/qingjian0/OmniRouter/actions/runs/42451617210): all 7 jobs passed | Review/integrate into dev, rerun integrated CI, perform live-provider acceptance |
+| [#8](https://github.com/qingjian0/OmniRouter/pull/8) | Adaptive task/latency/reliability/price scheduler | Run [42452050774](https://github.com/qingjian0/OmniRouter/actions/runs/42452050774): all 7 jobs passed | Review/integrate into dev; validate with real multi-provider traffic |
+| [#11](https://github.com/qingjian0/OmniRouter/pull/11) | Disabled-provider candidate filtering | Related scheduler files/tests also appear in PR #8 | Compare overlap; avoid duplicate changes |
+| [#7](https://github.com/qingjian0/OmniRouter/pull/7) | Authorized DeepSeek web-session pairing and encrypted credential lifecycle | Run [42451245405](https://github.com/qingjian0/OmniRouter/actions/runs/42451245405): all 7 jobs passed | Real browser/account validation and sanitized fixtures; inference transport, SSE, and multi-turn lineage remain unimplemented |
+
+PR #9 and PR #10 are earlier independent native-adapter branches; PR #12 is the consolidated integration candidate. Do not merge all three independently without reviewing overlap.
+
+The branch graph was checked on 2026-11-08: dev is 98 commits ahead of main. The listed feature branches have not been merged. Keep main unchanged until all release gates pass.
