@@ -30,15 +30,15 @@ func TestValidateAuthorizationBuildsDeterministicCookieHeader(t *testing.T) {
 
 func TestValidateAuthorizationRejectsUntrustedInput(t *testing.T) {
 	tests := map[string]func(*AuthorizationInput){
-		"missing token":          func(in *AuthorizationInput) { in.Token = nil },
-		"token newline":          func(in *AuthorizationInput) { in.Token = []byte("token\r\nX-Leak: yes") },
-		"missing session cookie": func(in *AuthorizationInput) { in.Cookies = in.Cookies[1:] },
-		"foreign domain":         func(in *AuthorizationInput) { in.Cookies[0].Domain = "evil.example" },
-		"insecure cookie":        func(in *AuthorizationInput) { in.Cookies[0].Secure = false },
-		"cookie injection":       func(in *AuthorizationInput) { in.Cookies[0].Value = "x; admin=true" },
-		"duplicate cookie":       func(in *AuthorizationInput) { in.Cookies = append(in.Cookies, in.Cookies[0]) },
-		"unapproved cookie":       func(in *AuthorizationInput) { in.Cookies = append(in.Cookies, BrowserCookie{Name: "analytics", Value: "tracking", Domain: "chat.deepseek.com", Path: "/", Secure: true}) },
-		"wrong path":             func(in *AuthorizationInput) { in.Cookies[0].Path = "/other" },
+		"missing token":         func(in *AuthorizationInput) { in.Token = nil },
+		"token newline":         func(in *AuthorizationInput) { in.Token = []byte("token\r\nX-Leak: yes") },
+		"missing session cookie":func(in *AuthorizationInput) { in.Cookies = in.Cookies[1:] },
+		"foreign domain":        func(in *AuthorizationInput) { in.Cookies[0].Domain = "evil.example" },
+		"insecure cookie":       func(in *AuthorizationInput) { in.Cookies[0].Secure = false },
+		"cookie injection":      func(in *AuthorizationInput) { in.Cookies[0].Value = "x; admin=true" },
+		"duplicate cookie":      func(in *AuthorizationInput) { in.Cookies = append(in.Cookies, in.Cookies[0]) },
+		"unapproved cookie":     func(in *AuthorizationInput) { in.Cookies = append(in.Cookies, BrowserCookie{Name: "analytics", Value: "tracking", Domain: "chat.deepseek.com", Path: "/", Secure: true}) },
+		"wrong path":            func(in *AuthorizationInput) { in.Cookies[0].Path = "/other" },
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
