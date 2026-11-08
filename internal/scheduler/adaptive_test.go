@@ -317,3 +317,23 @@ func TestBlendLatencyEMAHandlesMaximumDuration(t *testing.T) {
 	}
 }
 
+func TestAdaptiveMetricCountersSaturateAtUint64Maximum(t *testing.T) {
+	max := ^uint64(0)
+	if got := saturatingIncrement(max); got != max {
+		t.Fatalf("saturatingIncrement(MaxUint64) = %d, want %d", got, max)
+	}
+	if got := saturatingIncrement(max - 1); got != max {
+		t.Fatalf("saturatingIncrement(MaxUint64-1) = %d, want %d", got, max)
+	}
+
+	s := NewAdaptive(time.Minute)
+	s.metrics["counter-boundary"] = providerPerformance{samples: max, successes: max}
+	s.ReportOutcome("counter-boundary", time.Millisecond, true)
+	s.metricsMu.RLock()
+	got := s.metrics["counter-boundary"]
+	s.metricsMu.RUnlock()
+	if got.samples != max || got.successes != max {
+		t.Fatalf("counters wrapped at boundary: %#v", got)
+	}
+}
+
