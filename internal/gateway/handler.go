@@ -40,19 +40,19 @@ type Selector interface {
 }
 
 type Handler struct {
-	registry     *provider.Registry
-	selector     Selector
-	apiKey       string
-	mux          *http.ServeMux
-	metrics      *observability.Recorder
-	accounts     *account.Store
-	sessions     *session.Store
-	credentials  *credential.Vault
-	providerRepo *provider.Repository
-	accountRepo  *account.Repository
-	sessionRepo  *session.Repository
-	modelRepo    *domainmodel.Repository
-	apiKeyRepo   *apikey.Repository
+	registry                   *provider.Registry
+	selector                   Selector
+	apiKey                     string
+	mux                        *http.ServeMux
+	metrics                    *observability.Recorder
+	accounts                   *account.Store
+	sessions                   *session.Store
+	credentials                *credential.Vault
+	providerRepo               *provider.Repository
+	accountRepo                *account.Repository
+	sessionRepo                *session.Repository
+	modelRepo                  *domainmodel.Repository
+	apiKeyRepo                 *apikey.Repository
 	requestLogs                *storage.RequestLogRepository
 	deepSeekWebPairings        *deepseekweb.PairingManager
 	deepSeekWebAuthorization   *deepseekweb.AuthorizationService
