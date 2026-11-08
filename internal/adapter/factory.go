@@ -79,6 +79,14 @@ func New(cfg Config) (provider.Provider, error) {
 			ID: cfg.ID, Name: cfg.Name, BaseURL: cfg.BaseURL, APIKey: cfg.APIKey,
 			Models: cfg.Models,
 		})
+	case KindDeepSeekWeb:
+		if strings.TrimSpace(cfg.APIKey) != "" || len(cfg.Models) > 0 {
+			return nil, fmt.Errorf("DeepSeek Web registration does not accept API keys or models before its session transport is enabled")
+		}
+		if strings.TrimSpace(cfg.BaseURL) != "" && strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/") != deepseekweb.DefaultOrigin {
+			return nil, fmt.Errorf("DeepSeek Web origin is fixed to %s", deepseekweb.DefaultOrigin)
+		}
+		return deepseekweb.NewRegistrationProvider(cfg.ID, cfg.Name), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider kind %q", kind)
 	}
