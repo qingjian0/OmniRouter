@@ -159,14 +159,15 @@ func (l *ConversationLocks) Lock(ctx context.Context, providerID, accountID, loc
 	if l == nil {
 		return nil, fmt.Errorf("conversation lock registry is required")
 	}
-	key := strings.Join([]string{
-		strings.TrimSpace(providerID),
-		strings.TrimSpace(accountID),
-		strings.TrimSpace(localConversationID),
-	}, "\x00")
-	if strings.Contains(key, "\x00\x00") || key == "" {
-		return nil, fmt.Errorf("provider, account, and local conversation IDs are required")
+	providerID = strings.TrimSpace(providerID)
+	accountID = strings.TrimSpace(accountID)
+	localConversationID = strings.TrimSpace(localConversationID)
+	for _, value := range []string{providerID, accountID, localConversationID} {
+		if value == "" || strings.ContainsRune(value, '\x00') {
+			return nil, fmt.Errorf("provider, account, and local conversation IDs must be non-empty and contain no NUL bytes")
+		}
 	}
+	key := strings.Join([]string{providerID, accountID, localConversationID}, "\x00")
 	l.mu.Lock()
 	entry := l.entries[key]
 	if entry == nil {
