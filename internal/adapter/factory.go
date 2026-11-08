@@ -8,6 +8,7 @@ import (
 	"omnirouter/internal/provider"
 	"omnirouter/internal/provider/anthropic"
 	"omnirouter/internal/provider/deepseek"
+	"omnirouter/internal/provider/deepseekweb"
 	geminiprovider "omnirouter/internal/provider/gemini"
 	openai "omnirouter/internal/provider/openai"
 	openairesponses "omnirouter/internal/provider/openairesponses"
@@ -19,6 +20,7 @@ const (
 	KindDeepSeek         = "deepseek"
 	KindAnthropic        = "anthropic"
 	KindGemini           = "gemini"
+	KindDeepSeekWeb      = "deepseek-web"
 )
 
 type Config struct {
@@ -50,6 +52,8 @@ func DefaultBaseURL(kind string) string {
 		return anthropic.DefaultBaseURL
 	case KindGemini:
 		return geminiprovider.DefaultBaseURL
+	case KindDeepSeekWeb:
+		return deepseekweb.DefaultOrigin
 	default:
 		return ""
 	}
