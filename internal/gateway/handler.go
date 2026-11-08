@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -292,16 +293,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "valid JSON with a model is required")
 		return
 	}
-	var p provider.Provider
-	if h.selector != nil {
-		p, err = h.selectProviderFor(r.Context(), request.Model, requiredCapabilities(body))
-	} else {
-		var ok bool
-		p, ok = h.registry.ResolveModel(request.Model)
-		if !ok {
-			err = http.ErrNoLocation
-		}
-	}
+	p, err := h.selectProviderFor(r.Context(), request.Model, requiredCapabilities(body))
 	if err != nil || p == nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = request.Model })
 		setRequestError(r, "provider_unavailable")
@@ -402,12 +394,16 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 				h.streamNativeAnthropic(w, r, nativeAnthropic, native, model, body)
 				return
 			}
-			response, callErr := nativeAnthropic.GenerateAnthropic(r.Context(), &provider.Request{Model: model, Input: body})
+			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, func(candidate provider.Provider) (*provider.Response, error) {
+				candidateAnthropic, ok := candidate.(provider.AnthropicProvider)
+				if !ok {
+					return nil, fmt.Errorf("provider %q declares Anthropic capability but does not implement AnthropicProvider", candidate.ID())
+				}
+				return candidateAnthropic.GenerateAnthropic(r.Context(), &provider.Request{Model: model, Input: body})
+			})
+			setRequestRoute(r, selected, model)
 			if callErr != nil {
 				setRequestError(r, classifyRequestError(r, callErr, false))
-				if h.selector != nil {
-					h.selector.ReportFailure(native.ID())
-				}
 				writeError(w, http.StatusBadGateway, "upstream_error", "native Anthropic upstream request failed")
 				return
 			}
@@ -480,14 +476,43 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusRequestEntityTooLarge, "invalid_request_error", "request body exceeds 8 MiB")
 		return
 	}
+	required := requiredCapabilities(body)
+	if stream {
+		required = append(required, "streaming")
+	}
+	nativeRequirements := append(append([]string(nil), required...), "gemini_generate_content")
+	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements); nativeErr == nil {
+		if nativeGemini, ok := native.(provider.GeminiProvider); ok {
+			setRequestRoute(r, native, model)
+			if stream {
+				h.streamNativeGemini(w, r, nativeGemini, native, model, body)
+				return
+			}
+			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, func(candidate provider.Provider) (*provider.Response, error) {
+				candidateGemini, ok := candidate.(provider.GeminiProvider)
+				if !ok {
+					return nil, fmt.Errorf("provider %q declares Gemini capability but does not implement GeminiProvider", candidate.ID())
+				}
+				return candidateGemini.GenerateGemini(r.Context(), &provider.Request{Model: model, Input: body})
+			})
+			setRequestRoute(r, selected, model)
+			if callErr != nil {
+				setRequestError(r, classifyRequestError(r, callErr, false))
+				writeError(w, http.StatusBadGateway, "upstream_error", "native Gemini upstream request failed")
+				return
+			}
+			captureGeminiUsage(r, response.Output)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(response.Output)
+			return
+		}
+	}
+
 	payload, err := gemini.ToOpenAIStream(body, model, stream)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
-	}
-	required := requiredCapabilities(body)
-	if stream {
-		required = append(required, "streaming")
 	}
 	p, err := h.selectProviderFor(r.Context(), model, required)
 	if err != nil {
@@ -574,6 +599,117 @@ func captureAnthropicUsage(r *http.Request, raw []byte) {
 		return
 	}
 	storeRequestUsage(r, usage)
+}
+
+func captureGeminiUsage(r *http.Request, raw []byte) {
+	usage, err := tokenusage.ParseGemini(raw, true)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return
+	}
+	storeRequestUsage(r, usage)
+}
+
+func mergeGeminiStreamUsage(r *http.Request, current *tokenusage.Usage, raw []byte, final bool) *tokenusage.Usage {
+	data := eventData(raw)
+	if len(bytes.TrimSpace(data)) == 0 {
+		return current
+	}
+	usage, err := tokenusage.ParseGemini(data, final)
+	if err != nil {
+		setRequestError(r, "usage_parse_error")
+		return current
+	}
+	return tokenusage.Merge(current, usage)
+}
+
+// generateNativeWithFallback retries a failed non-streaming native-protocol
+// request only on another provider that declares the same required capabilities.
+func (h *Handler) generateNativeWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, generate func(provider.Provider) (*provider.Response, error)) (*provider.Response, provider.Provider, error) {
+	if initial == nil {
+		return nil, nil, fmt.Errorf("no native provider selected")
+	}
+	maxAttempts := 1
+	if h.registry != nil && h.registry.Count() > 1 {
+		maxAttempts = h.registry.Count()
+	}
+	attempted := make(map[string]struct{}, maxAttempts)
+	current := initial
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if current == nil {
+			break
+		}
+		if _, exists := attempted[current.ID()]; exists {
+			break
+		}
+		attempted[current.ID()] = struct{}{}
+		response, err := generate(current)
+		if err == nil && response == nil {
+			err = fmt.Errorf("provider %q returned an empty native response", current.ID())
+		}
+		if err == nil {
+			return response, current, nil
+		}
+		lastErr = err
+		if h.selector == nil || ctx.Err() != nil || attempt+1 >= maxAttempts {
+			break
+		}
+		h.selector.ReportFailure(current.ID())
+		next, selectErr := h.selectProviderFor(ctx, model, required)
+		if selectErr != nil {
+			break
+		}
+		current = next
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no alternate native provider is available")
+	}
+	return nil, current, lastErr
+}
+
+func (h *Handler) streamNativeGemini(w http.ResponseWriter, r *http.Request, native provider.GeminiProvider, upstream provider.Provider, model string, body []byte) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "server_error", "streaming is not supported by this server")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	beginStreamRequest(r)
+	var usage *tokenusage.Usage
+	terminal := false
+	err := native.StreamGemini(r.Context(), &provider.Request{Model: model, Input: body, Stream: true}, func(event provider.Event) error {
+		if len(event.Data) > 0 {
+			usage = mergeGeminiStreamUsage(r, usage, event.Data, false)
+			if _, writeErr := w.Write(event.Data); writeErr != nil {
+				return downstreamWriteError{err: writeErr}
+			}
+			flusher.Flush()
+		}
+		if event.Done {
+			terminal = event.ExplicitDone
+			if usage != nil {
+				usage.Final = event.ExplicitDone
+			}
+			storeRequestUsage(r, usage)
+		}
+		return nil
+	})
+	if err != nil {
+		storeRequestUsage(r, usage)
+		setRequestError(r, classifyRequestError(r, err, true))
+		if h.selector != nil {
+			h.selector.ReportFailure(upstream.ID())
+		}
+	} else if !terminal {
+		storeRequestUsage(r, usage)
+		setRequestError(r, "stream_incomplete")
+	} else {
+		completeStreamRequest(r)
+	}
 }
 
 func mergeAnthropicStreamUsage(r *http.Request, current *tokenusage.Usage, raw []byte, final bool) *tokenusage.Usage {
@@ -890,17 +1026,46 @@ func eventData(raw []byte) []byte {
 }
 
 func (h *Handler) selectProviderFor(ctx context.Context, model string, required []string) (provider.Provider, error) {
+	if selector, ok := h.selector.(interface {
+		SelectWithRequirements(context.Context, string, []string) (provider.Provider, error)
+	}); ok {
+		return selector.SelectWithRequirements(ctx, model, required)
+	}
+	if len(required) == 0 {
+		return h.selectProvider(ctx, model)
+	}
 	if h.selector != nil {
-		if selector, ok := h.selector.(interface {
-			SelectWithRequirements(context.Context, string, []string) (provider.Provider, error)
-		}); ok {
-			return selector.SelectWithRequirements(ctx, model, required)
+		return nil, fmt.Errorf("configured selector does not support capability-aware selection")
+	}
+	if h.registry == nil {
+		return nil, fmt.Errorf("provider registry is unavailable")
+	}
+	for _, candidate := range h.registry.List() {
+		models, err := candidate.ListModels(ctx)
+		if err != nil {
+			continue
 		}
-		if len(required) > 0 {
-			return nil, fmt.Errorf("configured selector does not support required capability filtering: %v", required)
+		for _, candidateModel := range models {
+			if candidateModel.ID != model || !hasDeclaredCapabilities(candidateModel.Capabilities, required) {
+				continue
+			}
+			return candidate, nil
 		}
 	}
-	return h.selectProvider(ctx, model)
+	return nil, fmt.Errorf("no healthy provider for model %q declares required capabilities: %v", model, required)
+}
+
+func hasDeclaredCapabilities(available, required []string) bool {
+	set := make(map[string]struct{}, len(available))
+	for _, capability := range available {
+		set[capability] = struct{}{}
+	}
+	for _, capability := range required {
+		if _, ok := set[capability]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // requiredCapabilities performs conservative structural detection. It does not
@@ -940,16 +1105,22 @@ func requiredCapabilities(body []byte) []string {
 					if child != nil {
 						found["json"] = true
 					}
-				case "format":
-					if settings, ok := child.(map[string]any); ok {
-						if formatType, ok := settings["type"].(string); ok && (formatType == "json_schema" || formatType == "json_object") {
-							found["json"] = true
-						}
+				case "responseMimeType":
+					if mimeType, ok := child.(string); ok && strings.EqualFold(mimeType, "application/json") {
+						found["json"] = true
 					}
-				case "image_url", "inline_data", "inlineData", "fileData":
+				case "thinkingConfig":
+					if settings, ok := child.(map[string]any); ok && len(settings) > 0 {
+						found["reasoning"] = true
+					}
+				case "image_url":
 					found["vision"] = true
+				case "inline_data", "inlineData", "fileData":
+					if isImagePayload(child) {
+						found["vision"] = true
+					}
 				case "type":
-					if blockType, ok := child.(string); ok && (blockType == "image" || blockType == "input_image") {
+					if blockType, ok := child.(string); ok && blockType == "image" {
 						found["vision"] = true
 					}
 				case "stream":
@@ -973,6 +1144,21 @@ func requiredCapabilities(body []byte) []string {
 		}
 	}
 	return out
+}
+
+// isImagePayload checks the declared media type instead of assuming that
+// every inline or uploaded file is an image; Gemini also carries audio/video.
+func isImagePayload(value any) bool {
+	payload, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	for _, key := range []string{"mimeType", "mime_type"} {
+		if mediaType, ok := payload[key].(string); ok && strings.HasPrefix(strings.ToLower(strings.TrimSpace(mediaType)), "image/") {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) selectProvider(ctx context.Context, model string) (provider.Provider, error) {
