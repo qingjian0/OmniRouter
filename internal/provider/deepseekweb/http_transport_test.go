@@ -125,11 +125,11 @@ func TestHTTPCompletionTransportReusesSessionWithRollingPrompt(t *testing.T) {
 		Token: []byte("user-token"), CookieHeader: []byte("ds_session_id=authorized-session"),
 	}, ChatCompletionInput{
 		Model: "deepseek-chat", ModelType: "default",
-		Prompt: "[User]: first turn\n\n[Assistant]: first answer\n\n[User]: second turn",
+		Prompt:     "[User]: first turn\n\n[Assistant]: first answer\n\n[User]: second turn",
 		RefFileIDs: []string{},
 	}, websession.Lineage{
 		UpstreamConversationID: "persisted-session",
-		ParentMessageID: "previous-response",
+		ParentMessageID:        "previous-response",
 	}, func(PatchUpdate) error { return nil })
 	if err != nil {
 		t.Fatalf("Stream returned error: %v", err)
