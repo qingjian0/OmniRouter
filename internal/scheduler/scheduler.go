@@ -84,6 +84,13 @@ func (s *Scheduler) SelectWithRequirements(ctx context.Context, modelID string, 
 	candidates := append([]Candidate(nil), s.candidates[modelID]...)
 	cursor := s.cursor[modelID]
 	s.mu.RUnlock()
+	eligibleCandidates := candidates[:0]
+	for _, candidate := range candidates {
+		if candidate.Enabled && candidate.Provider != nil {
+			eligibleCandidates = append(eligibleCandidates, candidate)
+		}
+	}
+	candidates = eligibleCandidates
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no enabled provider for model %q", modelID)
 	}
@@ -245,39 +252,40 @@ func (s *Scheduler) RemoveProvider(providerID string) {
 
 // AddOrReplaceProvider adds the provider to the configured model routes.
 func (s *Scheduler) AddOrReplaceProvider(p provider.Provider, models []string, priority int, weight uint32, enabled bool) {
-	if p == nil {
-		return
-	}
-	if priority == 0 {
-		priority = 100
-	}
-	if weight == 0 {
-		weight = 1
-	}
+	if p == nil { return }
+	if priority == 0 { priority = 100 }
+	if weight == 0 { weight = 1 }
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.health, p.ID())
+	previous := make(map[string]Candidate)
 	for modelID, candidates := range s.candidates {
 		kept := candidates[:0]
 		for _, candidate := range candidates {
-			if candidate.Provider == nil || candidate.Provider.ID() != p.ID() {
-				kept = append(kept, candidate)
+			if candidate.Provider != nil && candidate.Provider.ID() == p.ID() {
+				previous[modelID] = candidate
+				continue
 			}
+			kept = append(kept, candidate)
 		}
 		s.candidates[modelID] = kept
 	}
 	for _, modelID := range models {
-		if !enabled {
-			continue
+		old, found := previous[modelID]
+		if !enabled && !found { continue }
+		candidate := Candidate{Provider: p, Priority: priority, Weight: weight, Enabled: enabled}
+		if found {
+			candidate.Capabilities = append([]string(nil), old.Capabilities...)
+			candidate.ContextLimit = old.ContextLimit
+			candidate.InputCostPerMillionUSD = old.InputCostPerMillionUSD
+			candidate.OutputCostPerMillionUSD = old.OutputCostPerMillionUSD
+			candidate.PricingKnown = old.PricingKnown
 		}
-		s.candidates[modelID] = append(s.candidates[modelID], Candidate{Provider: p, Priority: priority, Weight: weight, Enabled: true})
+		s.candidates[modelID] = append(s.candidates[modelID], candidate)
 		sort.SliceStable(s.candidates[modelID], func(i, j int) bool { return s.candidates[modelID][i].Priority > s.candidates[modelID][j].Priority })
-		if s.cursor[modelID] == nil {
-			s.cursor[modelID] = &atomic.Uint64{}
-		}
+		if s.cursor[modelID] == nil { s.cursor[modelID] = &atomic.Uint64{} }
 	}
 }
-
 func hasCapabilities(available, required []string) bool {
 	set := make(map[string]struct{}, len(available))
 	for _, capability := range available {
@@ -294,15 +302,9 @@ func hasCapabilities(available, required []string) bool {
 // AddOrReplaceProviderModels keeps the scheduler's model capability metadata
 // synchronized with the provider registry during runtime administration.
 func (s *Scheduler) AddOrReplaceProviderModels(p provider.Provider, models []provider.Model, priority int, weight uint32, enabled bool) {
-	if p == nil {
-		return
-	}
-	if priority == 0 {
-		priority = 100
-	}
-	if weight == 0 {
-		weight = 1
-	}
+	if p == nil { return }
+	if priority == 0 { priority = 100 }
+	if weight == 0 { weight = 1 }
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.health, p.ID())
@@ -319,22 +321,19 @@ func (s *Scheduler) AddOrReplaceProviderModels(p provider.Provider, models []pro
 		s.candidates[modelID] = kept
 	}
 	for _, model := range models {
-		if !enabled {
-			continue
-		}
+		previous, found := previousPricing[model.ID]
+		if !enabled && !found { continue }
 		candidate := Candidate{
-			Provider: p, Priority: priority, Weight: weight, Enabled: true,
+			Provider: p, Priority: priority, Weight: weight, Enabled: enabled,
 			Capabilities: append([]string(nil), model.Capabilities...), ContextLimit: model.ContextLimit,
 		}
-		if previous, ok := previousPricing[model.ID]; ok {
+		if found {
 			candidate.InputCostPerMillionUSD = previous.InputCostPerMillionUSD
 			candidate.OutputCostPerMillionUSD = previous.OutputCostPerMillionUSD
 			candidate.PricingKnown = previous.PricingKnown
 		}
 		s.candidates[model.ID] = append(s.candidates[model.ID], candidate)
 		sort.SliceStable(s.candidates[model.ID], func(i, j int) bool { return s.candidates[model.ID][i].Priority > s.candidates[model.ID][j].Priority })
-		if s.cursor[model.ID] == nil {
-			s.cursor[model.ID] = &atomic.Uint64{}
-		}
+		if s.cursor[model.ID] == nil { s.cursor[model.ID] = &atomic.Uint64{} }
 	}
 }
