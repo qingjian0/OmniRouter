@@ -164,8 +164,8 @@ func Load() (Config, error) {
 	if cfg.HTTP.Address == "" {
 		return Config{}, fmt.Errorf("HTTP address must not be empty")
 	}
-	if strings.TrimSpace(cfg.GatewayAPIKey) == "" && !isLoopbackListenAddress(cfg.HTTP.Address) {
-		return Config{}, fmt.Errorf("OMNI_GATEWAY_API_KEY is required when OMNI_ADDR is not a loopback address; admin routes are unauthenticated in open mode")
+	if err := ValidateListenSecurity(cfg.HTTP.Address, cfg.GatewayAPIKey); err != nil {
+		return Config{}, err
 	}
 	return cfg, nil
 }
@@ -177,6 +177,13 @@ func env(key, fallback string) string {
 	return fallback
 }
 
+
+func ValidateListenSecurity(address, gatewayAPIKey string) error {
+	if strings.TrimSpace(gatewayAPIKey) == "" && !isLoopbackListenAddress(address) {
+		return fmt.Errorf("OMNI_GATEWAY_API_KEY is required when OMNI_ADDR is not a loopback address; admin routes are unauthenticated in open mode")
+	}
+	return nil
+}
 
 // isLoopbackListenAddress reports whether an HTTP listen address is restricted
 // to a loopback interface. Empty hosts and wildcard addresses are deliberately
