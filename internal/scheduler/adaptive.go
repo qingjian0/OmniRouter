@@ -163,7 +163,9 @@ func (s *AdaptiveScheduler) SelectAdaptive(ctx context.Context, modelID string, 
 		}
 		priorityScore := 0.5
 		if maxPriority != minPriority {
-			priorityScore = float64(candidate.Priority-minPriority) / float64(maxPriority-minPriority)
+			priorityOffset := uint64(candidate.Priority) - uint64(minPriority)
+			priorityRange := uint64(maxPriority) - uint64(minPriority)
+			priorityScore = float64(priorityOffset) / float64(priorityRange)
 		}
 		weightScore := math.Log1p(float64(candidate.Weight)) / math.Log1p(float64(maxWeight))
 		score := weights.cost*costScore + weights.latency*latencyScore +
@@ -304,7 +306,11 @@ func estimatedCost(candidate Candidate, profile AdaptiveProfile) (float64, bool)
 	}
 	input := float64(profile.EstimatedInputTokens) * inputPrice / 1_000_000
 	output := float64(profile.EstimatedOutputTokens) * outputPrice / 1_000_000
-	return input + output, true
+	cost := input + output
+	if math.IsNaN(cost) || math.IsInf(cost, 0) {
+		return 0, false
+	}
+	return cost, true
 }
 
 func reliabilityScore(stat providerPerformance) float64 {
