@@ -1,127 +1,112 @@
-# Multi-vendor Web Session Reverse Proxy
+# DeepSeek Web Reverse Proxy
 
-Status: scope correction and implementation contract. This is the primary Web-to-API workstream; it is distinct from the official API adapters.
+Status: DeepSeek-only implementation plan and acceptance contract. No GLM or Kimi work is included in this delivery.
 
-## Product requirement
+## Product boundary
 
-OmniRouter must expose a local OpenAI-compatible gateway backed by user-authorized sessions from the vendors' consumer web products. The first target set is:
+OmniRouter must expose the existing local OpenAI-compatible Gateway backed by a user-authorized session from the DeepSeek consumer website (`https://chat.deepseek.com`). This is a separate provider kind (`deepseek-web`) from the official DeepSeek API provider (`deepseek`).
 
-| Web product | Consumer origin | Credential lifecycle observed in reference implementations | Current OmniRouter state |
-|---|---|---|---|
-| DeepSeek Web | https://chat.deepseek.com | Browser-owned user token and session cookie; exact accepted cookie set and request flow must be fixture-verified | Pairing and encrypted credential storage exist; Provider is inert, zero models, no inference transport |
-| Zhipu Qingyan / GLM Web | https://chatglm.cn | Reference implementations use refresh-token based renewal, then short-lived access token; signed request metadata is reported | No provider, OAuth/session model, or transport exists |
-| Kimi Web | https://www.kimi.com | Reference implementations use web JWT/access token and Connect-RPC JSON framing; session/device metadata may be required | No provider, OAuth/session model, or transport exists |
+The first supported capability target is text-only Chat Completions:
+- `GET /v1/models`
+- `POST /v1/chat/completions`, non-streaming and streaming
+- durable multi-turn conversation continuity
+- per-account authorization, re-check, and revoke
 
-These are web-session adapters, not official API adapters. Keep official OpenAI, Anthropic, Gemini, and DeepSeek API providers separate and never mix credentials, health, model discovery, or transport.
+Responses API, tool-call emulation, search, image/file input, and reasoning-channel parity remain explicitly out of scope until Chat Completions passes its own acceptance suite.
 
-## Public gateway contract
+## Existing state on dev
 
-- Initial common ingress: GET /v1/models and POST /v1/chat/completions (stream and non-stream).
-- Responses API is enabled per adapter only after request/response mapping tests pass.
-- Client supplies full messages each request unless a provider-specific lineage mapping is explicitly supported.
-- Tool calling, vision, files, search, reasoning, and structured outputs are independent capabilities. Never infer support from a text-only success.
-- Provider/model identifiers must be namespaced so official API models and web-session models cannot collide.
-- Keep account selection and health isolated per vendor and account.
+- Provider registration, admin pairing tickets, Chromium extension pairing, encrypted token/cookie persistence, restart restore, and account-wide revoke are implemented.
+- `RegistrationProvider` is deliberately inert: it advertises zero models and rejects Generate/Stream. It is not a working web reverse proxy.
+- The pairing boundary currently accepts a user-authorized `userToken` and the `ds_session_id` cookie.
+- Generic upstream API providers and official DeepSeek API are separate and must remain unaffected by web-session failures.
 
-## Shared runtime architecture
+## Observed protocol evidence (not a stable upstream contract)
+
+A public reference implementation currently documents these observed details:
+- Origin: `https://chat.deepseek.com`
+- Completion endpoint: `POST /api/v0/chat/completion`
+- Request headers include Bearer authorization, Cookie, JSON content type, SSE accept, and DeepSeek web client metadata.
+- Request JSON includes `chat_session_id`, `parent_message_id`, `model_type`, `prompt`, `ref_file_ids`, `thinking_enabled`, `search_enabled`, `action`, and `preempt`.
+- Stream frames use SSE events such as `ready`, `title`, and `close`; patch payloads carry response fragments including `THINK` and `RESPONSE`, plus request/response message IDs and token usage.
+
+These observations came from third-party source and can become stale. They are research leads only, not sufficient to claim current live compatibility. Exact session creation, auth acceptance, payload fields, model mapping, stream terminal semantics, and account policy responses must be verified against sanitized fixtures from a current user-authorized browser session.
+
+## Challenge and policy boundary
+
+Some reference implementations include proof-of-work (PoW) challenge generation/solving. OmniRouter will not implement or embed PoW solvers, CAPTCHA/MFA automation, WAF bypass, challenge replay, identity rotation, or rate-limit evasion.
+
+The adapter must not fabricate a proof header or retry through a challenge. If the current DeepSeek web endpoint requires a challenge response that cannot be obtained through an ordinary, user-initiated browser flow, the adapter must fail closed with a typed `policy_blocked` / `reauthorization_required` outcome. No challenge-solving workaround is part of this project.
+
+## Runtime architecture
 
 ```text
 OpenAI-compatible client
-  -> Gateway authentication / request validation
-  -> Model + vendor-web provider selection
-  -> Account scheduler (status, concurrency, min interval, cooldown)
-  -> Encrypted credential vault + session lifecycle
-  -> Vendor protocol adapter
-       DeepSeek Web protocol
-       GLM Web protocol
-       Kimi Web Connect-RPC protocol
-  -> bounded HTTP transport / SSE or Connect stream decoder
-  -> normalized provider events
+  -> Gateway API-key authentication + request validation
+  -> deepseek-web provider selection (separate from official DeepSeek API)
+  -> account/session authorization check
+  -> per-account and per-conversation serialization
+  -> encrypted credential vault (userToken + cookie)
+  -> DeepSeek Web origin-pinned HTTP transport
+  -> DeepSeek SSE parser and versioned event decoder
   -> Chat Completions response / SSE encoder
-  -> SQLite conversation lineage + usage lifecycle
+  -> SQLite conversation lineage
 ```
 
-Shared components: account pool, encrypted credential references, session refresh lifecycle, HTTP timeout/cancellation, redaction, retry classification, SSE event normalization, per-conversation serialization, usage accounting, and fixture harness.
+Shared infrastructure in `internal/websession` is transport/storage machinery only; no second vendor adapter is being developed.
 
-Vendor-specific components: credential extraction/refresh, origin and headers, request schema, model catalogue, stream framing, terminal event recognition, conversation/session IDs, and capability mapping.
+## DeepSeek account and credential lifecycle
 
-Do not force all vendors into one generic wire protocol. Reuse lifecycle and transport primitives while keeping protocol adapters isolated and versioned.
-
-## Protocol evidence inventory
-
-### DeepSeek Web
-
-- Existing RFC records browser state at chat.deepseek.com and an observed completion endpoint at /api/v0/chat/completion. Treat this as historical evidence, not a stable contract.
-- Public projects report additional session creation and user-token exchange flows. Some implementations solve proof-of-work challenges. OmniRouter must not implement challenge solvers, CAPTCHA/MFA automation, WAF bypass, or anti-abuse evasion.
-- Only normal user-authorized browser sessions are accepted. If the site blocks or challenges a request, return a typed policy/authentication error and stop.
-- Existing `internal/provider/deepseekweb` contains validation, encrypted persistence, pairing, and a generic SSE frame parser only. `RegistrationProvider.Generate/Stream` still fails closed; there is no live completion transport.
-
-### Zhipu Qingyan / GLM Web
-
-- Reference projects report `chatglm.cn` refresh-token exchange followed by short-lived access-token use, and a streaming assistant endpoint.
-- A reference DSH plugin documents `POST /chatglm/user-api/user/refresh` and `POST /chatglm/backend-api/assistant/stream`; treat exact headers, signatures, request fields, and response part semantics as version-sensitive observations.
-- Any request signature must be implemented only if confirmed as ordinary protocol authentication from current user-authorized traffic and permitted for the intended use. Do not implement anti-abuse challenge solving or identity rotation.
-- No OmniRouter GLM Web implementation exists yet.
-
-### Kimi Web
-
-- Reference projects report the consumer origin `www.kimi.com`, JWT/access-token authentication, and a Connect-RPC JSON chat protocol under `/apiv2`.
-- The observed stream is not assumed to be SSE merely because the public gateway uses SSE. Implement the actual upstream framing separately and normalize only after terminal/error semantics are verified.
-- Device/session metadata and scenario/model mapping are version-sensitive. Do not hard-code a model catalogue from an old README.
-- No OmniRouter Kimi Web implementation exists yet.
-
-## Credential and account security
-
-- All tokens, refresh tokens, and cookies are write-only through authenticated local admin actions and encrypted in the existing AES-GCM vault.
+- Tokens and cookies are write-only through authenticated local admin actions and encrypted in the existing AES-GCM vault.
 - Never store browser profile directories, passwords, MFA seeds, or raw HAR exports.
-- Prefer an explicit browser extension or user-supplied narrowly scoped credential import. Never scrape unrelated tabs or origins.
-- Redact Authorization, Cookie, Set-Cookie, refresh/access tokens, user identifiers, conversation IDs, message IDs, device IDs, and pairing nonces from logs, traces, metrics, errors, and test output.
-- Refresh-token rotation must be persisted atomically before the old credential is discarded.
-- Revocation is terminal. Re-authentication creates a new session/credential generation.
-- Per-account rate limits and concurrency caps are mandatory; do not rotate accounts to evade upstream rate limits.
+- Keep credentials scoped to `chat.deepseek.com`; redirects are not followed and request paths are restricted to explicit DeepSeek API prefixes.
+- Re-authentication creates a new credential generation; revocation is terminal.
+- Refresh or rotation must be persisted atomically before an old credential is discarded.
+- Redact Authorization, Cookie, Set-Cookie, access tokens, user identifiers, conversation IDs, message IDs, and pairing nonces from logs, traces, metrics, errors, and tests.
+- Never rotate accounts to evade upstream rate limits.
 
-## Required protocol fixtures
+## Required sanitized fixtures
 
-Before enabling any adapter for inference, capture fixtures from an account the user owns or is authorized to test. Capture manually in browser DevTools; do not export raw HAR or copy raw cURL commands into the repository.
+Before enabling inference, capture current protocol evidence from an account the user owns or is authorized to test. Use browser DevTools during an ordinary manual chat; do not automate login, challenges, or PoW.
 
-Each vendor needs sanitized fixtures for:
+Required fixtures:
+1. One ordinary successful text completion request body and response status.
+2. Sanitized request headers showing header names only; redact every credential and proof value.
+3. A short streaming transcript containing each event name and sanitized JSON structure, with all user text, IDs, tokens, cookies, and proof values replaced by placeholders.
+4. Session creation/continuation fields and a two-turn example proving the actual parent-message relationship.
+5. Normal expired-session response.
+6. Rate-limit and policy-block response categories (status and safe error class only).
 
-1. Credential/session validation or refresh success, including expiry/rotation metadata but no secret values.
-2. One successful non-streaming request/response if the web client exposes it.
-3. One streaming request with all event/frame types and an explicit terminal marker.
-4. A multi-turn exchange proving conversation lineage fields and parent-message behavior.
-5. Ordinary expired-session failure.
-6. Rate-limited or policy-blocked response, recorded only as status/category; never solve or replay a challenge.
+Record browser version, capture date, visible DeepSeek web build/version if available, and locale. Never commit raw HAR, cURL exports, auth.json, token/cookie/proof values, or user conversation content.
 
-Fixture metadata must record vendor, capture date, browser version, locale, observed site build/version if visible, and source account type. Replace all identity and content fields with placeholders; do not preserve original token lengths/prefixes.
+## Implementation slices
 
-Fixtures are tests, not credentials. They must be reviewed for leakage before commit.
-
-## Delivery order
-
-1. Preserve the already integrated DeepSeek pairing/security foundation; do not merge the stale, diverged PR #7 branch wholesale.
-2. Implement shared web-session runtime contracts and SQLite conversation-lineage storage with restart and per-conversation serialization tests.
-3. Implement DeepSeek Web transport against current sanitized fixtures, without challenge bypass. Enable only verified text/stream capabilities.
-4. Implement Kimi Web as a separate Connect-RPC adapter after its fixtures are captured and reviewed.
-5. Implement GLM Web refresh-token lifecycle and stream adapter after its fixtures are captured and reviewed.
-6. Add per-vendor live acceptance, expiry/re-auth, revoke, multi-turn, cancellation, rate-limit, and account-pool tests.
-7. Keep all web-session providers opt-in and excluded from default routing until each provider passes its own acceptance suite.
-
-## Reference projects reviewed
-
-- PruhaNLP/web-to-api (MIT): useful architecture reference for DeepSeek/Kimi web adapters, browser-session import, and stream normalization. Its public README currently lists DeepSeek, Kimi, and Qwen; it does not establish GLM support.
-- Lequait/dsh-glm-web (MIT): focused GLM Web reference for refresh-token lifecycle and stream handling.
-- xiaoY233/Chat2API: broad multi-vendor reference including DeepSeek, GLM, and Kimi. Repository metadata reports no recognized open-source license; do not copy code. Treat protocol notes as unverified research leads only.
-- Maicon501a/kimi-proxy-web: focused Kimi Web Connect-RPC reference. Repository metadata does not declare a license; do not copy code.
-
-Reference code is not an upstream contract. Implement independently in Go, preserve attribution in research notes, and re-verify every protocol against current user-authorized browser traffic.
+1. Finish DeepSeek-only shared runtime foundation: durable lineage, conversation locks, origin-pinned HTTP transport, cancellation and body-size tests.
+2. Verify current session creation and completion schema from sanitized fixtures.
+3. Implement DeepSeek-specific request mapping and session lifecycle without PoW/challenge solving.
+4. Implement DeepSeek SSE event decoding with explicit terminal marker recognition; unknown event/schema must fail closed.
+5. Replace `RegistrationProvider` only when the transport is verified; advertise only text capabilities actually proven by fixtures.
+6. Wire the provider to encrypted authorization state and durable SQLite lineage.
+7. Add authenticated admin UI for session status, re-check, re-authentication, and revoke without ever displaying secrets.
+8. Run mock-server acceptance, SQLite restart, cancellation, malformed/unknown event, expiry, revoke, and a user-operated live smoke test.
 
 ## Acceptance gates
 
-- The three consumer-web providers appear separately from official API providers in the admin UI and model catalogue.
-- Each provider can independently import/refresh/revoke credentials and survives SQLite restart.
-- A valid session supports one text completion, one streamed completion with explicit terminal event, and a two-turn conversation.
-- Expired sessions fail closed and expose a re-authentication status; policy blocks do not trigger automatic retries or account rotation.
-- Downstream cancellation cancels upstream I/O and releases account concurrency.
+- The DeepSeek Web provider is independently selectable and never aliases the official DeepSeek API provider.
+- A paired account can be restored after SQLite restart without exposing credentials.
+- One non-streaming text completion succeeds with a current user-authorized session.
+- One streaming completion reaches a verified terminal event; EOF without terminal marker is an error.
+- Two sequential turns continue the same upstream conversation using the verified parent message ID.
+- Concurrent turns for one conversation are serialized; separate conversations can proceed independently.
+- Downstream cancellation cancels upstream I/O and releases locks.
+- Expired sessions fail closed and request re-authentication.
+- Policy blocks and rate limits are not retried or bypassed.
 - Logs, errors, metrics, request history, and backups contain no credentials.
-- No adapter is called production-ready based only on mock tests or a protocol copied from a third-party repository.
+- The provider remains unadvertised/unroutable until these gates pass.
+
+## Reference research
+
+- `kittors/deepseek-web-api` (MIT): useful protocol research for observed completion payloads, SSE patch events, session lineage, and OpenAI-compatible mapping. Its source also includes PoW handling; that part is explicitly excluded.
+- `sums001/Deepseek-API`: research lead only; its challenge-solving implementation is excluded. Review license before any reuse.
+
+Do not copy protocol assumptions blindly. Re-verify current behavior from sanitized, user-authorized traffic and implement independently in Go.
