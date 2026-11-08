@@ -153,12 +153,19 @@ func (p *Provider) StreamAnthropic(ctx context.Context, req *provider.Request, e
 			}
 		}
 		lines = lines[:0]
-		if eventType == "" && len(dataLines) > 0 {
+		if len(dataLines) > 0 {
 			var envelope struct {
 				Type string `json:"type"`
 			}
-			_ = json.Unmarshal([]byte(strings.Join(dataLines, "\n")), &envelope)
-			eventType = envelope.Type
+			if err := json.Unmarshal([]byte(strings.Join(dataLines, "\n")), &envelope); err != nil {
+				return fmt.Errorf("Anthropic Messages stream emitted malformed SSE JSON: %w", err)
+			}
+			if eventType != "" && envelope.Type != "" && eventType != envelope.Type {
+				return fmt.Errorf("Anthropic Messages SSE event type %q conflicts with payload type %q", eventType, envelope.Type)
+			}
+			if eventType == "" {
+				eventType = envelope.Type
+			}
 		}
 		switch eventType {
 		case "message_stop":
