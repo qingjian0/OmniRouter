@@ -10,8 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"omnirouter/internal/apikey"
 	"omnirouter/internal/provider"
 	"omnirouter/internal/scheduler"
+	"omnirouter/internal/storage"
 )
 
 type securityTestProvider struct {
@@ -213,5 +215,44 @@ func TestNonStreamingFailureRetriesDistinctEligibleProvider(t *testing.T) {
 	}
 	if !selector.failed["first"] {
 		t.Fatal("first provider failure was not reported to selector")
+	}
+}
+
+func TestScopedAPIKeyCannotCrossRouteScopes(t *testing.T) {
+	ctx := context.Background()
+	runtime, err := storage.OpenSQLiteRuntime(ctx, t.TempDir()+"/api-keys.db", storage.SQLiteOptions{WAL: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	keyRepo, err := apikey.NewRepository(runtime.Store().DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, secret, err := keyRepo.Create(ctx, "admin-read", "Admin read only", []string{apikey.ScopeAdminRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := provider.NewRegistry()
+	handler := NewHandlerWithFullRepositories(registry, "master-secret", nil, nil, nil, nil, nil, nil, keyRepo)
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+		want   int
+	}{
+		{name: "admin read", method: http.MethodGet, path: "/admin/providers", want: http.StatusOK},
+		{name: "gateway read denied", method: http.MethodGet, path: "/v1/models", want: http.StatusForbidden},
+		{name: "admin write denied", method: http.MethodPost, path: "/admin/providers", want: http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{}`))
+			req.Header.Set("Authorization", "Bearer "+secret)
+			res := httptest.NewRecorder()
+			handler.ServeHTTP(res, req)
+			if res.Code != tc.want {
+				t.Fatalf("status=%d want=%d body=%s", res.Code, tc.want, res.Body.String())
+			}
+		})
 	}
 }
