@@ -1,8 +1,8 @@
 package gateway
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"errors"
 	"io"
 	"net/http"
@@ -10,9 +10,11 @@ import (
 	"strings"
 
 	"omnirouter/internal/observability"
-	"omnirouter/internal/provider"
 	"testing"
 	"time"
+
+	"omnirouter/internal/observability"
+	"omnirouter/internal/provider"
 )
 
 func TestClassifyRequestError(t *testing.T) {
@@ -392,7 +394,6 @@ func TestRequiredCapabilitiesDetectsResponsesJSONAndImageInputs(t *testing.T) {
 	}
 }
 
-
 type nativeGeminiTestProvider struct {
 	*usageTestProvider
 }
@@ -562,7 +563,6 @@ func TestNativeGeminiNonStreamingRetriesAnotherCapabilityCompatibleProvider(t *t
 		t.Fatal("failed native provider was not reported to selector")
 	}
 }
-
 
 func TestRequiredCapabilitiesDetectsResponsesTextFormat(t *testing.T) {
 	for _, formatType := range []string{"json_schema", "json_object"} {
