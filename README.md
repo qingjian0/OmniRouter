@@ -1,6 +1,6 @@
 # OmniRouter
 
-轻量化、跨平台的统一 AI 接入、反向代理与调度网关。核心采用 Go 模块化单体，优先保持低依赖、低资源占用；管理界面采用 Vue 3 + TypeScript，构建后通过 Go embed 嵌入单一可执行文件；Node.js 仅用于前端构建，运行时不需要 Node.js。
+轻量化、跨平台的统一 AI 接入、反向代理与调度网关。上游分为官方 API Provider 与消费级 Web 登录态 Provider 两条独立通道；Web 反代首批目标是 DeepSeek 网页版、智谱清言网页版和 Kimi 网页版，将用户正常登录获得的会话转换为本地 OpenAI 兼容 API。它不是单纯的官方 API 聚合器。核心采用 Go 模块化单体，优先保持低依赖、低资源占用；管理界面采用 Vue 3 + TypeScript，构建后通过 Go embed 嵌入单一可执行文件；Node.js 仅用于前端构建，运行时不需要 Node.js。
 
 ## 当前实现状态（2026-11-08）
 
@@ -32,7 +32,7 @@ OmniRouter 已完成第一轮核心集成。当前开发基线为 `dev`，稳定
 - PR #7 仍为 Draft（后续协议/传输工作）；PR #17 已关闭且未合并；PR #19 已关闭；其 RFC 状态修正已直接提交到 dev，未重复合并。配对基础代码已由独立集成提交进入 dev。
 - `dev` 持续领先于 `main`；当前分支差异以 Git compare 为准，`main` 未被本轮修改。未完成发布门禁前不合并 main、不打 V1.0.0 标签。
 
-详细设计与调用链见 [架构与工程规范](docs/ARCHITECTURE.md)、[自适应调度](docs/ADAPTIVE-SCHEDULER.md) 和 [V1 发布清单](docs/V1-RELEASE-CHECKLIST.md)。
+网页登录态反代的目标范围、协议隔离、账号生命周期、会话连续性和验收门禁见 [多厂商 Web Session 反代设计](docs/WEB-SESSION-PROXY.md)。详细设计与调用链见 [架构与工程规范](docs/ARCHITECTURE.md)、[自适应调度](docs/ADAPTIVE-SCHEDULER.md) 和 [V1 发布清单](docs/V1-RELEASE-CHECKLIST.md)。
 
 ## 运行
 
