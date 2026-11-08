@@ -9,18 +9,23 @@ import (
 
 var ErrUnsupportedPatch = errors.New("deepseek web: unsupported completion patch")
 
-// PatchUpdate is the normalized effect of one DeepSeek SSE event or JSON-Patch
-// operation. Reasoning is kept separate from user-visible answer text.
+// PatchUpdate is one normalized upstream event. The three text channels stay
+// separate so callers cannot accidentally leak reasoning or search metadata
+// into the OpenAI assistant content field.
 type PatchUpdate struct {
-	ContentDelta     string
-	ReasoningDelta   string
-	CompletionTokens int
-	RequestMessageID string
+	ContentDelta      string
+	ReasoningDelta    string
+	SearchDelta       string
+	CompletionTokens  int
+	RequestMessageID  string
 	ResponseMessageID string
-	Title            string
-	Done             bool
+	Title             string
+	Done              bool
 }
 
+// PatchDecoder is per-upstream-stream state. Do not share one decoder across
+// concurrent completions: content-only APPEND patches inherit the active
+// fragment channel from the preceding fragment operation.
 type PatchDecoder struct {
 	fragmentType string
 }
@@ -36,14 +41,19 @@ type patchFragment struct {
 	Content string `json:"content"`
 }
 
-// DecodeEvent preserves the SSE event boundary used by the public references.
-// In particular, "close" is a terminal event; EOF and [DONE] alone are not
-// treated as proof that the upstream completion finished successfully.
+// DecodeFrame connects the generic bounded SSE parser to the DeepSeek-specific
+// decoder without losing event names or payload boundaries.
+func (d *PatchDecoder) DecodeFrame(frame SSEFrame) (PatchUpdate, error) {
+	return d.DecodeEvent(frame.Event, []byte(frame.Data))
+}
+
+// DecodeEvent handles lifecycle events and otherwise decodes the event payload
+// as a patch. Public references process patch payloads even when an event name
+// other than ready/title/close is present.
 func (d *PatchDecoder) DecodeEvent(event string, raw []byte) (PatchUpdate, error) {
 	if d == nil {
 		return PatchUpdate{}, errors.New("deepseek web: nil patch decoder")
 	}
-	var update PatchUpdate
 	switch event {
 	case "ready":
 		var ids struct {
@@ -53,9 +63,10 @@ func (d *PatchDecoder) DecodeEvent(event string, raw []byte) (PatchUpdate, error
 		if err := json.Unmarshal(raw, &ids); err != nil {
 			return PatchUpdate{}, fmt.Errorf("decode DeepSeek ready event: %w", err)
 		}
-		update.RequestMessageID = scalarID(ids.RequestMessageID)
-		update.ResponseMessageID = scalarID(ids.ResponseMessageID)
-		return update, nil
+		return PatchUpdate{
+			RequestMessageID:  scalarID(ids.RequestMessageID),
+			ResponseMessageID: scalarID(ids.ResponseMessageID),
+		}, nil
 	case "title":
 		var title struct {
 			Content string `json:"content"`
@@ -63,14 +74,11 @@ func (d *PatchDecoder) DecodeEvent(event string, raw []byte) (PatchUpdate, error
 		if err := json.Unmarshal(raw, &title); err != nil {
 			return PatchUpdate{}, fmt.Errorf("decode DeepSeek title event: %w", err)
 		}
-		update.Title = title.Content
-		return update, nil
+		return PatchUpdate{Title: title.Content}, nil
 	case "close":
 		return PatchUpdate{Done: true}, nil
-	case "":
-		return d.Decode(raw)
 	default:
-		return PatchUpdate{}, fmt.Errorf("%w: SSE event %q", ErrUnsupportedPatch, event)
+		return d.Decode(raw)
 	}
 }
 
@@ -108,6 +116,9 @@ func (d *PatchDecoder) Decode(raw []byte) (PatchUpdate, error) {
 		return PatchUpdate{}, ErrUnsupportedPatch
 	}
 	if env.Path == "" {
+		if env.Op != "" && env.Op != "APPEND" {
+			return PatchUpdate{}, ErrUnsupportedPatch
+		}
 		return d.decodeInitialOrAppend(env.Value)
 	}
 
@@ -137,14 +148,7 @@ func (d *PatchDecoder) Decode(raw []byte) (PatchUpdate, error) {
 		if err := json.Unmarshal(env.Value, &content); err != nil {
 			return PatchUpdate{}, ErrUnsupportedPatch
 		}
-		switch d.fragmentType {
-		case "RESPONSE", "ANSWER":
-			return PatchUpdate{ContentDelta: content}, nil
-		case "THINK":
-			return PatchUpdate{ReasoningDelta: content}, nil
-		default:
-			return PatchUpdate{}, ErrUnsupportedPatch
-		}
+		return d.channelDelta(content), nil
 	case "response/status", "quasi_status":
 		var status string
 		if err := json.Unmarshal(env.Value, &status); err != nil {
@@ -180,8 +184,11 @@ func (d *PatchDecoder) Decode(raw []byte) (PatchUpdate, error) {
 	case "response/search_status":
 		return PatchUpdate{}, nil
 	case "response/search_results":
-		// Search metadata is intentionally not mixed into assistant text.
-		return PatchUpdate{}, nil
+		var search json.RawMessage
+		if err := json.Unmarshal(env.Value, &search); err != nil {
+			return PatchUpdate{}, ErrUnsupportedPatch
+		}
+		return PatchUpdate{SearchDelta: string(search)}, nil
 	default:
 		return PatchUpdate{}, fmt.Errorf("%w: %s", ErrUnsupportedPatch, env.Path)
 	}
@@ -190,8 +197,8 @@ func (d *PatchDecoder) Decode(raw []byte) (PatchUpdate, error) {
 func (d *PatchDecoder) decodeInitialOrAppend(value json.RawMessage) (PatchUpdate, error) {
 	var initial struct {
 		Response struct {
-			Fragments []patchFragment `json:"fragments"`
-			AccumulatedTokenUsage int `json:"accumulated_token_usage"`
+			Fragments             []patchFragment `json:"fragments"`
+			AccumulatedTokenUsage int             `json:"accumulated_token_usage"`
 		} `json:"response"`
 	}
 	if err := json.Unmarshal(value, &initial); err == nil && len(initial.Response.Fragments) > 0 {
@@ -203,23 +210,29 @@ func (d *PatchDecoder) decodeInitialOrAppend(value json.RawMessage) (PatchUpdate
 			}
 			mergePatchUpdate(&result, update)
 		}
-		if initial.Response.AccumulatedTokenUsage > 0 {
+		if initial.Response.AccumulatedTokenUsage >= 0 && initial.Response.AccumulatedTokenUsage > 0 {
 			result.CompletionTokens = initial.Response.AccumulatedTokenUsage
 		}
 		return result, nil
 	}
 	var content string
 	if err := json.Unmarshal(value, &content); err == nil {
-		switch d.fragmentType {
-		case "RESPONSE", "ANSWER":
-			return PatchUpdate{ContentDelta: content}, nil
-		case "THINK":
-			return PatchUpdate{ReasoningDelta: content}, nil
-		default:
-			return PatchUpdate{}, ErrUnsupportedPatch
-		}
+		return d.channelDelta(content), nil
 	}
 	return PatchUpdate{}, ErrUnsupportedPatch
+}
+
+func (d *PatchDecoder) channelDelta(content string) PatchUpdate {
+	switch d.fragmentType {
+	case "RESPONSE", "ANSWER":
+		return PatchUpdate{ContentDelta: content}
+	case "SEARCH", "SEARCH_REF":
+		return PatchUpdate{SearchDelta: content}
+	default:
+		// The audited kittors implementation initializes its active channel
+		// to reasoning before the first fragment arrives.
+		return PatchUpdate{ReasoningDelta: content}
+	}
 }
 
 func (d *PatchDecoder) setFragment(fragment patchFragment) (PatchUpdate, error) {
@@ -230,8 +243,7 @@ func (d *PatchDecoder) setFragment(fragment patchFragment) (PatchUpdate, error) 
 	case "THINK":
 		return PatchUpdate{ReasoningDelta: fragment.Content}, nil
 	case "SEARCH", "SEARCH_REF":
-		// Search fragments are metadata, not assistant answer text.
-		return PatchUpdate{}, nil
+		return PatchUpdate{SearchDelta: fragment.Content}, nil
 	default:
 		return PatchUpdate{}, fmt.Errorf("%w: fragment type %q", ErrUnsupportedPatch, fragment.Type)
 	}
@@ -240,6 +252,7 @@ func (d *PatchDecoder) setFragment(fragment patchFragment) (PatchUpdate, error) 
 func mergePatchUpdate(dst *PatchUpdate, src PatchUpdate) {
 	dst.ContentDelta += src.ContentDelta
 	dst.ReasoningDelta += src.ReasoningDelta
+	dst.SearchDelta += src.SearchDelta
 	if src.CompletionTokens != 0 {
 		dst.CompletionTokens = src.CompletionTokens
 	}
