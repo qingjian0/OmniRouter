@@ -37,7 +37,7 @@ func TestOpenAIStreamEncoderMapsContentAndReasoning(t *testing.T) {
 	if !strings.HasPrefix(chunk.ID, "chatcmpl-") || chunk.Object != "chat.completion.chunk" || chunk.Model != "deepseek-chat" {
 		t.Fatalf("unexpected chunk envelope: %+v", chunk)
 	}
-	if len(chunk.Choices) != 1 || chunk.Choices[0].Delta["content"] != "answer" || chunk.Choices[0].Delta["reasoning_content"] != "reasoning" || chunk.Choices[0].FinishReason != nil {
+	if len(chunk.Choices) != 1 || chunk.Choices[0].Delta["role"] != "assistant" || chunk.Choices[0].Delta["content"] != "answer" || chunk.Choices[0].Delta["reasoning_content"] != "reasoning" || chunk.Choices[0].FinishReason != nil {
 		t.Fatalf("unexpected delta: %+v", chunk.Choices)
 	}
 }
