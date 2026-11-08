@@ -37,7 +37,7 @@ type blockingHealthProvider struct {
 	adaptiveTestProvider
 	started chan struct{}
 	release chan struct{}
-	once sync.Once
+	once    sync.Once
 }
 
 func (p *blockingHealthProvider) HealthCheck(context.Context) error {
