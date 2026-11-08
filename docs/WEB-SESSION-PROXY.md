@@ -104,9 +104,10 @@ Record browser version, capture date, visible DeepSeek web build/version if avai
 - Logs, errors, metrics, request history, and backups contain no credentials.
 - The provider remains unadvertised/unroutable until these gates pass.
 
-## Reference research
+## Reference research and reuse audit
 
-- `kittors/deepseek-web-api` (MIT): useful protocol research for observed completion payloads, SSE patch events, session lineage, and OpenAI-compatible mapping. Its source also includes PoW handling; that part is explicitly excluded.
-- `sums001/Deepseek-API`: research lead only; its challenge-solving implementation is excluded. Review license before any reuse.
+- `JuanCMPDev/deep-proxy` (MIT): Go reference implementation with a DeepSeek JSON-Patch stream parser and OpenAI Chat Completions translation. Its `response/fragments`, `THINK` / `RESPONSE`, `response/status`, `quasi_status`, and `accumulated_token_usage` handling is useful as a provisional parser reference. Its PoW challenge acquisition/solver, browser credential interception, and challenge retry logic are explicitly excluded.
+- `kittors/deepseek-web-api` (MIT): useful protocol and architecture research for observed completion payloads, SSE patch events, session lineage, and OpenAI-compatible mapping. Its PoW worker/solver is explicitly excluded.
+- `sums001/Deepseek-API`: research lead only; review license before reuse. Its challenge-solving implementation is excluded.
 
-Do not copy protocol assumptions blindly. Re-verify current behavior from sanitized, user-authorized traffic and implement independently in Go.
+The Go patch decoder currently being added is a deliberately isolated, provisional parser derived from documented public behavior of `deep-proxy`; it is not yet wired into `RegistrationProvider`, does not establish current protocol compatibility, and must not enable model advertisement or inference before current sanitized fixtures and acceptance tests pass. Prefer adapting small protocol-specific concepts over copying whole services. Do not copy protocol assumptions blindly. Re-verify current behavior from sanitized, user-authorized traffic and preserve the existing OmniRouter transport, vault, pairing, and SQLite lineage boundaries.
