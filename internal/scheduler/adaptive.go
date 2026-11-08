@@ -239,11 +239,26 @@ func (s *AdaptiveScheduler) ReportOutcome(providerID string, latency time.Durati
 		if stat.latencyEMA == 0 {
 			stat.latencyEMA = latency
 		} else {
-			stat.latencyEMA = time.Duration(0.2*float64(latency) + 0.8*float64(stat.latencyEMA))
+			stat.latencyEMA = blendLatencyEMA(stat.latencyEMA, latency)
 		}
 	}
 	s.metrics[providerID] = stat
 	s.metricsMu.Unlock()
+}
+
+// blendLatencyEMA computes (4*previous + next)/5 without converting
+// nanosecond durations to float64 or overflowing int64 intermediates.
+func blendLatencyEMA(previous, next time.Duration) time.Duration {
+	if previous <= 0 {
+		return next
+	}
+	if next <= 0 {
+		return previous
+	}
+	previousQuotient, nextQuotient := previous/5, next/5
+	previousRemainder, nextRemainder := previous%5, next%5
+	return previousQuotient*4 + nextQuotient +
+		(previousRemainder*4+nextRemainder)/5
 }
 
 type objectiveWeight struct {
