@@ -112,6 +112,10 @@ func Load() (Config, error) {
 			defaultID, defaultName = "deepseek", "DeepSeek"
 		} else if strings.EqualFold(cfg.Provider.Kind, "openai-responses") {
 			defaultID, defaultName = "openai-responses", "OpenAI Responses"
+		} else if strings.EqualFold(cfg.Provider.Kind, "anthropic") {
+			defaultID, defaultName = "anthropic", "Anthropic"
+		} else if strings.EqualFold(cfg.Provider.Kind, "gemini") {
+			defaultID, defaultName = "gemini", "Google Gemini"
 		}
 		cfg.Provider.ID = env("OMNI_PROVIDER_ID", defaultID)
 		cfg.Provider.Name = env("OMNI_PROVIDER_NAME", defaultName)
@@ -122,6 +126,10 @@ func Load() (Config, error) {
 				cfg.Provider.BaseURL = "https://api.deepseek.com"
 			case "openai-responses":
 				cfg.Provider.BaseURL = "https://api.openai.com/v1"
+			case "anthropic":
+				cfg.Provider.BaseURL = "https://api.anthropic.com/v1"
+			case "gemini":
+				cfg.Provider.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
 			}
 		}
 		cfg.Provider.APIKey = os.Getenv("OMNI_PROVIDER_API_KEY")
