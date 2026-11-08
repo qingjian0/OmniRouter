@@ -82,7 +82,7 @@ func TestExecutorProviderCommitsOnlyAfterVerifiedTerminal(t *testing.T) {
 	if lease.commits != 1 || lease.lineage.ParentMessageID != "response-2" || !lease.closed {
 		t.Fatalf("lineage transaction mismatch: commits=%d lineage=%+v closed=%v", lease.commits, lease.lineage, lease.closed)
 	}
-	if len(events) != 3 || events[0].Done || !events[1].Done || !events[1].ExplicitDone {
+	if len(events) != 3 || events[0].Done || events[1].Done || !events[2].Done || !events[2].ExplicitDone {
 		t.Fatalf("unexpected event sequence: %+v", events)
 	}
 	if !strings.Contains(string(events[0].Data), "answer") || !strings.Contains(string(events[1].Data), "finish_reason") {
