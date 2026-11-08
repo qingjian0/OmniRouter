@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -209,3 +210,46 @@ func TestAuthorizationServiceRollsBackPartialPersistence(t *testing.T) {
 		}
 	}
 }
+
+func TestAccountOperationLocksSerializeSameAccountAndReleaseEntries(t *testing.T) {
+	var locks accountOperationLocks
+	first := locks.lock("account-a")
+	entered := make(chan struct{})
+	release := make(chan func(), 1)
+	go func() {
+		close(entered)
+		release <- locks.lock("account-a")
+	}()
+	<-entered
+
+	locks.mu.Lock()
+	entry := locks.entries["account-a"]
+	if entry == nil || entry.refs != 2 {
+		locks.mu.Unlock()
+		first()
+		t.Fatalf("expected two references while second operation waits, got %#v", entry)
+	}
+	locks.mu.Unlock()
+
+	first()
+	second := <-release
+	second()
+
+	locks.mu.Lock()
+	defer locks.mu.Unlock()
+	if len(locks.entries) != 0 {
+		t.Fatalf("account lock entries leaked after release: %d", len(locks.entries))
+	}
+}
+
+func TestAccountOperationLocksDoNotBlockDifferentAccounts(t *testing.T) {
+	var locks accountOperationLocks
+	first := locks.lock("account-a")
+	defer first()
+
+	done := make(chan func(), 1)
+	go func() { done <- locks.lock("account-b") }()
+	second := <-done
+	second()
+}
+
