@@ -40,6 +40,35 @@ func TestGenerateAnthropicUsesNativeHeadersAndPath(t *testing.T) {
 	}
 }
 
+func TestGenerateAnthropicRejectsInvalidResponseEnvelope(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{name: "malformed JSON", body: "{not-json"},
+		{name: "unexpected type", body: `{"type":"error","error":{"type":"api_error"}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer server.Close()
+			p, err := New(Config{ID: "anthropic", BaseURL: server.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = p.GenerateAnthropic(context.Background(), &provider.Request{
+				Model: "claude-test",
+				Input: []byte(`{"model":"claude-test","max_tokens":8}`),
+			})
+			if err == nil {
+				t.Fatal("expected invalid response envelope to be rejected")
+			}
+		})
+	}
+}
+
 func TestStreamAnthropicRequiresMessageStop(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
