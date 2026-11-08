@@ -35,7 +35,7 @@ type Scheduler struct {
 }
 
 type probeLockEntry struct {
-	mu sync.Mutex
+	mu   sync.Mutex
 	refs int
 }
 
