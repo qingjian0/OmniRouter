@@ -416,7 +416,7 @@ onMounted(refresh);
               <button class="secondary" @click="copyPairingNonce">复制配对码</button>
               <p class="hint">在 Chrome / Edge 扩展弹窗中粘贴配对码并明确点击连接。不要将配对码发送给他人。</p>
             </div>
-            <p class="hint">必须先配置 OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN 并重启网关。授权成功后会尝试即时激活文本 Chat Completions 执行器；当前仓库尚未随附浏览器扩展，且真实 DeepSeek 在线兼容性、流式响应与多轮连续性仍未验收。不要把本地 CI 通过视为在线可用。</p>
+            <p class="hint">必须先配置 OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN 并重启网关。仓库已附带 Chromium Manifest V3 扩展（browser-extension/），需在 Chrome / Edge 开发者模式中加载未打包扩展；配对成功后会尝试即时激活文本 Chat Completions 执行器。扩展真机配对、当前网页会话字段兼容性、真实流式响应与多轮连续性仍未验收。不要把本地 CI 通过视为在线可用。</p>
           </article>
           <article class="panel">
             <div class="panel-title"><h2>Provider 列表</h2><span class="muted">{{ providers.length }} 项</span></div>
