@@ -62,7 +62,7 @@ func (p *usageTestProvider) GenerateResponses(context.Context, *provider.Request
 }
 
 func (p *usageTestProvider) StreamResponses(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
-	return emit(provider.Event{Data: []byte("event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":3,\"total_tokens\":5}}}\n\n"), Done: true, ExplicitDone: true})
+	return emit(provider.Event{Data: []byte("event: response.completed\ndata: {"type":"response.completed","response":{"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}}\n\n"), Done: true, ExplicitDone: true})
 }
 
 func (p *usageTestProvider) HealthCheck(context.Context) error { return nil }
@@ -300,10 +300,10 @@ func (p *nativeAnthropicTestProvider) GenerateAnthropic(context.Context, *provid
 }
 
 func (p *nativeAnthropicTestProvider) StreamAnthropic(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
-	if err := emit(provider.Event{Data: []byte("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":2}}}\n\n")}); err != nil {
+	if err := emit(provider.Event{Data: []byte("event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":2}}}\n\n")}); err != nil {
 		return err
 	}
-	return emit(provider.Event{Data: []byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"), Done: true, ExplicitDone: true})
+	return emit(provider.Event{Data: []byte("event: message_stop\ndata: {"type":"message_stop"}\n\n"), Done: true, ExplicitDone: true})
 }
 
 func TestGatewayUsesNativeAnthropicProviderWhenAvailable(t *testing.T) {
@@ -411,7 +411,7 @@ func (p *nativeGeminiTestProvider) GenerateGemini(context.Context, *provider.Req
 }
 
 func (p *nativeGeminiTestProvider) StreamGemini(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
-	if err := emit(provider.Event{Data: []byte("data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"native gemini\"}]}}]}\n\n")}); err != nil {
+	if err := emit(provider.Event{Data: []byte("data: {"candidates":[{"content":{"role":"model","parts":[{"text":"native gemini"}]}}]}\n\n")}); err != nil {
 		return err
 	}
 	return emit(provider.Event{Done: true, ExplicitDone: true})
