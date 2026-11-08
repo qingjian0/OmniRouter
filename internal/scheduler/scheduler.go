@@ -72,6 +72,16 @@ func (s *Scheduler) Replace(modelID string, candidates []Candidate) {
 	sort.SliceStable(filtered, func(i, j int) bool { return filtered[i].Priority > filtered[j].Priority })
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A route replacement may swap the concrete adapter behind an existing
+	// provider ID. Invalidate its shared health cache before publishing routes.
+	for _, candidate := range s.candidates[modelID] {
+		if candidate.Provider != nil {
+			delete(s.health, candidate.Provider.ID())
+		}
+	}
+	for _, candidate := range filtered {
+		delete(s.health, candidate.Provider.ID())
+	}
 	s.candidates[modelID] = filtered
 	if s.cursor[modelID] == nil {
 		s.cursor[modelID] = &atomic.Uint64{}
