@@ -33,7 +33,9 @@ type CompletionLeaseManager interface {
 	BeginLease(context.Context, string, string, string) (ConversationLease, error)
 }
 
-type coordinatorLeaseManager struct{ coordinator *websession.ConversationCoordinator }
+type coordinatorLeaseManager struct {
+	coordinator *websession.ConversationCoordinator
+}
 
 func NewCoordinatorLeaseManager(coordinator *websession.ConversationCoordinator) (*coordinatorLeaseManager, error) {
 	if coordinator == nil {
@@ -56,18 +58,18 @@ type UpstreamCompletionTransport interface {
 // protocol's verified successful terminal condition.
 type CompletionResult struct {
 	UpstreamConversationID string
-	ResponseMessageID     string
+	ResponseMessageID      string
 	Completed              bool
 }
 
 type ExecutorConfig struct {
-	ID          string
-	Name        string
-	AccountID   string
-	Models      []string
+	ID            string
+	Name          string
+	AccountID     string
+	Models        []string
 	Authorization AuthorizationLoader
-	Leases      CompletionLeaseManager
-	Transport   UpstreamCompletionTransport
+	Leases        CompletionLeaseManager
+	Transport     UpstreamCompletionTransport
 }
 
 type ExecutorProvider struct {
@@ -107,7 +109,7 @@ func NewExecutorProvider(cfg ExecutorConfig) (*ExecutorProvider, error) {
 	return &ExecutorProvider{id: cfg.ID, name: cfg.Name, accountID: cfg.AccountID, models: models, authorization: cfg.Authorization, leases: cfg.Leases, transport: cfg.Transport}, nil
 }
 
-func (p *ExecutorProvider) ID() string { return p.id }
+func (p *ExecutorProvider) ID() string   { return p.id }
 func (p *ExecutorProvider) Name() string { return p.name }
 
 func (p *ExecutorProvider) ListModels(context.Context) ([]provider.Model, error) {
@@ -136,10 +138,10 @@ func (p *ExecutorProvider) Generate(ctx context.Context, req *provider.Request) 
 		message["reasoning_content"] = reasoning.String()
 	}
 	body, err := json.Marshal(map[string]any{
-		"id": "deepseek-web-" + fmt.Sprint(time.Now().UnixNano()),
-		"object": "chat.completion",
+		"id":      "deepseek-web-" + fmt.Sprint(time.Now().UnixNano()),
+		"object":  "chat.completion",
 		"created": time.Now().Unix(),
-		"model": req.Model,
+		"model":   req.Model,
 		"choices": []any{map[string]any{"index": 0, "message": message, "finish_reason": "stop"}},
 	})
 	if err != nil {
