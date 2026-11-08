@@ -34,7 +34,7 @@ func TestMapChatCompletionInputModelAliases(t *testing.T) {
 		{"deepseek-search", "default", false, true},
 	}
 	for _, tc := range cases {
-		got, err := MapChatCompletionInput([]byte(`{"model":"`+tc.model+`","messages":[{"role":"user","content":"hello"}]}`))
+		got, err := MapChatCompletionInput([]byte(`{"model":"` + tc.model + `","messages":[{"role":"user","content":"hello"}]}`))
 		if err != nil {
 			t.Fatalf("%s: %v", tc.model, err)
 		}
