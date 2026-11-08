@@ -49,10 +49,6 @@ func (e *OpenAIStreamEncoder) Encode(update PatchUpdate) ([]byte, error) {
 	}
 
 	delta := make(map[string]string, 3)
-	if !e.started {
-		delta["role"] = "assistant"
-		e.started = true
-	}
 	if update.ContentDelta != "" {
 		delta["content"] = update.ContentDelta
 	}
@@ -61,6 +57,10 @@ func (e *OpenAIStreamEncoder) Encode(update PatchUpdate) ([]byte, error) {
 	}
 	if len(delta) == 0 && !update.Done {
 		return nil, nil
+	}
+	if !e.started {
+		delta["role"] = "assistant"
+		e.started = true
 	}
 
 	var finishReason *string
