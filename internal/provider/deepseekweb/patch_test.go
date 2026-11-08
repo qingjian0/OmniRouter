@@ -275,7 +275,6 @@ func TestParseAndDecodeDeepSeekSSELifecycle(t *testing.T) {
 	}
 }
 
-
 func TestPatchDecoderBatchPreservesFragmentUpdates(t *testing.T) {
 	decoder := &PatchDecoder{}
 	update, err := decoder.Decode([]byte(`{"p":"response","o":"BATCH","v":[{"p":"response/fragments","o":"APPEND","v":[{"type":"THINK","content":"reason"},{"type":"RESPONSE","content":"answer"}]},{"p":"accumulated_token_usage","v":17},{"p":"response/status","o":"SET","v":"FINISHED"}]}`))
