@@ -100,7 +100,7 @@ func TestMapChatCompletionInputBoundsConversationHistory(t *testing.T) {
 	for i := 0; i < 24; i++ {
 		messages = append(messages, `{"role":"user","content":"turn-`+string(rune('A'+i))+`"}`)
 	}
-	input := `{"model":"deepseek-chat","messages":[`+strings.Join(messages,",")+ `]}`
+	input := `{"model":"deepseek-chat","messages":[` + strings.Join(messages, ",") + `]}`
 	got, err := MapChatCompletionInput([]byte(input))
 	if err != nil {
 		t.Fatal(err)
