@@ -27,11 +27,6 @@ type ConversationLease interface {
 	Close()
 }
 
-// ConversationManager serializes turns and returns the lineage snapshot.
-type ConversationManager interface {
-	Begin(context.Context, string, string, string) (*websession.ConversationLease, error)
-}
-
 // CompletionLeaseManager is the provider-facing adapter for the concrete
 // coordinator. It keeps the coordinator API narrow and mockable in tests.
 type CompletionLeaseManager interface {
@@ -220,7 +215,6 @@ func (p *ExecutorProvider) execute(ctx context.Context, req *provider.Request, c
 	}
 	defer lease.Close()
 
-	var terminal PatchUpdate
 	sawTerminal := false
 	result, err := p.transport.Stream(ctx, material, input, lease.Lineage(), func(update PatchUpdate) error {
 		if sawTerminal {
@@ -228,7 +222,6 @@ func (p *ExecutorProvider) execute(ctx context.Context, req *provider.Request, c
 		}
 		if update.Done {
 			sawTerminal = true
-			terminal = update
 			return nil
 		}
 		return consume(update)
@@ -245,7 +238,6 @@ func (p *ExecutorProvider) execute(ctx context.Context, req *provider.Request, c
 	if _, err := lease.Commit(ctx, result.UpstreamConversationID, result.ResponseMessageID); err != nil {
 		return fmt.Errorf("commit successful DeepSeek Web conversation lineage: %w", err)
 	}
-	_ = terminal
 	for _, finish := range afterCommit {
 		if err := finish(); err != nil {
 			return err
