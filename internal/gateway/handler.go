@@ -506,7 +506,7 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 				h.streamNativeGemini(w, r, nativeGemini, native, model, body)
 				return
 			}
-			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, func(candidate provider.Provider) (*provider.Response, error) {
+			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, profile, func(candidate provider.Provider) (*provider.Response, error) {
 				candidateGemini, ok := candidate.(provider.GeminiProvider)
 				if !ok {
 					return nil, fmt.Errorf("provider %q declares Gemini capability but does not implement GeminiProvider", candidate.ID())
@@ -715,6 +715,7 @@ func (h *Handler) streamNativeGemini(w http.ResponseWriter, r *http.Request, nat
 	beginStreamRequest(r)
 	var usage *tokenusage.Usage
 	terminal := false
+	streamStarted := time.Now()
 	err := native.StreamGemini(r.Context(), &provider.Request{Model: model, Input: body, Stream: true}, func(event provider.Event) error {
 		if len(event.Data) > 0 {
 			usage = mergeGeminiStreamUsage(r, usage, event.Data, false)
@@ -769,7 +770,6 @@ func (h *Handler) streamNativeAnthropic(w http.ResponseWriter, r *http.Request, 
 	beginStreamRequest(r)
 	var usage *tokenusage.Usage
 	terminal := false
-	streamStarted := time.Now()
 	err := native.StreamAnthropic(r.Context(), &provider.Request{Model: model, Input: body, Stream: true}, func(event provider.Event) error {
 		if len(event.Data) > 0 {
 			usage = mergeAnthropicStreamUsage(r, usage, event.Data, event.Done && event.ExplicitDone)
