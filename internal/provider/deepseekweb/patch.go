@@ -13,7 +13,7 @@ var ErrUnsupportedPatch = errors.New("deepseek web: unsupported completion patch
 // operation. THINK fragments are tracked but never exposed as assistant text.
 type PatchUpdate struct {
 	ContentDelta    string
-		CompletionTokens int
+	CompletionTokens int
 	Done             bool
 }
 
