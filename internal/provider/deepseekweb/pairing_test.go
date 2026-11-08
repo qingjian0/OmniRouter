@@ -2,6 +2,7 @@ package deepseekweb
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -93,3 +94,41 @@ func TestLoopbackPeerValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestPairingTicketConcurrentConsumeSucceedsExactlyOnce(t *testing.T) {
+	manager := NewPairingManager()
+	ticket, err := manager.Create("deepseek-web", "personal")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const consumers = 32
+	var wg sync.WaitGroup
+	results := make(chan error, consumers)
+	for i := 0; i < consumers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, consumeErr := manager.Consume(ticket.Nonce)
+			results <- consumeErr
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	successes, rejected := 0, 0
+	for consumeErr := range results {
+		switch {
+		case consumeErr == nil:
+			successes++
+		case errors.Is(consumeErr, ErrPairingInvalid):
+			rejected++
+		default:
+			t.Fatalf("unexpected consume error: %v", consumeErr)
+		}
+	}
+	if successes != 1 || rejected != consumers-1 {
+		t.Fatalf("concurrent consumes: successes=%d rejected=%d, want 1 and %d", successes, rejected, consumers-1)
+	}
+}
+
