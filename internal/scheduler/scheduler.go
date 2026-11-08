@@ -267,7 +267,10 @@ func (s *Scheduler) AddOrReplaceProvider(p provider.Provider, models []string, p
 		s.candidates[modelID] = kept
 	}
 	for _, modelID := range models {
-		s.candidates[modelID] = append(s.candidates[modelID], Candidate{Provider: p, Priority: priority, Weight: weight, Enabled: enabled})
+		if !enabled {
+			continue
+		}
+		s.candidates[modelID] = append(s.candidates[modelID], Candidate{Provider: p, Priority: priority, Weight: weight, Enabled: true})
 		sort.SliceStable(s.candidates[modelID], func(i, j int) bool { return s.candidates[modelID][i].Priority > s.candidates[modelID][j].Priority })
 		if s.cursor[modelID] == nil {
 			s.cursor[modelID] = &atomic.Uint64{}
@@ -316,8 +319,11 @@ func (s *Scheduler) AddOrReplaceProviderModels(p provider.Provider, models []pro
 		s.candidates[modelID] = kept
 	}
 	for _, model := range models {
+		if !enabled {
+			continue
+		}
 		candidate := Candidate{
-			Provider: p, Priority: priority, Weight: weight, Enabled: enabled,
+			Provider: p, Priority: priority, Weight: weight, Enabled: true,
 			Capabilities: append([]string(nil), model.Capabilities...), ContextLimit: model.ContextLimit,
 		}
 		if previous, ok := previousPricing[model.ID]; ok {
