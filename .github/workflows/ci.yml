@@ -77,6 +77,11 @@ jobs:
             exit 1
           fi
 
+      - name: Validate Chromium extension package
+        run: |
+          ruby -rjson -e 'm=JSON.parse(File.read("browser-extension/manifest.json")); abort "Manifest V3 required" unless m["manifest_version"] == 3; %w[popup.html popup.js popup.css README.md].each { |f| abort "missing extension file: #{f}" unless File.file?("browser-extension/#{f}") }; abort "missing cookies permission" unless m.fetch("permissions", []).include?("cookies"); puts "Chromium extension package OK"'
+          node --check browser-extension/popup.js
+
       - name: Check smoke-test script syntax
         run: |
           bash -n scripts/deepseek-smoke.sh
@@ -187,6 +192,7 @@ jobs:
           name="omnirouter-ci-${GOOS}-${GOARCH}"
           go build -trimpath -o "dist/${name}${EXT}" ./cmd/omnirouter
           cp README.md "dist/README.md"
+          cp -R browser-extension "dist/browser-extension"
           cp docs/INSTALL.md "dist/INSTALL.md"
           cp examples/omnirouter.env.example "dist/omnirouter.env.example"
           cp docs/DATABASE-BACKUP-RESTORE.md "dist/DATABASE-BACKUP-RESTORE.md"
@@ -194,9 +200,9 @@ jobs:
           cp docs/ANDROID-TERMUX-ACCEPTANCE.md "dist/ANDROID-TERMUX-ACCEPTANCE.md"
           cp docs/V1-RELEASE-CHECKLIST.md "dist/V1-RELEASE-CHECKLIST.md"
           mkdir -p dist/scripts
-          cp scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/termux-smoke.sh dist/scripts/
+          cp scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/termux-smoke.sh browser-extension/README.md browser-extension/manifest.json browser-extension/popup.html browser-extension/popup.js browser-extension/popup.css dist/scripts/
           if [ "${GOOS}" = "windows" ]; then
-            (cd dist && zip -r "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts)
+            (cd dist && zip -r "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts browser-extension)
             archive="dist/${name}.zip"
           else
             archive="dist/${name}.tar.gz"
