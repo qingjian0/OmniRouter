@@ -29,7 +29,7 @@ OmniRouter 已完成第一轮核心集成。当前开发基线为 `dev`，稳定
 **分支和 PR：**
 - PR #11、#12、#15 已合并到 dev；PR #15 集成提交如上。
 - PR #8、#16 已关闭，相关调度/价格能力已由 PR #15 整合。
-- PR #7 仍为 Draft（后续协议/传输工作）；PR #17 已关闭且未合并；PR #19 为 RFC 状态修正文档 PR，当前仍 Open。配对基础代码已由独立集成提交进入 dev。
+- PR #7 仍为 Draft（后续协议/传输工作）；PR #17 已关闭且未合并；PR #19 已关闭；其 RFC 状态修正已直接提交到 dev，未重复合并。配对基础代码已由独立集成提交进入 dev。
 - `dev` 持续领先于 `main`；当前分支差异以 Git compare 为准，`main` 未被本轮修改。未完成发布门禁前不合并 main、不打 V1.0.0 标签。
 
 详细设计与调用链见 [架构与工程规范](docs/ARCHITECTURE.md)、[自适应调度](docs/ADAPTIVE-SCHEDULER.md) 和 [V1 发布清单](docs/V1-RELEASE-CHECKLIST.md)。
