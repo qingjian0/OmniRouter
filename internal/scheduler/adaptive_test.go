@@ -374,7 +374,7 @@ func TestRemovedProviderCannotPublishStaleHealthAndProbeLockIsRetired(t *testing
 		release: make(chan struct{}),
 	}
 	newProvider := adaptiveTestProvider{id: "shared-id"}
-	s.Replace("m", []Candidate{{Provider: oldProvider, Enabled: true, Weight: 1}})
+	s.Replace("m", []Candidate{{Provider: replacement, Enabled: true, Weight: 1}})
 
 	selection := make(chan error, 1)
 	go func() {
@@ -429,13 +429,9 @@ func TestSameProviderInstanceHandlesNonComparableValueAdapters(t *testing.T) {
 
 func TestReplaceInvalidatesHealthForReplacedProviderID(t *testing.T) {
 	s := New(time.Minute)
-	oldProvider := &blockingHealthProvider{
-		adaptiveTestProvider: adaptiveTestProvider{id: "replace-id"},
-		started: make(chan struct{}),
-		release: make(chan struct{}),
-	}
-	// Use an immediately healthy provider to seed the positive health cache.
+	// Use immediately healthy value adapters to seed and replace the cache.
 	seed := adaptiveTestProvider{id: "replace-id"}
+	replacement := adaptiveTestProvider{id: "replace-id"}
 	s.Replace("m", []Candidate{{Provider: seed, Enabled: true, Weight: 1}})
 	if _, err := s.Select(context.Background(), "m"); err != nil {
 		t.Fatal(err)
