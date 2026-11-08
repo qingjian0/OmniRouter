@@ -243,7 +243,9 @@ func TestStreamAnthropicRejectsErrorAndConflictingSSEEvents(t *testing.T) {
 			}))
 			defer server.Close()
 			p, err := New(Config{ID: "anthropic", BaseURL: server.URL})
-			if err != nil { t.Fatal(err) }
+			if err != nil {
+				t.Fatal(err)
+			}
 			err = p.StreamAnthropic(context.Background(), &provider.Request{
 				Model: "m", Input: []byte(`{"model":"m","max_tokens":8}`),
 			}, func(provider.Event) error { return nil })
