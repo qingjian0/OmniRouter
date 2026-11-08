@@ -203,3 +203,14 @@ A per-completion encoder now exists in `internal/provider/deepseekweb/openai_str
 - Rejects writes after completion and uses a distinct completion ID per encoder instance.
 
 The encoder is a tested serialization boundary only. It is not connected to the DeepSeek HTTP transport, `PatchDecoder`, or `RegistrationProvider`; no upstream request or live inference is enabled. Completion-token usage is not yet projected into downstream chunks. A provider integration must also preserve the Gateway's explicit terminal-event contract and cancellation behavior.
+
+### Local conversation identity contract
+
+The Chat Completions gateway now accepts an optional `X-OmniRouter-Conversation-ID` header and carries the validated value through `provider.Request.ConversationID` for both streaming and non-streaming requests, including provider fallback attempts.
+
+- The value is an opaque **local** conversation key, 1–128 ASCII characters from `A-Z a-z 0-9 . _ : -`.
+- It is not a DeepSeek `chat_session_id`, parent message ID, cookie, or credential.
+- Callers that want cross-request DeepSeek Web continuity must send the same header value on every turn. If omitted, the adapter must treat the request as an independent conversation and must not guess identity from message text or API key.
+- The adapter must scope lineage by provider and authorized account in addition to this local key, and serialize turns with `ConversationLocks`.
+- The header is opt-in and does not change the behavior of other providers. It is not currently persisted by the Gateway itself; the DeepSeek Web coordinator still needs to connect it to `LineageRepository`.
+
