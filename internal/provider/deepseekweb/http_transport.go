@@ -104,7 +104,7 @@ func (t *HTTPCompletionTransport) Stream(
 
 	payload := struct {
 		ChatSessionID string   `json:"chat_session_id"`
-		ParentMessageID string  `json:"parent_message_id"`
+		ParentMessageID *string `json:"parent_message_id"`
 		ModelType string         `json:"model_type"`
 		Prompt string            `json:"prompt"`
 		RefFileIDs []string      `json:"ref_file_ids"`
@@ -113,7 +113,7 @@ func (t *HTTPCompletionTransport) Stream(
 		Preempt bool             `json:"preempt"`
 	}{
 		ChatSessionID: sessionID,
-		ParentMessageID: strings.TrimSpace(lineage.ParentMessageID),
+		ParentMessageID: optionalString(lineage.ParentMessageID),
 		ModelType: input.ModelType,
 		Prompt: input.Prompt,
 		RefFileIDs: input.RefFileIDs,
@@ -243,8 +243,7 @@ func (t *HTTPCompletionTransport) headers(token, cookie []byte) http.Header {
 	return headers
 }
 
-// drainAndClose is retained as a small helper for transports that may later
-// add bounded response-body diagnostics; it never returns upstream body text.
+func optionalString(value string) *string {\n\tif strings.TrimSpace(value) == "" {\n\t\treturn nil\n\t}\n\ttrimmed := strings.TrimSpace(value)\n\treturn &trimmed\n}\n\n// drainAndClose is retained as a small helper for transports that may later\n// add bounded response-body diagnostics; it never returns upstream body text.
 func drainAndClose(body io.ReadCloser) {
 	if body == nil {
 		return
