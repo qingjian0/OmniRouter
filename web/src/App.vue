@@ -123,24 +123,20 @@ async function mutate(path: string, method: string, payload: unknown, success: s
 }
 
 function applyProviderKindDefaults() {
-  if (providerForm.kind === "deepseek") {
-    if (!providerForm.id || providerForm.id === "openai-compatible" || providerForm.id === "openai-responses") providerForm.id = "deepseek";
-    if (!providerForm.name || providerForm.name === "OpenAI-compatible" || providerForm.name === "OpenAI Responses") providerForm.name = "DeepSeek";
-    if (!providerForm.base_url) providerForm.base_url = "https://api.deepseek.com";
-    if (!providerForm.models) providerForm.models = "deepseek-flash,deepseek-v4-pro";
-    providerForm.capabilities = "";
-  } else if (providerForm.kind === "openai-responses") {
-    if (!providerForm.id || providerForm.id === "openai-compatible" || providerForm.id === "deepseek") providerForm.id = "openai-responses";
-    if (!providerForm.name || providerForm.name === "OpenAI-compatible" || providerForm.name === "DeepSeek") providerForm.name = "OpenAI Responses";
-    if (!providerForm.base_url || providerForm.base_url === "https://api.deepseek.com") providerForm.base_url = "https://api.openai.com/v1";
-    if (!providerForm.models || providerForm.models === "deepseek-flash,deepseek-v4-pro") providerForm.models = "gpt-4.1";
-    providerForm.capabilities = "";
-  } else {
-    if (providerForm.base_url === "https://api.deepseek.com" || providerForm.base_url === "https://api.openai.com/v1") providerForm.base_url = "";
-    if (providerForm.id === "openai-responses") providerForm.id = "";
-    if (providerForm.name === "OpenAI Responses") providerForm.name = "";
-    if (providerForm.models === "deepseek-flash,deepseek-v4-pro" || providerForm.models === "gpt-4.1") providerForm.models = "";
-  }
+  const defaults: Record<string, { id: string; name: string; base_url: string; models: string }> = {
+    "openai-compatible": { id: "", name: "", base_url: "", models: "" },
+    deepseek: { id: "deepseek", name: "DeepSeek", base_url: "https://api.deepseek.com", models: "deepseek-flash,deepseek-v4-pro" },
+    "openai-responses": { id: "openai-responses", name: "OpenAI Responses", base_url: "https://api.openai.com/v1", models: "gpt-4.1" },
+    anthropic: { id: "anthropic", name: "Anthropic", base_url: "https://api.anthropic.com/v1", models: "claude-sonnet-4-5" },
+    gemini: { id: "gemini", name: "Google Gemini", base_url: "https://generativelanguage.googleapis.com/v1beta", models: "gemini-2.5-flash" }
+  };
+  const selected = defaults[providerForm.kind] ?? defaults["openai-compatible"];
+  const known = Object.values(defaults);
+  if (!providerForm.id || known.some((item) => item.id && item.id === providerForm.id)) providerForm.id = selected.id;
+  if (!providerForm.name || known.some((item) => item.name && item.name === providerForm.name)) providerForm.name = selected.name;
+  if (!providerForm.base_url || known.some((item) => item.base_url && item.base_url === providerForm.base_url)) providerForm.base_url = selected.base_url;
+  if (!providerForm.models || known.some((item) => item.models && item.models === providerForm.models)) providerForm.models = selected.models;
+  if (providerForm.kind !== "openai-compatible") providerForm.capabilities = "";
 }
 
 async function createProvider() {
@@ -335,19 +331,19 @@ onMounted(refresh);
           <article class="panel">
             <div class="panel-title"><h2>添加 Provider</h2><span class="muted">官方 API / OpenAI-compatible</span></div>
             <form class="form-grid" @submit.prevent="createProvider">
-              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="deepseek">DeepSeek 官方 API</option></select></label>
+              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="anthropic">Anthropic Messages API（原生）</option><option value="gemini">Google Gemini API（原生）</option><option value="deepseek">DeepSeek 官方 API</option></select></label>
               <label>ID<input v-model="providerForm.id" required placeholder="deepseek-primary" /></label>
               <label>名称<input v-model="providerForm.name" placeholder="DeepSeek Primary" /></label>
-              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : 'https://api.example.com/v1'" /></label>
+              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'anthropic' ? 'https://api.anthropic.com/v1' : providerForm.kind === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : providerForm.kind === 'openai-responses' ? 'https://api.openai.com/v1' : 'https://api.example.com/v1'" /></label>
               <label class="wide">上游 API Key<input v-model="providerForm.api_key" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
-              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : 'model-a,model-b'" /></label>
+              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : providerForm.kind === 'anthropic' ? 'claude-sonnet-4-5' : providerForm.kind === 'gemini' ? 'gemini-2.5-flash' : providerForm.kind === 'openai-responses' ? 'gpt-4.1' : 'model-a,model-b'" /></label>
               <label>优先级<input v-model.number="providerForm.priority" type="number" min="0" /></label>
               <label>权重<input v-model.number="providerForm.weight" type="number" min="0" max="1000000" /></label>
               <label v-if="providerForm.kind !== 'deepseek'" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
               <label class="check"><input v-model="providerForm.enabled" type="checkbox" />启用</label>
               <div class="form-actions"><button class="primary" type="submit">保存 Provider</button></div>
             </form>
-            <p class="hint">OpenAI Responses 类型直接请求 Base URL + /responses，只声明 Responses 与 Streaming 能力，不会伪装成 Chat Completions。配置上游密钥前，必须设置 OMNI_CREDENTIAL_ENCRYPTION_KEY。</p>
+            <p class="hint">OpenAI Responses、Anthropic Messages、Gemini 均使用各自原生协议，不会伪装成 Chat Completions。配置上游密钥前，必须设置 OMNI_CREDENTIAL_ENCRYPTION_KEY。</p>
           </article>
           <article class="panel">
             <div class="panel-title"><h2>Provider 列表</h2><span class="muted">{{ providers.length }} 项</span></div>
