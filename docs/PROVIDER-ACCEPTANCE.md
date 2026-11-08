@@ -65,3 +65,18 @@ It does not reveal the secret values or print response bodies.
 
 This workflow validates one real OpenAI-compatible upstream through all three inbound protocol adapters for basic text requests. It does not certify native Anthropic/Gemini upstream APIs, tools, vision, failover, cancellation, long-stream behavior, or Android/Termux runtime.
 Do not add credentials to workflow inputs, source files, or commit messages.
+
+
+## Official native provider acceptance
+
+The generic smoke test above is intentionally limited to one OpenAI-compatible
+upstream. It does not validate the official native OpenAI Responses, Anthropic
+Messages, or Gemini APIs.
+
+Use [LIVE-PROVIDER-MATRIX.md](LIVE-PROVIDER-MATRIX.md) and the
+[Native Provider Live Acceptance workflow](../.github/workflows/native-provider-live.yml)
+for separate official-upstream checks. OpenAI Responses, Anthropic Messages,
+and Gemini use their native outbound adapters; DeepSeek uses its dedicated
+official API smoke suite. A successful basic-text run is not a certification
+of tools, vision, long streams, cancellation under load, rate-limit recovery,
+or all model capabilities.
