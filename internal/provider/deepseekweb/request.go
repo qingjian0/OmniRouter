@@ -75,14 +75,16 @@ func MapChatCompletionInput(raw []byte) (ChatCompletionInput, error) {
 
 	var prompt strings.Builder
 	for index, message := range request.Messages {
-		if len(message.ToolCalls) > 0 && string(message.ToolCalls) != "null" && string(message.ToolCalls) != "[]" {
+		toolCalls := bytes.TrimSpace(message.ToolCalls)
+		if len(toolCalls) > 0 && !bytes.Equal(toolCalls, []byte("null")) && !bytes.Equal(toolCalls, []byte("[]")) {
 			return ChatCompletionInput{}, fmt.Errorf("%w: tool_calls are not supported (message %d)", ErrUnsupportedChatRequest, index)
 		}
+		contentRaw := bytes.TrimSpace(message.Content)
 		var content string
-		if len(message.Content) == 0 || string(message.Content) == "null" {
+		if len(contentRaw) == 0 || bytes.Equal(contentRaw, []byte("null")) {
 			return ChatCompletionInput{}, fmt.Errorf("%w: text content is required (message %d)", ErrUnsupportedChatRequest, index)
 		}
-		if err := json.Unmarshal(message.Content, &content); err != nil {
+		if err := json.Unmarshal(contentRaw, &content); err != nil {
 			return ChatCompletionInput{}, fmt.Errorf("%w: message %d content must be a string", ErrUnsupportedChatRequest, index)
 		}
 
@@ -97,17 +99,19 @@ func MapChatCompletionInput(raw []byte) (ChatCompletionInput, error) {
 		default:
 			return ChatCompletionInput{}, fmt.Errorf("%w: unsupported message role %q", ErrUnsupportedChatRequest, message.Role)
 		}
+		if index > 0 {
+			prompt.WriteString("\n\n")
+		}
 		prompt.WriteByte('[')
 		prompt.WriteString(label)
 		prompt.WriteString("]: ")
 		prompt.WriteString(content)
-		prompt.WriteString("\n\n")
 	}
 
 	return ChatCompletionInput{
 		Model:           request.Model,
 		ModelType:       modelType,
-		Prompt:          strings.TrimRight(prompt.String(), "\n"),
+		Prompt:          prompt.String(),
 		ThinkingEnabled: thinkingEnabled,
 		SearchEnabled:   searchEnabled,
 		RefFileIDs:      []string{},
