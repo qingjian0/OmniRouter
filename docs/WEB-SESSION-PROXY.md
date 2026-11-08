@@ -230,3 +230,19 @@ This is now a reusable orchestration primitive, but it is not yet instantiated b
 ## Expanded reference audit (2026-11-08)
 
 A broader source-level comparison covering NIyueE/ds-free-api, deep-proxy, kittors/deepseek-web-api, nv-hoai/deepseek-rp, and additional projects is documented in [DEEPSEEK-WEB-REFERENCE-AUDIT.md](./DEEPSEEK-WEB-REFERENCE-AUDIT.md). It records the newer observed completion field set (including source), SSE event semantics, incremental-prompt versus rolling-history differences, model availability caveats, account concurrency considerations, and license/security exclusions. The audit is research evidence only; it does not enable live inference or replace current sanitized fixtures.
+
+### Provider execution orchestration (mockable; transport still pending)
+
+`internal/provider/deepseekweb/executor.go` now provides an injectable `ExecutorProvider` that composes the already-tested local layers without inventing the private upstream HTTP protocol:
+- Validates and projects the incoming OpenAI Chat Completions request through `MapChatCompletionInput`.
+- Requires an explicitly enabled model and a stable local `ConversationID`.
+- Loads the user-authorized token/cookie material through the encrypted authorization service boundary and zeroes the returned byte buffers after the turn.
+- Acquires a per-conversation lease and passes its durable lineage snapshot to the transport adapter.
+- Accepts normalized `PatchUpdate` values from an `UpstreamCompletionTransport`; answer and reasoning deltas are projected to OpenAI SSE separately.
+- Buffers the terminal chunk until the transport reports verified completion and supplies both upstream conversation and response-message IDs.
+- Commits lineage only after that terminal contract succeeds; transport errors, cancellation, missing terminal evidence, or missing IDs do not commit.
+- Non-streaming generation aggregates answer/reasoning deltas into a Chat Completions response.
+
+The transport interface is intentionally injectable so mock HTTP/protocol fixtures can exercise the orchestration deterministically. **There is not yet a concrete DeepSeek Web HTTP transport, and `ExecutorProvider` is not yet wired into the runtime provider factory/registry.** The existing `RegistrationProvider` remains inert. The `HealthCheck` method currently validates that local authorization material can be restored; it does not make a network request or prove that DeepSeek accepts the session.
+
+The new executor tests cover successful lineage commit, missing terminal evidence, upstream failure, missing local conversation identity, and non-streaming aggregation. These are mock orchestration tests, not live protocol tests. Current sanitized request/response fixtures are still required before a concrete HTTP transport can be implemented or models can be advertised in production.
