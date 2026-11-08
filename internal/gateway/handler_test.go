@@ -13,6 +13,7 @@ import (
 
 	"omnirouter/internal/observability"
 	"omnirouter/internal/provider"
+	"omnirouter/internal/scheduler"
 )
 
 func TestClassifyRequestError(t *testing.T) {
@@ -408,7 +409,7 @@ func TestSelectProviderForFailsClosedWithoutCapabilityAwareSelector(t *testing.T
 		t.Fatal(err)
 	}
 	h := &Handler{registry: registry, selector: legacySelectorTest{upstream: p}}
-	if _, err := h.selectProviderFor(context.Background(), "model-test", []string{"responses"}); err == nil {
+	if _, err := h.selectProviderFor(context.Background(), "model-test", []string{"responses"}, scheduler.AdaptiveProfile{}); err == nil {
 		t.Fatal("expected capability filtering error")
 	}
 }
@@ -416,7 +417,7 @@ func TestSelectProviderForFailsClosedWithoutCapabilityAwareSelector(t *testing.T
 func TestSelectProviderForAllowsLegacySelectorWithoutRequirements(t *testing.T) {
 	p := &usageTestProvider{}
 	h := &Handler{registry: provider.NewRegistry(), selector: legacySelectorTest{upstream: p}}
-	got, err := h.selectProviderFor(context.Background(), "model-test", nil)
+	got, err := h.selectProviderFor(context.Background(), "model-test", nil, scheduler.AdaptiveProfile{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -594,7 +595,7 @@ func TestNativeGeminiNonStreamingRetriesAnotherCapabilityCompatibleProvider(t *t
 	}
 	selector := &nativeFallbackSelectorTest{providers: []provider.Provider{first, second}}
 	h := &Handler{registry: registry, selector: selector}
-	response, selected, err := h.generateNativeWithFallback(context.Background(), first, "model-test", []string{"gemini_generate_content"}, func(candidate provider.Provider) (*provider.Response, error) {
+	response, selected, err := h.generateNativeWithFallback(context.Background(), first, "model-test", []string{"gemini_generate_content"}, scheduler.AdaptiveProfile{}, func(candidate provider.Provider) (*provider.Response, error) {
 		geminiProvider, ok := candidate.(provider.GeminiProvider)
 		if !ok {
 			return nil, fmt.Errorf("not a Gemini provider")
