@@ -136,6 +136,20 @@ func TestPatchDecoderSSEEventLifecycle(t *testing.T) {
 	}
 }
 
+func TestPatchDecoderTreatsUpdateSessionAsNonTerminalMetadata(t *testing.T) {
+	decoder := &PatchDecoder{}
+	update, err := decoder.DecodeEvent("update_session", []byte(`{"chat_session_id":"session-1"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if update.Done || update.ContentDelta != "" || update.ReasoningDelta != "" || update.ResponseMessageID != "" {
+		t.Fatalf("session metadata must not become completion output or terminal state: %+v", update)
+	}
+	if _, err := decoder.DecodeEvent("update_session", []byte(`not-json`)); !errors.Is(err, ErrUnsupportedPatch) {
+		t.Fatalf("malformed session metadata must fail closed, got %v", err)
+	}
+}
+
 func TestPatchDecoderDecodesNumericMessageIDs(t *testing.T) {
 	decoder := &PatchDecoder{}
 	ready, err := decoder.DecodeEvent("ready", []byte(`{"request_message_id":123,"response_message_id":456}`))
