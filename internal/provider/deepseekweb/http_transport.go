@@ -152,6 +152,14 @@ func (t *HTTPCompletionTransport) Stream(
 		if update.ResponseMessageID != "" {
 			result.ResponseMessageID = update.ResponseMessageID
 		}
+		if update.SearchDelta != "" {
+			// Search citations are outside the initial text-only contract.
+			// Drain them without leaking opaque upstream metadata into content.
+			update.SearchDelta = ""
+			if update.ContentDelta == "" && update.ReasoningDelta == "" && update.ResponseMessageID == "" && update.RequestMessageID == "" && !update.Done {
+				return nil
+			}
+		}
 		if update.Done {
 			// DeepSeek may emit search_results after FINISHED. Delay the
 			// normalized terminal signal until the complete SSE body drains.
