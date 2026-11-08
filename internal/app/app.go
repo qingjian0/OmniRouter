@@ -23,6 +23,7 @@ import (
 	"omnirouter/internal/security"
 	"omnirouter/internal/session"
 	"omnirouter/internal/storage"
+	"omnirouter/internal/websession"
 )
 
 type App struct {
@@ -75,6 +76,30 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	lineageRepo, err := websession.NewLineageRepository(dbRuntime.Store().DB())
+	if err != nil {
+		return nil, err
+	}
+	conversationCoordinator, err := websession.NewConversationCoordinator(lineageRepo, websession.NewConversationLocks())
+	if err != nil {
+		return nil, err
+	}
+	leaseManager, err := deepseekweb.NewCoordinatorLeaseManager(conversationCoordinator)
+	if err != nil {
+		return nil, err
+	}
+	var webAuthorization *deepseekweb.AuthorizationService
+	var webTransport deepseekweb.UpstreamCompletionTransport
+	if vault != nil && vault.Persistent() {
+		webAuthorization, err = deepseekweb.NewAuthorizationService(accountRepo, sessionRepo, vault)
+		if err != nil {
+			return nil, err
+		}
+		webTransport, err = deepseekweb.NewHTTPCompletionTransport()
+		if err != nil {
+			return nil, err
+		}
+	}
 	apiKeyRepo, err := apikey.NewRepository(dbRuntime.Store().DB())
 	if err != nil {
 		return nil, err
@@ -92,8 +117,8 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 			providerName = providerConfig.ID
 		}
 		kind := adapter.NormalizeKind(providerConfig.Kind)
-		if kind == adapter.KindDeepSeekWeb && (providerConfig.APIKey != "" || len(providerConfig.Models) > 0) {
-			return nil, fmt.Errorf("provider %q: DeepSeek Web registration does not accept API keys or models until its session transport is enabled", providerConfig.ID)
+		if kind == adapter.KindDeepSeekWeb && providerConfig.APIKey != "" {
+			return nil, fmt.Errorf("provider %q: DeepSeek Web uses browser pairing and does not accept API keys", providerConfig.ID)
 		}
 		baseURL := providerConfig.BaseURL
 		if strings.TrimSpace(baseURL) == "" {
@@ -214,9 +239,33 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 			}
 			contextLimits[m.ID] = m.ContextLimit
 		}
-		upstream, buildErr := adapter.New(adapter.Config{Kind: record.Kind, ID: record.ID, Name: record.Name, BaseURL: record.BaseURL, APIKey: apiKey, Models: modelIDs, ModelCapabilities: capabilities, ModelContextLimits: contextLimits})
-		if buildErr != nil {
-			return nil, fmt.Errorf("restore provider %q adapter: %w", record.ID, buildErr)
+		var upstream provider.Provider
+		if adapter.NormalizeKind(record.Kind) == adapter.KindDeepSeekWeb && webAuthorization != nil && webTransport != nil && len(modelIDs) > 0 {
+			accounts, accountErr := accountRepo.List(dbCtx, record.ID)
+			if accountErr != nil {
+				return nil, fmt.Errorf("load DeepSeek Web accounts for provider %q: %w", record.ID, accountErr)
+			}
+			for _, owner := range accounts {
+				if owner.Status != account.StatusActive {
+					continue
+				}
+				candidate, createErr := deepseekweb.NewExecutorProvider(deepseekweb.ExecutorConfig{
+					ID: record.ID, Name: record.Name, AccountID: owner.ID, Models: modelIDs,
+					Authorization: webAuthorization, Leases: leaseManager, Transport: webTransport,
+				})
+				if createErr != nil {
+					return nil, fmt.Errorf("restore DeepSeek Web provider %q: %w", record.ID, createErr)
+				}
+				upstream = candidate
+				break
+			}
+		}
+		if upstream == nil {
+			var buildErr error
+			upstream, buildErr = adapter.New(adapter.Config{Kind: record.Kind, ID: record.ID, Name: record.Name, BaseURL: record.BaseURL, APIKey: apiKey, Models: modelIDs, ModelCapabilities: capabilities, ModelContextLimits: contextLimits})
+			if buildErr != nil {
+				return nil, fmt.Errorf("restore provider %q adapter: %w", record.ID, buildErr)
+			}
 		}
 		if err := registry.Replace(upstream); err != nil {
 			return nil, err
