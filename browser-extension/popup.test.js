@@ -71,7 +71,7 @@ test("pairs only after click and sends the minimum expected payload to loopback"
   assert.equal(h.calls.scripts, 1);
   assert.equal(h.calls.cookies, 1);
   assert.equal(h.calls.scriptDetails.target.tabId, 7);
-  assert.deepEqual(h.calls.cookieDetails, { url: "https://chat.deepseek.com/", name: "ds_session_id" });
+  assert.equal(JSON.stringify(h.calls.cookieDetails), JSON.stringify({ url: "https://chat.deepseek.com/", name: "ds_session_id" }));
   assert.equal(h.calls.fetch.length, 1);
 
   const [url, options] = h.calls.fetch[0];
@@ -82,13 +82,13 @@ test("pairs only after click and sends the minimum expected payload to loopback"
   assert.equal(options.headers["X-Omni-Pairing-Nonce"], "a".repeat(64));
   const payload = JSON.parse(options.body);
   assert.equal(Buffer.from(payload.token, "base64").toString("utf8"), "user-token-测试");
-  assert.deepEqual(payload.cookies, [{
+  assert.equal(JSON.stringify(payload.cookies), JSON.stringify([{
     name: "ds_session_id",
     value: "session-value",
     domain: "chat.deepseek.com",
     path: "/",
     secure: true
-  }]);
+  }]));
   assert.equal(h.nodes.nonce.value, "");
   assert.equal(h.nodes.status.dataset.state, "success");
   assert.equal(h.nodes.connect.disabled, false);
