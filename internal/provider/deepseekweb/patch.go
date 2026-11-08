@@ -169,27 +169,39 @@ func (d *PatchDecoder) Decode(raw []byte) (PatchUpdate, error) {
 			return PatchUpdate{}, ErrUnsupportedPatch
 		}
 		var batch []patchEnvelope
-		if err := json.Unmarshal(env.Value, &batch); err != nil {
+		if err := json.Unmarshal(env.Value, &batch); err != nil || len(batch) == 0 {
 			return PatchUpdate{}, ErrUnsupportedPatch
 		}
 		var result PatchUpdate
 		for _, item := range batch {
-			switch item.Path {
-			case "quasi_status", "response/status":
-				var status string
-				if err := json.Unmarshal(item.Value, &status); err != nil {
-					return PatchUpdate{}, ErrUnsupportedPatch
-				}
-				result.Done = result.Done || status == "FINISHED"
-			case "accumulated_token_usage":
+			if len(item.Value) == 0 {
+				return PatchUpdate{}, ErrUnsupportedPatch
+			}
+			if item.Path == "accumulated_token_usage" {
 				var count int
 				if err := json.Unmarshal(item.Value, &count); err != nil || count < 0 {
 					return PatchUpdate{}, ErrUnsupportedPatch
 				}
 				result.CompletionTokens = count
+				continue
 			}
+			encoded, err := json.Marshal(item)
+			if err != nil {
+				return PatchUpdate{}, ErrUnsupportedPatch
+			}
+			update, err := d.Decode(encoded)
+			if err != nil {
+				return PatchUpdate{}, err
+			}
+			mergePatchUpdate(&result, update)
 		}
 		return result, nil
+	case "accumulated_token_usage":
+		var count int
+		if err := json.Unmarshal(env.Value, &count); err != nil || count < 0 {
+			return PatchUpdate{}, ErrUnsupportedPatch
+		}
+		return PatchUpdate{CompletionTokens: count}, nil
 	case "response/search_status":
 		return PatchUpdate{}, nil
 	case "response/search_results":
