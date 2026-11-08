@@ -1,6 +1,6 @@
 # DeepSeek consumer-web adapter RFC
 
-Status: Draft — isolated authorization and pairing primitives are present; Gateway/App/config/UI wiring and end-to-end pairing acceptance are not yet integrated. No inference transport is implemented.  
+Status: Draft — authorization, encrypted credential lifecycle, browser pairing, Gateway/App/config/UI wiring are integrated on the feature branch. Browser acceptance and sanitized protocol fixtures remain outstanding; no inference transport is implemented.  
 Target branch: `feature/deepseek-web-pairing-v2` (rebuilt from current `dev`)
 
 ## 1. Scope and trust boundary
