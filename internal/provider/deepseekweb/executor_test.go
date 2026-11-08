@@ -12,8 +12,9 @@ import (
 
 type testAuthorizationLoader struct {
 	material AuthorizationMaterial
-	err error
+	err      error
 }
+
 func (a testAuthorizationLoader) LoadAuthorization(context.Context, string) (AuthorizationMaterial, error) {
 	return AuthorizationMaterial{Token: append([]byte(nil), a.material.Token...), CookieHeader: append([]byte(nil), a.material.CookieHeader...)}, a.err
 }
@@ -24,6 +25,7 @@ type testConversationLease struct {
 	closed    bool
 	commitErr error
 }
+
 func (l *testConversationLease) Lineage() websession.Lineage { return l.lineage }
 func (l *testConversationLease) Commit(_ context.Context, conversationID, messageID string) (websession.Lineage, error) {
 	l.commits++
@@ -40,6 +42,7 @@ type testLeaseManager struct {
 	lease *testConversationLease
 	err   error
 }
+
 func (m testLeaseManager) BeginLease(context.Context, string, string, string) (ConversationLease, error) {
 	return m.lease, m.err
 }
@@ -49,6 +52,7 @@ type testCompletionTransport struct {
 	err     error
 	updates []PatchUpdate
 }
+
 func (t testCompletionTransport) Stream(_ context.Context, _ AuthorizationMaterial, _ ChatCompletionInput, _ websession.Lineage, emit func(PatchUpdate) error) (CompletionResult, error) {
 	for _, update := range t.updates {
 		if err := emit(update); err != nil {
@@ -79,7 +83,7 @@ func testRequest() *provider.Request {
 func TestExecutorProviderCommitsOnlyAfterVerifiedTerminal(t *testing.T) {
 	lease := &testConversationLease{}
 	transport := testCompletionTransport{
-		result: CompletionResult{UpstreamConversationID: "remote-conversation", ResponseMessageID: "response-2", Completed: true},
+		result:  CompletionResult{UpstreamConversationID: "remote-conversation", ResponseMessageID: "response-2", Completed: true},
 		updates: []PatchUpdate{{ContentDelta: "answer"}, {Done: true}},
 	}
 	p := newTestExecutor(t, transport, lease)
@@ -87,7 +91,9 @@ func TestExecutorProviderCommitsOnlyAfterVerifiedTerminal(t *testing.T) {
 	if err := p.Stream(context.Background(), testRequest(), func(event provider.Event) error {
 		events = append(events, event)
 		return nil
-	}); err != nil { t.Fatal(err) }
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if lease.commits != 1 || lease.lineage.ParentMessageID != "response-2" || !lease.closed {
 		t.Fatalf("lineage transaction mismatch: commits=%d lineage=%+v closed=%v", lease.commits, lease.lineage, lease.closed)
 	}
@@ -150,7 +156,9 @@ func TestExecutorProviderGenerateReturnsAggregatedCompletion(t *testing.T) {
 		updates: []PatchUpdate{{ContentDelta: "hello "}, {ContentDelta: "world"}, {Done: true}},
 	}, lease)
 	response, err := p.Generate(context.Background(), testRequest())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(string(response.Output), `"content":"hello world"`) {
 		t.Fatalf("unexpected aggregated response: %s", response.Output)
 	}
