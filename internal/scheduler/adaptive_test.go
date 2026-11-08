@@ -351,8 +351,6 @@ func TestAdaptiveMetricCountersSaturateAtUint64Maximum(t *testing.T) {
 	}
 }
 
-
-
 func TestSaturatingFailureIncrementAtUint32Maximum(t *testing.T) {
 	if got := saturatingFailureIncrement(^uint32(0)); got != ^uint32(0) {
 		t.Fatalf("failure counter wrapped at uint32 maximum: got %d", got)
@@ -364,7 +362,6 @@ func TestSaturatingFailureIncrementAtUint32Maximum(t *testing.T) {
 		t.Fatalf("first failure count = %d, want 1", got)
 	}
 }
-
 
 func TestRemovedProviderCannotPublishStaleHealthAndProbeLockIsRetired(t *testing.T) {
 	s := New(time.Minute)
@@ -408,7 +405,6 @@ func TestRemovedProviderCannotPublishStaleHealthAndProbeLockIsRetired(t *testing
 	}
 }
 
-
 type nonComparableAdaptiveProvider struct {
 	adaptiveTestProvider
 	labels []string
@@ -425,7 +421,6 @@ func TestSameProviderInstanceHandlesNonComparableValueAdapters(t *testing.T) {
 		t.Fatal("different value adapters must not match")
 	}
 }
-
 
 func TestReplaceInvalidatesHealthForReplacedProviderID(t *testing.T) {
 	s := New(time.Minute)
