@@ -27,6 +27,7 @@ import (
 	"omnirouter/internal/protocol/anthropic"
 	"omnirouter/internal/protocol/gemini"
 	"omnirouter/internal/provider"
+	"omnirouter/internal/provider/deepseekweb"
 	"omnirouter/internal/scheduler"
 	"omnirouter/internal/session"
 	"omnirouter/internal/storage"
@@ -39,21 +40,24 @@ type Selector interface {
 }
 
 type Handler struct {
-	registry     *provider.Registry
-	selector     Selector
-	apiKey       string
-	mux          *http.ServeMux
-	metrics      *observability.Recorder
-	accounts     *account.Store
-	sessions     *session.Store
-	credentials  *credential.Vault
-	providerRepo *provider.Repository
-	accountRepo  *account.Repository
-	sessionRepo  *session.Repository
-	modelRepo    *domainmodel.Repository
-	apiKeyRepo   *apikey.Repository
-	requestLogs  *storage.RequestLogRepository
-	mutationMu   sync.Mutex
+	registry                   *provider.Registry
+	selector                   Selector
+	apiKey                     string
+	mux                        *http.ServeMux
+	metrics                    *observability.Recorder
+	accounts                   *account.Store
+	sessions                   *session.Store
+	credentials                *credential.Vault
+	providerRepo               *provider.Repository
+	accountRepo                *account.Repository
+	sessionRepo                *session.Repository
+	modelRepo                  *domainmodel.Repository
+	apiKeyRepo                 *apikey.Repository
+	requestLogs                *storage.RequestLogRepository
+	deepSeekWebPairings        *deepseekweb.PairingManager
+	deepSeekWebAuthorization   *deepseekweb.AuthorizationService
+	deepSeekWebExtensionOrigin string
+	mutationMu                 sync.Mutex
 }
 
 func NewHandler(registry *provider.Registry, apiKey string, selector Selector) http.Handler {
@@ -75,7 +79,16 @@ func NewHandlerWithRepositories(registry *provider.Registry, apiKey string, sele
 }
 
 func NewHandlerWithFullRepositories(registry *provider.Registry, apiKey string, selector Selector, vault *credential.Vault, providerRepo *provider.Repository, accountRepo *account.Repository, sessionRepo *session.Repository, modelRepo *domainmodel.Repository, apiKeyRepo *apikey.Repository, requestLogRepos ...*storage.RequestLogRepository) http.Handler {
+	return NewHandlerWithDeepSeekWeb(registry, apiKey, selector, vault, providerRepo, accountRepo, sessionRepo, modelRepo, apiKeyRepo, "", requestLogRepos...)
+}
+
+func NewHandlerWithDeepSeekWeb(registry *provider.Registry, apiKey string, selector Selector, vault *credential.Vault, providerRepo *provider.Repository, accountRepo *account.Repository, sessionRepo *session.Repository, modelRepo *domainmodel.Repository, apiKeyRepo *apikey.Repository, extensionOrigin string, requestLogRepos ...*storage.RequestLogRepository) http.Handler {
 	h := &Handler{registry: registry, apiKey: apiKey, selector: selector, mux: http.NewServeMux(), metrics: observability.NewRecorder(1000), accounts: account.NewStore(), sessions: session.NewStore(), credentials: vault, providerRepo: providerRepo, accountRepo: accountRepo, sessionRepo: sessionRepo, modelRepo: modelRepo, apiKeyRepo: apiKeyRepo}
+	h.deepSeekWebPairings = deepseekweb.NewPairingManager()
+	h.deepSeekWebExtensionOrigin = strings.TrimSpace(extensionOrigin)
+	if auth, err := deepseekweb.NewAuthorizationService(accountRepo, sessionRepo, vault); err == nil {
+		h.deepSeekWebAuthorization = auth
+	}
 	if len(requestLogRepos) > 0 && requestLogRepos[0] != nil {
 		h.requestLogs = requestLogRepos[0]
 		h.metrics.SetSink(requestLogSink{repo: requestLogRepos[0]})
@@ -89,6 +102,10 @@ func NewHandlerWithFullRepositories(registry *provider.Registry, apiKey string, 
 	h.mux.Handle("POST /v1/messages", h.protect(http.HandlerFunc(h.anthropicMessages)))
 	h.mux.Handle("POST /v1beta/models/", h.protect(http.HandlerFunc(h.geminiGenerateContent)))
 	h.mux.Handle("GET /admin/providers", h.protect(http.HandlerFunc(h.adminProviders)))
+	h.mux.Handle("POST /admin/deepseek-web/pairings", h.protect(http.HandlerFunc(h.createDeepSeekWebPairing)))
+	h.mux.Handle("POST /admin/deepseek-web/accounts/{id}/revoke", h.protect(http.HandlerFunc(h.revokeDeepSeekWebAccount)))
+	h.mux.HandleFunc("OPTIONS /internal/deepseek-web/pairings", h.deepSeekWebPairingPreflight)
+	h.mux.HandleFunc("POST /internal/deepseek-web/pairings", h.submitDeepSeekWebPairing)
 	h.mux.Handle("GET /admin/accounts", h.protect(http.HandlerFunc(h.adminAccounts)))
 	h.mux.Handle("POST /admin/accounts", h.protect(http.HandlerFunc(h.createAccount)))
 	h.mux.Handle("GET /admin/accounts/{id}", h.protect(http.HandlerFunc(h.getAccount)))

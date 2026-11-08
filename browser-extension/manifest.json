@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "OmniRouter DeepSeek Web Connector",
+  "version": "0.1.0",
+  "description": "Explicitly connect the active DeepSeek Web session to a local OmniRouter instance.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "cookies"
+  ],
+  "host_permissions": [
+    "https://chat.deepseek.com/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Connect DeepSeek Web to OmniRouter"
+  }
+}

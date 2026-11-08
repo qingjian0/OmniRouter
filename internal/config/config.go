@@ -9,12 +9,13 @@ import (
 )
 
 type Config struct {
-	HTTP                    HTTPConfig
-	Database                DatabaseConfig
-	Provider                ProviderConfig
-	Providers               []ProviderConfig
-	GatewayAPIKey           string
-	CredentialEncryptionKey string
+	HTTP                       HTTPConfig
+	Database                   DatabaseConfig
+	Provider                   ProviderConfig
+	Providers                  []ProviderConfig
+	GatewayAPIKey              string
+	CredentialEncryptionKey    string
+	DeepSeekWebExtensionOrigin string
 }
 
 type ProviderConfig struct {
@@ -101,6 +102,7 @@ func Load() (Config, error) {
 	}
 	cfg.GatewayAPIKey = os.Getenv("OMNI_GATEWAY_API_KEY")
 	cfg.CredentialEncryptionKey = strings.TrimSpace(os.Getenv("OMNI_CREDENTIAL_ENCRYPTION_KEY"))
+	cfg.DeepSeekWebExtensionOrigin = strings.TrimSpace(os.Getenv("OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN"))
 	if raw := strings.TrimSpace(os.Getenv("OMNI_PROVIDERS")); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &cfg.Providers); err != nil {
 			return Config{}, fmt.Errorf("OMNI_PROVIDERS: %w", err)
@@ -116,6 +118,8 @@ func Load() (Config, error) {
 			defaultID, defaultName = "anthropic", "Anthropic"
 		} else if strings.EqualFold(cfg.Provider.Kind, "gemini") {
 			defaultID, defaultName = "gemini", "Google Gemini"
+		} else if strings.EqualFold(cfg.Provider.Kind, "deepseek-web") {
+			defaultID, defaultName = "deepseek-web", "DeepSeek Web"
 		}
 		cfg.Provider.ID = env("OMNI_PROVIDER_ID", defaultID)
 		cfg.Provider.Name = env("OMNI_PROVIDER_NAME", defaultName)
@@ -130,6 +134,8 @@ func Load() (Config, error) {
 				cfg.Provider.BaseURL = "https://api.anthropic.com/v1"
 			case "gemini":
 				cfg.Provider.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
+			case "deepseek-web":
+				cfg.Provider.BaseURL = "https://chat.deepseek.com"
 			}
 		}
 		cfg.Provider.APIKey = os.Getenv("OMNI_PROVIDER_API_KEY")

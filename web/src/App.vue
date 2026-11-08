@@ -33,6 +33,8 @@ const credentials = ref<Row[]>([]);
 const apiKeys = ref<Row[]>([]);
 const requests = ref<Row[]>([]);
 const oneTimeSecret = ref("");
+const pairingTicket = ref<Row | null>(null);
+const pairingProviders = computed(() => providers.value.filter((item) => item.kind === "deepseek-web"));
 
 const providerForm = reactive({
   kind: "openai-compatible", id: "", name: "", base_url: "", api_key: "", models: "",
@@ -40,6 +42,7 @@ const providerForm = reactive({
   capabilities: ""
 });
 const accountForm = reactive({ provider_id: "", name: "" });
+const pairingForm = reactive({ provider_id: "", account_name: "Personal DeepSeek Web" });
 const sessionForm = reactive({ account_id: "", status: "unknown", expires_at: "" });
 const credentialForm = reactive({ account_id: "", kind: "api_key", value: "", expires_at: "" });
 const apiKeyForm = reactive({ name: "" });
@@ -128,7 +131,8 @@ function applyProviderKindDefaults() {
     deepseek: { id: "deepseek", name: "DeepSeek", base_url: "https://api.deepseek.com", models: "deepseek-flash,deepseek-v4-pro" },
     "openai-responses": { id: "openai-responses", name: "OpenAI Responses", base_url: "https://api.openai.com/v1", models: "gpt-4.1" },
     anthropic: { id: "anthropic", name: "Anthropic", base_url: "https://api.anthropic.com/v1", models: "claude-sonnet-4-5" },
-    gemini: { id: "gemini", name: "Google Gemini", base_url: "https://generativelanguage.googleapis.com/v1beta", models: "gemini-2.5-flash" }
+    gemini: { id: "gemini", name: "Google Gemini", base_url: "https://generativelanguage.googleapis.com/v1beta", models: "gemini-2.5-flash" },
+    "deepseek-web": { id: "deepseek-web", name: "DeepSeek Web（仅会话登记）", base_url: "https://chat.deepseek.com", models: "" }
   };
   const selected = defaults[providerForm.kind] ?? defaults["openai-compatible"];
   const known = Object.values(defaults);
@@ -137,6 +141,7 @@ function applyProviderKindDefaults() {
   if (!providerForm.base_url || known.some((item) => item.base_url && item.base_url === providerForm.base_url)) providerForm.base_url = selected.base_url;
   if (!providerForm.models || known.some((item) => item.models && item.models === providerForm.models)) providerForm.models = selected.models;
   if (providerForm.kind !== "openai-compatible") providerForm.capabilities = "";
+  if (providerForm.kind === "deepseek-web") providerForm.api_key = "";
 }
 
 async function createProvider() {
@@ -158,6 +163,25 @@ async function createProvider() {
   } catch (e) {
     error.value = `Provider 能力 JSON 无效：${messageOf(e)}`;
   }
+}
+
+async function createDeepSeekWebPairing() {
+  error.value = "";
+  notice.value = "";
+  pairingTicket.value = null;
+  try {
+    const result = await api("/admin/deepseek-web/pairings", "POST", pairingForm);
+    pairingTicket.value = result;
+    notice.value = "一次性配对码已创建，有效期 2 分钟。";
+  } catch (e) { error.value = messageOf(e); }
+}
+
+async function copyPairingNonce() {
+  if (!pairingTicket.value?.nonce) return;
+  try {
+    await navigator.clipboard.writeText(pairingTicket.value.nonce);
+    notice.value = "配对码已复制；请在浏览器扩展中粘贴并立即使用。";
+  } catch { error.value = "剪贴板不可用，请手动复制配对码。"; }
 }
 
 function refreshProviderModels(p: Row) {
@@ -189,6 +213,16 @@ function removeAccount(a: Row) {
     return mutate(`/admin/accounts/${encodeURIComponent(a.id)}`, "DELETE", undefined, "账户已删除");
   }
 }
+function isDeepSeekWebAccount(a: Row) {
+  return providers.value.some((item) => item.id === a.provider_id && item.kind === "deepseek-web");
+}
+
+function revokeDeepSeekWebAccount(a: Row) {
+  if (window.confirm(`确定撤销 DeepSeek Web 账户 ${a.name || a.id}？其访问令牌、Cookie 和所有会话将被永久撤销。`)) {
+    return mutate(`/admin/deepseek-web/accounts/${encodeURIComponent(a.id)}/revoke`, "POST", undefined, "DeepSeek Web 授权已撤销");
+  }
+}
+
 function isoDate(value: string): string | undefined {
   return value ? new Date(value).toISOString() : undefined;
 }
@@ -350,19 +384,39 @@ onMounted(refresh);
           <article class="panel">
             <div class="panel-title"><h2>添加 Provider</h2><span class="muted">官方 API / OpenAI-compatible</span></div>
             <form class="form-grid" @submit.prevent="createProvider">
-              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="anthropic">Anthropic Messages API（原生）</option><option value="gemini">Google Gemini API（原生）</option><option value="deepseek">DeepSeek 官方 API</option></select></label>
+              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="anthropic">Anthropic Messages API（原生）</option><option value="gemini">Google Gemini API（原生）</option><option value="deepseek">DeepSeek 官方 API</option><option value="deepseek-web">DeepSeek Web（浏览器会话登记，推理暂不可用）</option></select></label>
               <label>ID<input v-model="providerForm.id" required placeholder="deepseek-primary" /></label>
               <label>名称<input v-model="providerForm.name" placeholder="DeepSeek Primary" /></label>
-              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'anthropic' ? 'https://api.anthropic.com/v1' : providerForm.kind === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : providerForm.kind === 'openai-responses' ? 'https://api.openai.com/v1' : 'https://api.example.com/v1'" /></label>
-              <label class="wide">上游 API Key<input v-model="providerForm.api_key" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
-              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : providerForm.kind === 'anthropic' ? 'claude-sonnet-4-5' : providerForm.kind === 'gemini' ? 'gemini-2.5-flash' : providerForm.kind === 'openai-responses' ? 'gpt-4.1' : 'model-a,model-b'" /></label>
+              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek-web' ? 'https://chat.deepseek.com' : providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'anthropic' ? 'https://api.anthropic.com/v1' : providerForm.kind === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : providerForm.kind === 'openai-responses' ? 'https://api.openai.com/v1' : 'https://api.example.com/v1'" /></label>
+              <label class="wide">上游 API Key<input v-model="providerForm.api_key" :disabled="providerForm.kind === 'deepseek-web'" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
+              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :disabled="providerForm.kind === 'deepseek-web'" :required="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : providerForm.kind === 'anthropic' ? 'claude-sonnet-4-5' : providerForm.kind === 'gemini' ? 'gemini-2.5-flash' : providerForm.kind === 'openai-responses' ? 'gpt-4.1' : 'model-a,model-b'" /></label>
               <label>优先级<input v-model.number="providerForm.priority" type="number" min="0" /></label>
               <label>权重<input v-model.number="providerForm.weight" type="number" min="0" max="1000000" /></label>
-              <label v-if="providerForm.kind !== 'deepseek'" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
+              <label v-if="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
               <label class="check"><input v-model="providerForm.enabled" type="checkbox" />启用</label>
               <div class="form-actions"><button class="primary" type="submit">保存 Provider</button></div>
             </form>
             <p class="hint">OpenAI Responses、Anthropic Messages、Gemini 均使用各自原生协议，不会伪装成 Chat Completions。配置上游密钥前，必须设置 OMNI_CREDENTIAL_ENCRYPTION_KEY。</p>
+          </article>
+          <article v-if="pairingProviders.length" class="panel">
+            <div class="panel-title"><h2>DeepSeek Web 浏览器授权</h2><span class="muted">仅登记会话，不提供推理</span></div>
+            <form class="form-grid" @submit.prevent="createDeepSeekWebPairing">
+              <label>DeepSeek Web Provider
+                <select v-model="pairingForm.provider_id" required>
+                  <option value="" disabled>选择已登记的 DeepSeek Web Provider</option>
+                  <option v-for="p in pairingProviders" :key="p.id" :value="p.id">{{ p.name || p.id }}</option>
+                </select>
+              </label>
+              <label>账户名称<input v-model="pairingForm.account_name" required maxlength="80" /></label>
+              <div class="form-actions"><button class="primary" type="submit">创建一次性配对码</button></div>
+            </form>
+            <div v-if="pairingTicket?.nonce" class="secret-panel">
+              <strong>一次性配对码（2 分钟有效）</strong>
+              <code>{{ pairingTicket.nonce }}</code>
+              <button class="secondary" @click="copyPairingNonce">复制配对码</button>
+              <p class="hint">在 Chrome / Edge 扩展弹窗中粘贴配对码并明确点击连接。不要将配对码发送给他人。</p>
+            </div>
+            <p class="hint">必须先配置 OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN 并重启网关。当前 DeepSeek Web Provider 只支持浏览器会话加密登记和撤销；推理传输尚未实现，不能作为可用模型调用。</p>
           </article>
           <article class="panel">
             <div class="panel-title"><h2>Provider 列表</h2><span class="muted">{{ providers.length }} 项</span></div>
@@ -391,7 +445,7 @@ onMounted(refresh);
           </article>
           <article class="panel"><div class="panel-title"><h2>账户列表</h2></div>
             <div class="table-wrap"><table><thead><tr><th>名称 / ID</th><th>Provider</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="a in accounts" :key="a.id"><td><b>{{ a.name }}</b><small>{{ a.id }}</small></td><td>{{ a.provider_id }}</td><td><select :value="a.status" @change="setAccountStatus(a, eventValue($event))"><option>active</option><option>disabled</option><option>error</option></select></td><td>{{ shortTime(a.created_at) }}</td><td><button class="danger" @click="removeAccount(a)">删除</button></td></tr><tr v-if="!accounts.length"><td colspan="5" class="empty">暂无账户</td></tr></tbody>
+              <tbody><tr v-for="a in accounts" :key="a.id"><td><b>{{ a.name }}</b><small>{{ a.id }}</small></td><td>{{ a.provider_id }}</td><td><select :value="a.status" @change="setAccountStatus(a, eventValue($event))"><option>active</option><option>disabled</option><option>error</option></select></td><td>{{ shortTime(a.created_at) }}</td><td class="actions"><button v-if="isDeepSeekWebAccount(a)" class="secondary" @click="revokeDeepSeekWebAccount(a)">撤销网页授权</button><button class="danger" @click="removeAccount(a)">删除</button></td></tr><tr v-if="!accounts.length"><td colspan="5" class="empty">暂无账户</td></tr></tbody>
             </table></div>
           </article>
         </section>

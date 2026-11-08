@@ -8,6 +8,7 @@ import (
 	"omnirouter/internal/provider"
 	"omnirouter/internal/provider/anthropic"
 	"omnirouter/internal/provider/deepseek"
+	"omnirouter/internal/provider/deepseekweb"
 	geminiprovider "omnirouter/internal/provider/gemini"
 	openai "omnirouter/internal/provider/openai"
 	openairesponses "omnirouter/internal/provider/openairesponses"
@@ -19,6 +20,7 @@ const (
 	KindDeepSeek         = "deepseek"
 	KindAnthropic        = "anthropic"
 	KindGemini           = "gemini"
+	KindDeepSeekWeb      = "deepseek-web"
 )
 
 type Config struct {
@@ -50,6 +52,8 @@ func DefaultBaseURL(kind string) string {
 		return anthropic.DefaultBaseURL
 	case KindGemini:
 		return geminiprovider.DefaultBaseURL
+	case KindDeepSeekWeb:
+		return deepseekweb.DefaultOrigin
 	default:
 		return ""
 	}
@@ -79,6 +83,14 @@ func New(cfg Config) (provider.Provider, error) {
 			ID: cfg.ID, Name: cfg.Name, BaseURL: cfg.BaseURL, APIKey: cfg.APIKey,
 			Models: cfg.Models,
 		})
+	case KindDeepSeekWeb:
+		if strings.TrimSpace(cfg.APIKey) != "" || len(cfg.Models) > 0 {
+			return nil, fmt.Errorf("DeepSeek Web registration does not accept API keys or models before its session transport is enabled")
+		}
+		if strings.TrimSpace(cfg.BaseURL) != "" && strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/") != deepseekweb.DefaultOrigin {
+			return nil, fmt.Errorf("DeepSeek Web origin is fixed to %s", deepseekweb.DefaultOrigin)
+		}
+		return deepseekweb.NewRegistrationProvider(cfg.ID, cfg.Name), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider kind %q", kind)
 	}
