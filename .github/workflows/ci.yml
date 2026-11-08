@@ -70,6 +70,7 @@ jobs:
       - name: Check formatting
         shell: bash
         run: |
+          gofmt -d ./internal/gateway/handler.go
           files="$(gofmt -l $(find . -name '*.go' -type f))"
           if [ -n "$files" ]; then
             printf '%s\n' "$files"
