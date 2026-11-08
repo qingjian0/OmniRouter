@@ -57,6 +57,7 @@ type Handler struct {
 	deepSeekWebPairings        *deepseekweb.PairingManager
 	deepSeekWebAuthorization   *deepseekweb.AuthorizationService
 	deepSeekWebExtensionOrigin string
+	deepSeekWebRegistrar       DeepSeekWebRegistrar
 	mutationMu                 sync.Mutex
 }
 
@@ -83,7 +84,11 @@ func NewHandlerWithFullRepositories(registry *provider.Registry, apiKey string, 
 }
 
 func NewHandlerWithDeepSeekWeb(registry *provider.Registry, apiKey string, selector Selector, vault *credential.Vault, providerRepo *provider.Repository, accountRepo *account.Repository, sessionRepo *session.Repository, modelRepo *domainmodel.Repository, apiKeyRepo *apikey.Repository, extensionOrigin string, requestLogRepos ...*storage.RequestLogRepository) http.Handler {
-	h := &Handler{registry: registry, apiKey: apiKey, selector: selector, mux: http.NewServeMux(), metrics: observability.NewRecorder(1000), accounts: account.NewStore(), sessions: session.NewStore(), credentials: vault, providerRepo: providerRepo, accountRepo: accountRepo, sessionRepo: sessionRepo, modelRepo: modelRepo, apiKeyRepo: apiKeyRepo}
+	return NewHandlerWithDeepSeekWebRegistrar(registry, apiKey, selector, vault, providerRepo, accountRepo, sessionRepo, modelRepo, apiKeyRepo, extensionOrigin, nil, requestLogRepos...)
+}
+
+func NewHandlerWithDeepSeekWebRegistrar(registry *provider.Registry, apiKey string, selector Selector, vault *credential.Vault, providerRepo *provider.Repository, accountRepo *account.Repository, sessionRepo *session.Repository, modelRepo *domainmodel.Repository, apiKeyRepo *apikey.Repository, extensionOrigin string, registrar DeepSeekWebRegistrar, requestLogRepos ...*storage.RequestLogRepository) http.Handler {
+	h := &Handler{registry: registry, apiKey: apiKey, selector: selector, mux: http.NewServeMux(), metrics: observability.NewRecorder(1000), accounts: account.NewStore(), sessions: session.NewStore(), credentials: vault, providerRepo: providerRepo, accountRepo: accountRepo, sessionRepo: sessionRepo, modelRepo: modelRepo, apiKeyRepo: apiKeyRepo, deepSeekWebRegistrar: registrar}
 	h.deepSeekWebPairings = deepseekweb.NewPairingManager()
 	h.deepSeekWebExtensionOrigin = strings.TrimSpace(extensionOrigin)
 	if auth, err := deepseekweb.NewAuthorizationService(accountRepo, sessionRepo, vault); err == nil {
