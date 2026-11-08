@@ -6,10 +6,10 @@ import (
 	"omnirouter/internal/provider"
 )
 
-// RegistrationProvider is an intentionally inert registration shell. It allows
-// an administrator to create a DeepSeek Web provider record and pair a browser
-// session before the private request transport is implemented. It advertises
-// no models, so the scheduler cannot route inference to this provider.
+// RegistrationProvider is the pre-pairing registration shell. It advertises
+// only the explicitly configured model allowlist; inference remains unavailable
+// until a browser account is paired and the runtime replaces this shell with an
+// ExecutorProvider.
 type RegistrationProvider struct {
 	id     string
 	name   string
