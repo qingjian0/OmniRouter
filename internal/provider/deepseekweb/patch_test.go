@@ -274,3 +274,34 @@ func TestParseAndDecodeDeepSeekSSELifecycle(t *testing.T) {
 		t.Fatalf("close event did not terminate stream: %+v", updates[3])
 	}
 }
+
+
+func TestPatchDecoderBatchPreservesFragmentUpdates(t *testing.T) {
+	decoder := &PatchDecoder{}
+	update, err := decoder.Decode([]byte(`{"p":"response","o":"BATCH","v":[{"p":"response/fragments","o":"APPEND","v":[{"type":"THINK","content":"reason"},{"type":"RESPONSE","content":"answer"}]},{"p":"accumulated_token_usage","v":17},{"p":"response/status","o":"SET","v":"FINISHED"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if update.ReasoningDelta != "reason" || update.ContentDelta != "answer" || update.CompletionTokens != 17 || !update.Done {
+		t.Fatalf("batch updates were not fully merged: %+v", update)
+	}
+}
+
+func TestPatchDecoderBatchRejectsUnknownPatch(t *testing.T) {
+	decoder := &PatchDecoder{}
+	_, err := decoder.Decode([]byte(`{"p":"response","o":"BATCH","v":[{"p":"response/unknown","o":"SET","v":"x"}]}`))
+	if !errors.Is(err, ErrUnsupportedPatch) {
+		t.Fatalf("unknown batch patch must fail closed, got %v", err)
+	}
+}
+
+func TestPatchDecoderReadsStandaloneTokenUsage(t *testing.T) {
+	decoder := &PatchDecoder{}
+	update, err := decoder.Decode([]byte(`{"p":"accumulated_token_usage","o":"SET","v":9}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if update.CompletionTokens != 9 {
+		t.Fatalf("token usage mismatch: %+v", update)
+	}
+}
