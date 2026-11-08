@@ -79,7 +79,7 @@ func TestAuthorizationServicePersistsRestoresAndRevokes(t *testing.T) {
 	if string(restored.Token) != "user-token-value" {
 		t.Fatal("restored token does not match imported token")
 	}
-	if string(restored.CookieHeader) != "ds_session_id=session-123; other=value" {
+	if string(restored.CookieHeader) != "ds_session_id=session-123" {
 		t.Fatal("restored cookie header does not match validated cookie set")
 	}
 	zeroBytes(restored.Token)
