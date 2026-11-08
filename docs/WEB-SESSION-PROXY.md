@@ -168,6 +168,17 @@ This is request normalization only. It is not yet called by the gateway or provi
 
 The OmniRoute reference's persistent-session design also demonstrates that session reuse and rolling prompt history are separate controls: its implementation keeps an upstream session cache and separately limits the prompt transcript. OmniRouter will keep its durable per-provider-account lineage model and conversation lock, but will not key sessions by raw tokens or copy the reference's generated-cookie/browser-fingerprint/challenge logic. A verified two-turn fixture must determine whether upstream parent IDs are required and how stale-session responses are represented.
 
+
+Request mapper regression coverage now includes:
+- canonical and alias model option mapping;
+- explicit request-option overrides;
+- historical assistant tool-call + matching tool-result reconstruction;
+- bounded 20-entry transcript behavior;
+- malformed JSON, trailing JSON, unsupported roles/content, malformed tool arguments, and rejection of active `tools[]`;
+- preservation of leading/trailing message whitespace.
+
+The tests exercise only the local normalization layer. They do not assert upstream acceptance or tool-call execution.
+
 ### Source-level audit notes
 
 The audit is based on concrete implementation files, not README claims alone:
