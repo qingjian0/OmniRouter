@@ -53,11 +53,11 @@ type Handler struct {
 	sessionRepo  *session.Repository
 	modelRepo    *domainmodel.Repository
 	apiKeyRepo   *apikey.Repository
-	requestLogs  *storage.RequestLogRepository
-	deepSeekWebPairings *deepseekweb.PairingManager
-	deepSeekWebAuthorization *deepseekweb.AuthorizationService
+	requestLogs                *storage.RequestLogRepository
+	deepSeekWebPairings        *deepseekweb.PairingManager
+	deepSeekWebAuthorization   *deepseekweb.AuthorizationService
 	deepSeekWebExtensionOrigin string
-	mutationMu   sync.Mutex
+	mutationMu                 sync.Mutex
 }
 
 func NewHandler(registry *provider.Registry, apiKey string, selector Selector) http.Handler {
