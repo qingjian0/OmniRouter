@@ -178,7 +178,9 @@ func TestPatchDecoderDoesNotTreatDoneSentinelAsTerminal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if update.Done { t.Fatal("[DONE] is not a verified DeepSeek terminal event") }
+	if update.Done {
+		t.Fatal("[DONE] is not a verified DeepSeek terminal event")
+	}
 }
 
 func TestPatchDecoderPreservesSearchResultsAsMetadata(t *testing.T) {
