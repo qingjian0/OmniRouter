@@ -123,3 +123,62 @@ Reference: [NIyueeE/ds-free-api development notes](https://git.xszz.org/NIyueeE/
 - The DeepSeek Web Provider is still inert; no real upstream completion has been validated.
 - Request mapping, OpenAI SSE encoding, SQLite lineage, and the conversation lease coordinator exist as isolated components, not a complete live provider.
 - The latest inspected CI failure was a compile error from the unused import in coordinator_test.go. A cleanup commit was pushed after identifying it; its replacement CI must be checked before reporting a pass.
+
+
+## Direct GitHub source inspection (2026-11-08 14:15Z)
+
+The following files were fetched from the repositories themselves during this pass; this is not a README-only comparison.
+
+### kittors/deepseek-web-api — MIT, active reference
+
+Inspected:
+- `src/deepseek/completion.ts`
+- `src/deepseek/sse.ts`
+- `src/deepseek/updates.ts`
+- `src/deepseek/sessionStore.ts`
+- `src/deepseek/client.ts`
+- `src/deepseek/types.ts`
+- `LICENSE`
+
+Concrete reusable design observations:
+- The SSE parser is stateful across arbitrary network chunk boundaries, preserves named event labels, joins multiple data lines, and flushes a final unterminated frame.
+- The update decoder separates `ready`, `title`, `close`, reasoning, answer, and token-usage events. It tracks the active fragment channel so content-only APPEND operations do not accidentally mix THINK and RESPONSE.
+- Session storage persists the last response message ID and uses it as the next turn's parent; it supports explicit IDs, previous-response IDs, and normalized history matching.
+- The completion client keeps request preparation, session resolution, auth refresh, streaming, and persistence in separate layers.
+- The completion request currently includes browser-derived auth and a PoW response. Its login/browser and PoW path is not adopted under OmniRouter's fail-closed anti-abuse boundary.
+
+### JuanCMPDev/deep-proxy — MIT, best Go-language reference
+
+Inspected:
+- `internal/proxy/translate_request.go`
+- `internal/proxy/deepseek_chunk.go`
+- `internal/proxy/translate_stream.go`
+- `LICENSE`
+
+Concrete observations:
+- Its request mapper is compact and directly comparable to OmniRouter's Go mapper.
+- Its patch parser demonstrates fragment-type tracking, response-only output, token usage extraction, and status handling.
+- Its stream converter demonstrates OpenAI chunk assembly and terminal output.
+- Its current upstream request flow explicitly uses PoW/WASM and browser-captured credentials. Those parts are excluded; only the language-level separation and independently re-tested parsing/translation ideas are candidates for reuse.
+
+### nv-hoai/deepseek-rp — Python reference
+
+Inspected:
+- `dsk/sse.py`
+- `dsk/client.py`
+
+Concrete observations:
+- The parser explicitly documents inherited patch path/operation state, full-response snapshots, fragment APPEND, content APPEND, BATCH, and named metadata events.
+- The client separates transport, typed models, cookies, device identity, challenge logic, and stream parsing. Its challenge, device-identity, and WAF recovery implementation is not adopted.
+
+### lcx9451/deepseek-web-proxy — protocol lead only
+
+The public README describes a 2026 protocol shape with session creation, a challenge endpoint, completion JSON, and patch-style SSE. This is a lead for cross-checking event/field names, not a basis for implementing challenge handling. License and provenance were not established; no code is copied.
+
+## Implementation decision after direct inspection
+
+1. Do not wait for the user to supply all protocol research. Continue mining public, license-compatible source and dated protocol notes.
+2. Reuse OmniRouter's existing Go SSE framing, patch decoder, OpenAI encoder, and SQLite lease abstractions where they already cover the observed behavior. Do not replace working code merely to mirror another repository.
+3. Next code-level comparison should be a gap matrix between OmniRouter's `patch.go` and kittors `updates.ts` / nv-hoai `sse.py`: named event handling, inherited `p/o`, fragment index handling, BATCH usage, and explicit terminal variants. Add isolated Go regression fixtures for only the compatible, verified cases.
+4. Build and test an HTTP transport against a local mock upstream using the existing abstractions. Do not enable live provider registration until the ordinary authorized request path is verified.
+5. No PoW solver, HIF-LEIM acquisition, browser/device impersonation, CAPTCHA/WAF bypass, challenge replay, or rate-limit evasion will be ported. If the current upstream requires such a gate outside a normal user-authorized flow, return a typed fail-closed error rather than simulating success.
