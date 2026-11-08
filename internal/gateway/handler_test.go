@@ -562,3 +562,26 @@ func TestNativeGeminiNonStreamingRetriesAnotherCapabilityCompatibleProvider(t *t
 		t.Fatal("failed native provider was not reported to selector")
 	}
 }
+
+
+func TestRequiredCapabilitiesDetectsResponsesTextFormat(t *testing.T) {
+	for _, formatType := range []string{"json_schema", "json_object"} {
+		body := []byte(`{"model":"gpt-test","text":{"format":{"type":"` + formatType + `"}}}`)
+		got := requiredCapabilities(body)
+		found := false
+		for _, capability := range got {
+			if capability == "json" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("format type %q must require JSON capability; got %v", formatType, got)
+		}
+	}
+	plain := requiredCapabilities([]byte(`{"model":"gpt-test","text":{"format":{"type":"text"}}}`))
+	for _, capability := range plain {
+		if capability == "json" {
+			t.Fatalf("plain text format must not require JSON capability: %v", plain)
+		}
+	}
+}
