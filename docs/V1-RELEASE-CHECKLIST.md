@@ -149,6 +149,7 @@ all passed.
 | [#16](https://github.com/qingjian0/OmniRouter/pull/16) | Earlier combined integration candidate | Closed, superseded by #15 | Do not merge separately |
 | [#7](https://github.com/qingjian0/OmniRouter/pull/7) | DeepSeek Web authorization/session and follow-on transport work | Open Draft | Pairing scaffold separately integrated to dev; browser acceptance and transport remain pending |
 | [#17](https://github.com/qingjian0/OmniRouter/pull/17) | Earlier DeepSeek Web registration integration candidate | Closed, not merged | Superseded by direct integration commit `2c727e7e0e752865fd6cd2218213ffe13f0a89cb`; do not reopen/merge duplicate work |
+| [#19](https://github.com/qingjian0/OmniRouter/pull/19) | DeepSeek Web RFC acceptance-status correction | Closed, superseded | The corrected RFC status is committed directly on dev; do not merge duplicate docs |
 
 PR #7 must not be described as an inference-capable DeepSeek Web Provider.
 The pairing scaffold is already integrated on dev: browser authorization,
