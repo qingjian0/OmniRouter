@@ -3,15 +3,16 @@ package gateway
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"testing"
+	"time"
 
 	"omnirouter/internal/observability"
 	"omnirouter/internal/provider"
-	"testing"
-	"time"
 )
 
 func TestClassifyRequestError(t *testing.T) {
@@ -41,13 +42,24 @@ func TestClassifyRequestError(t *testing.T) {
 }
 
 type usageTestProvider struct {
-	stream func(context.Context, *provider.Request, func(provider.Event) error) error
+	id           string
+	capabilities []string
+	stream       func(context.Context, *provider.Request, func(provider.Event) error) error
 }
 
-func (p *usageTestProvider) ID() string   { return "provider-test" }
+func (p *usageTestProvider) ID() string {
+	if p.id == "" {
+		return "provider-test"
+	}
+	return p.id
+}
 func (p *usageTestProvider) Name() string { return "test" }
 func (p *usageTestProvider) ListModels(context.Context) ([]provider.Model, error) {
-	return []provider.Model{{ID: "model-test", Provider: p.ID()}}, nil
+	capabilities := p.capabilities
+	if capabilities == nil {
+		capabilities = []string{"responses", "streaming"}
+	}
+	return []provider.Model{{ID: "model-test", Provider: p.ID(), Capabilities: capabilities}}, nil
 }
 func (p *usageTestProvider) Generate(context.Context, *provider.Request) (*provider.Response, error) {
 	return &provider.Response{Model: "model-test", Output: []byte(`{"id":"x","choices":[],"usage":{"prompt_tokens":7,"completion_tokens":5,"total_tokens":12}}`)}, nil
@@ -65,6 +77,23 @@ func (p *usageTestProvider) StreamResponses(_ context.Context, _ *provider.Reque
 }
 
 func (p *usageTestProvider) HealthCheck(context.Context) error { return nil }
+
+type chatOnlyTestProvider struct {
+	id string
+}
+
+func (p *chatOnlyTestProvider) ID() string   { return p.id }
+func (p *chatOnlyTestProvider) Name() string { return p.id }
+func (p *chatOnlyTestProvider) ListModels(context.Context) ([]provider.Model, error) {
+	return []provider.Model{{ID: "model-test", Provider: p.id, Capabilities: []string{"chat", "streaming"}}}, nil
+}
+func (p *chatOnlyTestProvider) Generate(context.Context, *provider.Request) (*provider.Response, error) {
+	return &provider.Response{Model: "model-test", Output: []byte(`{"choices":[]}`)}, nil
+}
+func (p *chatOnlyTestProvider) Stream(context.Context, *provider.Request, func(provider.Event) error) error {
+	return nil
+}
+func (p *chatOnlyTestProvider) HealthCheck(context.Context) error { return nil }
 
 func newUsageTestHandler(p provider.Provider) (*Handler, http.Handler) {
 	registry := provider.NewRegistry()
@@ -224,6 +253,9 @@ func TestStreamingUsageParseFailureDoesNotPersistInvalidCounts(t *testing.T) {
 func TestGatewayResponsesAPIRecordsUsage(t *testing.T) {
 	p := &usageTestProvider{}
 	registry := provider.NewRegistry()
+	if err := registry.Register(&chatOnlyTestProvider{id: "aaa-chat"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := registry.Register(p); err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +318,7 @@ func (p *nativeAnthropicTestProvider) StreamAnthropic(_ context.Context, _ *prov
 }
 
 func TestGatewayUsesNativeAnthropicProviderWhenAvailable(t *testing.T) {
-	p := &nativeAnthropicTestProvider{usageTestProvider: &usageTestProvider{}}
+	p := &nativeAnthropicTestProvider{usageTestProvider: &usageTestProvider{capabilities: []string{"anthropic_messages"}}}
 	registry := provider.NewRegistry()
 	if err := registry.Register(p); err != nil {
 		t.Fatal(err)
@@ -304,7 +336,7 @@ func TestGatewayUsesNativeAnthropicProviderWhenAvailable(t *testing.T) {
 }
 
 func TestGatewayStreamsNativeAnthropicEvents(t *testing.T) {
-	p := &nativeAnthropicTestProvider{usageTestProvider: &usageTestProvider{}}
+	p := &nativeAnthropicTestProvider{usageTestProvider: &usageTestProvider{capabilities: []string{"anthropic_messages", "streaming"}}}
 	registry := provider.NewRegistry()
 	if err := registry.Register(p); err != nil {
 		t.Fatal(err)
@@ -319,4 +351,253 @@ func TestGatewayStreamsNativeAnthropicEvents(t *testing.T) {
 	if !strings.Contains(response.Body.String(), "event: message_stop") {
 		t.Fatalf("native message_stop was not forwarded: %s", response.Body.String())
 	}
+}
+
+type legacySelectorTest struct {
+	upstream provider.Provider
+}
+
+func (s legacySelectorTest) Select(context.Context, string) (provider.Provider, error) {
+	return s.upstream, nil
+}
+func (legacySelectorTest) ReportFailure(string) {}
+
+func TestSelectProviderForFailsClosedWithoutCapabilityAwareSelector(t *testing.T) {
+	registry := provider.NewRegistry()
+	p := &usageTestProvider{}
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	h := &Handler{registry: registry, selector: legacySelectorTest{upstream: p}}
+	if _, err := h.selectProviderFor(context.Background(), "model-test", []string{"responses"}); err == nil {
+		t.Fatal("expected capability filtering error")
+	}
+}
+
+func TestSelectProviderForAllowsLegacySelectorWithoutRequirements(t *testing.T) {
+	p := &usageTestProvider{}
+	h := &Handler{registry: provider.NewRegistry(), selector: legacySelectorTest{upstream: p}}
+	got, err := h.selectProviderFor(context.Background(), "model-test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID() != p.ID() {
+		t.Fatalf("selected %q, want %q", got.ID(), p.ID())
+	}
+}
+
+func TestRequiredCapabilitiesDetectsResponsesJSONAndImageInputs(t *testing.T) {
+	got := requiredCapabilities([]byte(`{
+		"model":"gpt-4.1",
+		"text":{"format":{"type":"json_schema","name":"answer","schema":{"type":"object"}}},
+		"input":[{"role":"user","content":[{"type":"input_image","image_url":"https://example.test/image.png"}]}]
+	}`))
+	found := map[string]bool{}
+	for _, capability := range got {
+		found[capability] = true
+	}
+	for _, capability := range []string{"json", "vision"} {
+		if !found[capability] {
+			t.Errorf("missing required capability %q in %v", capability, got)
+		}
+	}
+}
+
+type nativeGeminiTestProvider struct {
+	*usageTestProvider
+}
+
+type nativeFallbackSelectorTest struct {
+	providers []provider.Provider
+	failed    map[string]bool
+}
+
+type failingNativeGeminiTestProvider struct {
+	*nativeGeminiTestProvider
+}
+
+func (p *nativeGeminiTestProvider) GenerateGemini(context.Context, *provider.Request) (*provider.Response, error) {
+	return &provider.Response{Model: "model-test", Output: []byte(`{"candidates":[{"content":{"role":"model","parts":[{"text":"native gemini"}]}}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":4,"totalTokenCount":7}}`)}, nil
+}
+
+func (p *nativeGeminiTestProvider) StreamGemini(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
+	if err := emit(provider.Event{Data: []byte("data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"native gemini\"}]}}]}\n\n")}); err != nil {
+		return err
+	}
+	return emit(provider.Event{Done: true, ExplicitDone: true})
+}
+
+func TestGatewayUsesNativeGeminiProviderWhenAvailable(t *testing.T) {
+	p := &nativeGeminiTestProvider{usageTestProvider: &usageTestProvider{capabilities: []string{"gemini_generate_content"}}}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1beta/models/model-test:generateContent", strings.NewReader(`{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}`))
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "native gemini") {
+		t.Fatalf("native Gemini response was not forwarded: %s", response.Body.String())
+	}
+}
+
+func TestGatewayStreamsNativeGeminiEvents(t *testing.T) {
+	p := &nativeGeminiTestProvider{usageTestProvider: &usageTestProvider{capabilities: []string{"gemini_generate_content", "streaming"}}}
+	registry := provider.NewRegistry()
+	if err := registry.Register(p); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandlerWithFullRepositories(registry, "", nil, nil, nil, nil, nil, nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1beta/models/model-test:streamGenerateContent", strings.NewReader(`{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}`))
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "native gemini") || !strings.Contains(response.Header().Get("Content-Type"), "text/event-stream") {
+		t.Fatalf("native Gemini SSE was not forwarded: headers=%v body=%s", response.Header(), response.Body.String())
+	}
+}
+
+func TestRequiredCapabilitiesIncludesGeminiSpecificFeatures(t *testing.T) {
+	got := requiredCapabilities([]byte(`{
+		"generationConfig": {
+			"responseMimeType": "application/json",
+			"thinkingConfig": {"thinkingBudget": 1024}
+		},
+		"tools": [{"functionDeclarations": [{"name": "lookup"}]}],
+		"contents": [{"parts": [{"inlineData": {"mimeType": "image/png", "data": "AA=="}}]}]
+	}`))
+	found := map[string]bool{}
+	for _, capability := range got {
+		found[capability] = true
+	}
+	for _, capability := range []string{"json", "reasoning", "tools", "vision"} {
+		if !found[capability] {
+			t.Errorf("missing Gemini required capability %q in %v", capability, got)
+		}
+	}
+}
+
+func TestRequiredCapabilitiesDoesNotTreatAudioOrVideoAsVision(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{name: "inline image", body: `{"contents":[{"parts":[{"inlineData":{"mimeType":"image/png","data":"AA=="}}]}]}`, want: true},
+		{name: "uploaded image", body: `{"contents":[{"parts":[{"fileData":{"mimeType":"image/jpeg","fileUri":"gs://bucket/image.jpg"}}]}]}`, want: true},
+		{name: "inline audio", body: `{"contents":[{"parts":[{"inlineData":{"mimeType":"audio/ogg","data":"AA=="}}]}]}`},
+		{name: "uploaded video", body: `{"contents":[{"parts":[{"fileData":{"mimeType":"video/mp4","fileUri":"gs://bucket/video.mp4"}}]}]}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := requiredCapabilities([]byte(test.body))
+			found := false
+			for _, capability := range got {
+				if capability == "vision" {
+					found = true
+				}
+			}
+			if found != test.want {
+				t.Fatalf("vision capability = %v, want %v; all capabilities: %v", found, test.want, got)
+			}
+		})
+	}
+}
+
+func (s *nativeFallbackSelectorTest) Select(_ context.Context, model string) (provider.Provider, error) {
+	return s.SelectWithRequirements(context.Background(), model, nil)
+}
+
+func (s *nativeFallbackSelectorTest) SelectWithRequirements(_ context.Context, _ string, required []string) (provider.Provider, error) {
+	for _, candidate := range s.providers {
+		if s.failed[candidate.ID()] {
+			continue
+		}
+		models, err := candidate.ListModels(context.Background())
+		if err != nil {
+			continue
+		}
+		for _, model := range models {
+			if hasDeclaredCapabilities(model.Capabilities, required) {
+				return candidate, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no eligible provider")
+}
+
+func (s *nativeFallbackSelectorTest) ReportFailure(id string) {
+	if s.failed == nil {
+		s.failed = make(map[string]bool)
+	}
+	s.failed[id] = true
+}
+
+func (p *failingNativeGeminiTestProvider) GenerateGemini(context.Context, *provider.Request) (*provider.Response, error) {
+	return nil, fmt.Errorf("simulated upstream failure")
+}
+
+func TestNativeGeminiNonStreamingRetriesAnotherCapabilityCompatibleProvider(t *testing.T) {
+	first := &failingNativeGeminiTestProvider{nativeGeminiTestProvider: &nativeGeminiTestProvider{usageTestProvider: &usageTestProvider{id: "gemini-failing", capabilities: []string{"gemini_generate_content"}}}}
+	second := &nativeGeminiTestProvider{usageTestProvider: &usageTestProvider{id: "gemini-backup", capabilities: []string{"gemini_generate_content"}}}
+	registry := provider.NewRegistry()
+	if err := registry.Register(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Register(second); err != nil {
+		t.Fatal(err)
+	}
+	selector := &nativeFallbackSelectorTest{providers: []provider.Provider{first, second}}
+	h := &Handler{registry: registry, selector: selector}
+	response, selected, err := h.generateNativeWithFallback(context.Background(), first, "model-test", []string{"gemini_generate_content"}, func(candidate provider.Provider) (*provider.Response, error) {
+		geminiProvider, ok := candidate.(provider.GeminiProvider)
+		if !ok {
+			return nil, fmt.Errorf("not a Gemini provider")
+		}
+		return geminiProvider.GenerateGemini(context.Background(), &provider.Request{Model: "model-test"})
+	})
+	if err != nil {
+		t.Fatalf("native fallback failed: %v", err)
+	}
+	if selected.ID() != second.ID() || !strings.Contains(string(response.Output), "native gemini") {
+		t.Fatalf("selected=%q response=%s, want second native provider", selected.ID(), response.Output)
+	}
+	if !selector.failed[first.ID()] {
+		t.Fatal("failed native provider was not reported to selector")
+	}
+}
+
+func TestRequiredCapabilitiesDetectsResponsesTextFormat(t *testing.T) {
+	for _, formatType := range []string{"json_schema", "json_object"} {
+		body := []byte(`{"model":"gpt-test","text":{"format":{"type":"` + formatType + `"}}}`)
+		got := requiredCapabilities(body)
+		found := false
+		for _, capability := range got {
+			if capability == "json" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("format type %q must require JSON capability; got %v", formatType, got)
+		}
+	}
+	plain := requiredCapabilities([]byte(`{"model":"gpt-test","text":{"format":{"type":"text"}}}`))
+	for _, capability := range plain {
+		if capability == "json" {
+			t.Fatalf("plain text format must not require JSON capability: %v", plain)
+		}
+	}
+	imageBlock := requiredCapabilities([]byte(`{"model":"gpt-test","input":[{"content":[{"type":"input_image"}]}]}`))
+	for _, capability := range imageBlock {
+		if capability == "vision" {
+			return
+		}
+	}
+	t.Fatalf("Responses input_image block must require vision capability: %v", imageBlock)
 }
