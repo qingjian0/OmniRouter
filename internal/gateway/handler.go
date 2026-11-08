@@ -27,6 +27,7 @@ import (
 	"omnirouter/internal/protocol/anthropic"
 	"omnirouter/internal/protocol/gemini"
 	"omnirouter/internal/provider"
+	"omnirouter/internal/provider/deepseekweb"
 	"omnirouter/internal/scheduler"
 	"omnirouter/internal/session"
 	"omnirouter/internal/storage"
