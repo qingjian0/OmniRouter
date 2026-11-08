@@ -68,13 +68,17 @@ func (c *HTTPClient) Do(ctx context.Context, method, requestPath string, headers
 	}
 	parsedPath, err := url.ParseRequestURI(requestPath)
 	if err != nil || parsedPath.IsAbs() || parsedPath.Host != "" || !strings.HasPrefix(parsedPath.Path, "/") ||
-		strings.HasPrefix(parsedPath.Path, "//") || path.Clean(parsedPath.Path) != parsedPath.Path ||
-		strings.Contains(parsedPath.Path, "\\") {
+		strings.HasPrefix(parsedPath.Path, "//") || strings.Contains(parsedPath.Path, "\\") {
+		return nil, fmt.Errorf("web-session request path is invalid")
+	}
+	decodedPath, err := url.PathUnescape(parsedPath.EscapedPath())
+	if err != nil || !strings.HasPrefix(decodedPath, "/") || strings.HasPrefix(decodedPath, "//") ||
+		path.Clean(decodedPath) != decodedPath || strings.Contains(decodedPath, "\\") {
 		return nil, fmt.Errorf("web-session request path is invalid")
 	}
 	allowed := false
 	for _, prefix := range c.prefixes {
-		if parsedPath.Path == prefix || strings.HasPrefix(parsedPath.Path, prefix+"/") {
+		if decodedPath == prefix || strings.HasPrefix(decodedPath, prefix+"/") {
 			allowed = true
 			break
 		}
@@ -83,7 +87,7 @@ func (c *HTTPClient) Do(ctx context.Context, method, requestPath string, headers
 		return nil, fmt.Errorf("web-session request path is outside the configured vendor API prefixes")
 	}
 	target := *c.origin
-	target.Path = parsedPath.Path
+	target.Path = decodedPath
 	target.RawQuery = parsedPath.RawQuery
 	req, err := http.NewRequestWithContext(ctx, method, target.String(), body)
 	if err != nil {
