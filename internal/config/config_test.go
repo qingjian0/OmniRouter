@@ -69,3 +69,30 @@ func TestLoadDeepSeekProviderDefaults(t *testing.T) {
 		t.Fatalf("base URL = %q", got.BaseURL)
 	}
 }
+
+func TestLoadOpenAIResponsesProviderDefaults(t *testing.T) {
+	t.Setenv("OMNI_PROVIDERS", "")
+	t.Setenv("OMNI_PROVIDER_KIND", "openai-responses")
+	t.Setenv("OMNI_PROVIDER_ID", "")
+	t.Setenv("OMNI_PROVIDER_NAME", "")
+	t.Setenv("OMNI_PROVIDER_BASE_URL", "")
+	t.Setenv("OMNI_PROVIDER_API_KEY", "test-key")
+	t.Setenv("OMNI_PROVIDER_MODELS", "gpt-4.1")
+	t.Setenv("OMNI_PROVIDER_MODEL_CAPABILITIES", "")
+	t.Setenv("OMNI_PROVIDER_MODEL_CONTEXT_LIMITS", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Providers) != 1 {
+		t.Fatalf("providers = %d, want 1", len(cfg.Providers))
+	}
+	got := cfg.Providers[0]
+	if got.Kind != "openai-responses" || got.ID != "openai-responses" || got.Name != "OpenAI Responses" {
+		t.Fatalf("unexpected Responses identity: %+v", got)
+	}
+	if got.BaseURL != "https://api.openai.com/v1" {
+		t.Fatalf("base URL = %q", got.BaseURL)
+	}
+}
