@@ -22,10 +22,10 @@ func TestMapChatCompletionInputRoleTaggedPrompt(t *testing.T) {
 
 func TestMapChatCompletionInputModelAliases(t *testing.T) {
 	cases := []struct {
-		model string
+		model    string
 		typeName string
 		thinking bool
-		search bool
+		search   bool
 	}{
 		{"deepseek-reasoner", "expert", true, false},
 		{"deepseek-r1", "expert", true, false},
