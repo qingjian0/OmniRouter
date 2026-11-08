@@ -302,6 +302,22 @@ func supportsCapabilities(declared, required []string) bool {
 	return true
 }
 
+func validConversationID(value string) bool {
+	if value == "" {
+		return true
+	}
+	if len(value) > 128 {
+		return false
+	}
+	for _, ch := range value {
+		if !(ch >= 'a' && ch <= 'z') && !(ch >= 'A' && ch <= 'Z') &&
+			!(ch >= '0' && ch <= '9') && ch != '-' && ch != '_' && ch != '.' && ch != ':' {
+			return false
+		}
+	}
+	return true
+}
+
 func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, (8<<20)+1))
 	if err != nil {
@@ -318,6 +334,11 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.Unmarshal(body, &request); err != nil || strings.TrimSpace(request.Model) == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "valid JSON with a model is required")
+		return
+	}
+	conversationID := strings.TrimSpace(r.Header.Get("X-OmniRouter-Conversation-ID"))
+	if !validConversationID(conversationID) {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "X-OmniRouter-Conversation-ID must be 1-128 ASCII letters, digits, or . _ : -")
 		return
 	}
 	required := requiredCapabilities(body)
@@ -344,7 +365,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 		var usage *tokenusage.Usage
 		terminal := false
 		streamStarted := time.Now()
-		err := p.Stream(r.Context(), &provider.Request{Model: request.Model, Input: body, Stream: true}, func(event provider.Event) error {
+		err := p.Stream(r.Context(), &provider.Request{Model: request.Model, Input: body, Stream: true, ConversationID: conversationID}, func(event provider.Event) error {
 			chunk := "data: [DONE]\n\n"
 			if !event.Done {
 				usage = mergeStreamUsage(r, usage, event.Data, false)
@@ -382,7 +403,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	response, p, err := h.generateWithFallback(r.Context(), p, request.Model, requiredCapabilities(body), adaptiveProfileForRequest(r, body, requiredCapabilities(body)), body)
+	response, p, err := h.generateWithFallback(r.Context(), p, request.Model, requiredCapabilities(body), adaptiveProfileForRequest(r, body, requiredCapabilities(body)), body, conversationID)
 	if err != nil {
 		setRequestRoute(r, p, request.Model)
 		setRequestError(r, classifyRequestError(r, err, false))
@@ -597,9 +618,13 @@ func (h *Handler) reportProviderOutcome(p provider.Provider, latency time.Durati
 // generateWithFallback retries a failed non-streaming request on another
 // healthy provider for the same model. It never retries a provider twice in
 // one request and preserves the original capability requirements.
-func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, profile scheduler.AdaptiveProfile, payload []byte) (*provider.Response, provider.Provider, error) {
+func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, profile scheduler.AdaptiveProfile, payload []byte, conversationIDs ...string) (*provider.Response, provider.Provider, error) {
 	if initial == nil {
 		return nil, nil, fmt.Errorf("no provider selected")
+	}
+	conversationID := ""
+	if len(conversationIDs) > 0 {
+		conversationID = conversationIDs[0]
 	}
 	current := initial
 	attempted := make(map[string]struct{}, h.registry.Count())
@@ -614,7 +639,7 @@ func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Pro
 		}
 		attempted[current.ID()] = struct{}{}
 		started := time.Now()
-		response, err := current.Generate(ctx, &provider.Request{Model: model, Input: payload})
+		response, err := current.Generate(ctx, &provider.Request{Model: model, Input: payload, ConversationID: conversationID})
 		if err == nil && response == nil {
 			err = fmt.Errorf("provider %q returned an empty response", current.ID())
 		}
