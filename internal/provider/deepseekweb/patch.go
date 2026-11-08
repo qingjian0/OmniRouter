@@ -9,11 +9,15 @@ import (
 
 var ErrUnsupportedPatch = errors.New("deepseek web: unsupported completion patch")
 
-// PatchUpdate is the user-visible effect of one observed DeepSeek JSON-Patch
-// operation. THINK fragments are tracked but never exposed as assistant text.
+// PatchUpdate is the normalized effect of one DeepSeek SSE event or JSON-Patch
+// operation. Reasoning is kept separate from user-visible answer text.
 type PatchUpdate struct {
-	ContentDelta    string
+	ContentDelta     string
+	ReasoningDelta   string
 	CompletionTokens int
+	RequestMessageID string
+	ResponseMessageID string
+	Title            string
 	Done             bool
 }
 
@@ -32,10 +36,62 @@ type patchFragment struct {
 	Content string `json:"content"`
 }
 
-// Decode consumes one SSE data payload. The supported operations are based on
+// DecodeEvent preserves the SSE event boundary used by the public references.
+// In particular, "close" is a terminal event; EOF and [DONE] alone are not
+// treated as proof that the upstream completion finished successfully.
+func (d *PatchDecoder) DecodeEvent(event string, raw []byte) (PatchUpdate, error) {
+	if d == nil {
+		return PatchUpdate{}, errors.New("deepseek web: nil patch decoder")
+	}
+	var update PatchUpdate
+	switch event {
+	case "ready":
+		var ids struct {
+			RequestMessageID  json.RawMessage `json:"request_message_id"`
+			ResponseMessageID json.RawMessage `json:"response_message_id"`
+		}
+		if err := json.Unmarshal(raw, &ids); err != nil {
+			return PatchUpdate{}, fmt.Errorf("decode DeepSeek ready event: %w", err)
+		}
+		update.RequestMessageID = scalarID(ids.RequestMessageID)
+		update.ResponseMessageID = scalarID(ids.ResponseMessageID)
+		return update, nil
+	case "title":
+		var title struct {
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal(raw, &title); err != nil {
+			return PatchUpdate{}, fmt.Errorf("decode DeepSeek title event: %w", err)
+		}
+		update.Title = title.Content
+		return update, nil
+	case "close":
+		return PatchUpdate{Done: true}, nil
+	case "":
+		return d.Decode(raw)
+	default:
+		return PatchUpdate{}, fmt.Errorf("%w: SSE event %q", ErrUnsupportedPatch, event)
+	}
+}
+
+func scalarID(raw json.RawMessage) string {
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var n json.Number
+	if json.Unmarshal(raw, &n) == nil {
+		return n.String()
+	}
+	return ""
+}
+
+// Decode consumes one SSE data payload. Supported patch shapes are based on
 // public reference implementations and remain provisional until matched to a
-// current, user-authorized sanitized fixture. Unknown structural operations
-// fail closed rather than silently producing a truncated completion.
+// current, user-authorized sanitized fixture.
 func (d *PatchDecoder) Decode(raw []byte) (PatchUpdate, error) {
 	if d == nil {
 		return PatchUpdate{}, errors.New("deepseek web: nil patch decoder")
@@ -57,24 +113,38 @@ func (d *PatchDecoder) Decode(raw []byte) (PatchUpdate, error) {
 
 	switch env.Path {
 	case "response/fragments":
+		if env.Op != "" && env.Op != "APPEND" {
+			return PatchUpdate{}, ErrUnsupportedPatch
+		}
 		var fragments []patchFragment
 		if err := json.Unmarshal(env.Value, &fragments); err != nil || len(fragments) == 0 {
 			return PatchUpdate{}, ErrUnsupportedPatch
 		}
-		d.fragmentType = fragments[0].Type
-		return fragmentUpdate(fragments[0])
+		var result PatchUpdate
+		for _, fragment := range fragments {
+			update, err := d.setFragment(fragment)
+			if err != nil {
+				return PatchUpdate{}, err
+			}
+			mergePatchUpdate(&result, update)
+		}
+		return result, nil
 	case "response/fragments/-1/content":
+		if env.Op != "" && env.Op != "APPEND" {
+			return PatchUpdate{}, ErrUnsupportedPatch
+		}
 		var content string
 		if err := json.Unmarshal(env.Value, &content); err != nil {
 			return PatchUpdate{}, ErrUnsupportedPatch
 		}
-		if d.fragmentType == "RESPONSE" {
+		switch d.fragmentType {
+		case "RESPONSE", "ANSWER":
 			return PatchUpdate{ContentDelta: content}, nil
+		case "THINK":
+			return PatchUpdate{ReasoningDelta: content}, nil
+		default:
+			return PatchUpdate{}, ErrUnsupportedPatch
 		}
-		if d.fragmentType == "THINK" {
-			return PatchUpdate{}, nil
-		}
-		return PatchUpdate{}, ErrUnsupportedPatch
 	case "response/status", "quasi_status":
 		var status string
 		if err := json.Unmarshal(env.Value, &status); err != nil {
@@ -92,7 +162,7 @@ func (d *PatchDecoder) Decode(raw []byte) (PatchUpdate, error) {
 		var result PatchUpdate
 		for _, item := range batch {
 			switch item.Path {
-			case "quasi_status":
+			case "quasi_status", "response/status":
 				var status string
 				if err := json.Unmarshal(item.Value, &status); err != nil {
 					return PatchUpdate{}, ErrUnsupportedPatch
@@ -107,6 +177,11 @@ func (d *PatchDecoder) Decode(raw []byte) (PatchUpdate, error) {
 			}
 		}
 		return result, nil
+	case "response/search_status":
+		return PatchUpdate{}, nil
+	case "response/search_results":
+		// Search metadata is intentionally not mixed into assistant text.
+		return PatchUpdate{}, nil
 	default:
 		return PatchUpdate{}, fmt.Errorf("%w: %s", ErrUnsupportedPatch, env.Path)
 	}
@@ -116,19 +191,30 @@ func (d *PatchDecoder) decodeInitialOrAppend(value json.RawMessage) (PatchUpdate
 	var initial struct {
 		Response struct {
 			Fragments []patchFragment `json:"fragments"`
+			AccumulatedTokenUsage int `json:"accumulated_token_usage"`
 		} `json:"response"`
 	}
 	if err := json.Unmarshal(value, &initial); err == nil && len(initial.Response.Fragments) > 0 {
-		d.fragmentType = initial.Response.Fragments[0].Type
-		return fragmentUpdate(initial.Response.Fragments[0])
+		var result PatchUpdate
+		for _, fragment := range initial.Response.Fragments {
+			update, err := d.setFragment(fragment)
+			if err != nil {
+				return PatchUpdate{}, err
+			}
+			mergePatchUpdate(&result, update)
+		}
+		if initial.Response.AccumulatedTokenUsage > 0 {
+			result.CompletionTokens = initial.Response.AccumulatedTokenUsage
+		}
+		return result, nil
 	}
 	var content string
 	if err := json.Unmarshal(value, &content); err == nil {
 		switch d.fragmentType {
-		case "RESPONSE":
+		case "RESPONSE", "ANSWER":
 			return PatchUpdate{ContentDelta: content}, nil
 		case "THINK":
-			return PatchUpdate{}, nil
+			return PatchUpdate{ReasoningDelta: content}, nil
 		default:
 			return PatchUpdate{}, ErrUnsupportedPatch
 		}
@@ -136,13 +222,35 @@ func (d *PatchDecoder) decodeInitialOrAppend(value json.RawMessage) (PatchUpdate
 	return PatchUpdate{}, ErrUnsupportedPatch
 }
 
-func fragmentUpdate(fragment patchFragment) (PatchUpdate, error) {
+func (d *PatchDecoder) setFragment(fragment patchFragment) (PatchUpdate, error) {
+	d.fragmentType = fragment.Type
 	switch fragment.Type {
-	case "RESPONSE":
+	case "RESPONSE", "ANSWER":
 		return PatchUpdate{ContentDelta: fragment.Content}, nil
 	case "THINK":
+		return PatchUpdate{ReasoningDelta: fragment.Content}, nil
+	case "SEARCH", "SEARCH_REF":
+		// Search fragments are metadata, not assistant answer text.
 		return PatchUpdate{}, nil
 	default:
-		return PatchUpdate{}, ErrUnsupportedPatch
+		return PatchUpdate{}, fmt.Errorf("%w: fragment type %q", ErrUnsupportedPatch, fragment.Type)
 	}
+}
+
+func mergePatchUpdate(dst *PatchUpdate, src PatchUpdate) {
+	dst.ContentDelta += src.ContentDelta
+	dst.ReasoningDelta += src.ReasoningDelta
+	if src.CompletionTokens != 0 {
+		dst.CompletionTokens = src.CompletionTokens
+	}
+	if src.RequestMessageID != "" {
+		dst.RequestMessageID = src.RequestMessageID
+	}
+	if src.ResponseMessageID != "" {
+		dst.ResponseMessageID = src.ResponseMessageID
+	}
+	if src.Title != "" {
+		dst.Title = src.Title
+	}
+	dst.Done = dst.Done || src.Done
 }
