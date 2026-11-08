@@ -14,7 +14,11 @@ import (
 	"omnirouter/internal/provider/deepseekweb"
 )
 
-type DeepSeekWebRegistrar interface {\n\tRegisterDeepSeekWebAccount(context.Context, string, string, string) error\n}\n\n// createDeepSeekWebPairing is an authenticated admin operation. The returned
+type DeepSeekWebRegistrar interface {
+	RegisterDeepSeekWebAccount(context.Context, string, string, string) error
+}
+
+// createDeepSeekWebPairing is an authenticated admin operation. The returned
 // nonce is a short-lived capability and must not be logged or persisted.
 func (h *Handler) createDeepSeekWebPairing(w http.ResponseWriter, r *http.Request) {
 	if h.apiKey == "" {
