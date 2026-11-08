@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -163,6 +164,9 @@ func Load() (Config, error) {
 	if cfg.HTTP.Address == "" {
 		return Config{}, fmt.Errorf("HTTP address must not be empty")
 	}
+	if err := ValidateListenSecurity(cfg.HTTP.Address, cfg.GatewayAPIKey); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
 }
 
@@ -171,4 +175,31 @@ func env(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+
+func ValidateListenSecurity(address, gatewayAPIKey string) error {
+	if strings.TrimSpace(gatewayAPIKey) == "" && !isLoopbackListenAddress(address) {
+		return fmt.Errorf("OMNI_GATEWAY_API_KEY is required when OMNI_ADDR is not a loopback address; admin routes are unauthenticated in open mode")
+	}
+	return nil
+}
+
+// isLoopbackListenAddress reports whether an HTTP listen address is restricted
+// to a loopback interface. Empty hosts and wildcard addresses are deliberately
+// treated as externally reachable.
+func isLoopbackListenAddress(address string) bool {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(address))
+	if err != nil {
+		return false
+	}
+	host = strings.TrimSpace(host)
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if zone := strings.LastIndexByte(host, '%'); zone >= 0 {
+		host = host[:zone]
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

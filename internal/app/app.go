@@ -32,6 +32,9 @@ type App struct {
 }
 
 func New(cfg config.Config, logger *slog.Logger) (*App, error) {
+	if err := config.ValidateListenSecurity(cfg.HTTP.Address, cfg.GatewayAPIKey); err != nil {
+		return nil, err
+	}
 	dbCtx, cancelDB := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelDB()
 	dbRuntime, err := storage.OpenSQLiteRuntime(dbCtx, cfg.Database.Path, storage.SQLiteOptions{BusyTimeout: cfg.Database.BusyTimeout, WAL: cfg.Database.WAL})

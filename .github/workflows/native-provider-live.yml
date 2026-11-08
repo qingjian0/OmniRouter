@@ -1,0 +1,108 @@
+name: Native Provider Live Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "Official upstream adapter to verify"
+        required: true
+        type: choice
+        options:
+          - openai-responses
+          - anthropic
+          - gemini
+          - deepseek
+      model:
+        description: "Exact model ID enabled for the selected provider"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-provider-live-${{ inputs.provider }}
+  cancel-in-progress: false
+
+jobs:
+  native-provider:
+    name: Live ${{ inputs.provider }} native API acceptance
+    runs-on: ubuntu-latest
+    env:
+      OMNI_ADDR: 127.0.0.1:8765
+      OMNI_DATABASE_PATH: ${{ runner.temp }}/omnirouter-native-live.db
+      OMNI_PROVIDER_KIND: ${{ inputs.provider }}
+      OMNI_PROVIDER_ID: live-${{ inputs.provider }}
+      OMNI_PROVIDER_NAME: ${{ inputs.provider }} official live acceptance
+      OMNI_PROVIDER_MODELS: ${{ inputs.model }}
+      OMNI_SMOKE_MODEL: ${{ inputs.model }}
+      OMNI_BASE_URL: http://127.0.0.1:8765
+      OMNI_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.OMNI_CREDENTIAL_ENCRYPTION_KEY }}
+      OMNI_GATEWAY_API_KEY: ${{ secrets.OMNI_GATEWAY_API_KEY }}
+      OMNI_PROVIDER_API_KEY: ${{ inputs.provider == 'openai-responses' && secrets.OPENAI_API_KEY || inputs.provider == 'anthropic' && secrets.ANTHROPIC_API_KEY || inputs.provider == 'gemini' && secrets.GEMINI_API_KEY || secrets.DEEPSEEK_API_KEY }}
+      OMNI_PROVIDER_BASE_URL: ${{ inputs.provider == 'openai-responses' && 'https://api.openai.com/v1' || inputs.provider == 'anthropic' && 'https://api.anthropic.com/v1' || inputs.provider == 'gemini' && 'https://generativelanguage.googleapis.com/v1beta' || 'https://api.deepseek.com' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build embedded admin assets
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          test -s ../internal/admin/static/dist/index.html
+          test -n "$(find ../internal/admin/static/dist/assets -type f -print -quit)"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+
+      - name: Verify selected provider secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${OMNI_PROVIDER_API_KEY}" ]] || { echo "::error::Missing API key secret for selected provider"; exit 1; }
+          [[ -n "${OMNI_CREDENTIAL_ENCRYPTION_KEY}" ]] || { echo "::error::Missing OMNI_CREDENTIAL_ENCRYPTION_KEY"; exit 1; }
+          [[ -n "${OMNI_GATEWAY_API_KEY}" ]] || { echo "::error::Missing OMNI_GATEWAY_API_KEY"; exit 1; }
+          [[ -n "${OMNI_PROVIDER_MODELS}" ]] || { echo "::error::A model input is required"; exit 1; }
+
+      - name: Build and start OmniRouter
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod download
+          go build -trimpath -o "${RUNNER_TEMP}/omnirouter" ./cmd/omnirouter
+          "${RUNNER_TEMP}/omnirouter" >"${RUNNER_TEMP}/omnirouter-native-live.log" 2>&1 &
+          pid=$!
+          cleanup() {
+            if kill -0 "${pid}" 2>/dev/null; then
+              kill -TERM "${pid}" 2>/dev/null || true
+              wait "${pid}" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+          ready=0
+          for _ in $(seq 1 45); do
+            if curl -fsS --max-time 2 http://127.0.0.1:8765/healthz >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "${pid}" 2>/dev/null; then
+              echo "::error::OmniRouter exited during startup; inspect the sanitized job outcome."
+              exit 1
+            fi
+            sleep 1
+          done
+          [[ "${ready}" -eq 1 ]] || { echo "::error::OmniRouter did not become healthy"; exit 1; }
+          if [[ "${OMNI_PROVIDER_KIND}" == "deepseek" ]]; then
+            bash scripts/deepseek-smoke.sh
+          else
+            bash scripts/native-provider-smoke.sh
+          fi

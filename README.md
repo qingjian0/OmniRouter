@@ -288,7 +288,7 @@ Persisted gateway API keys support the following explicit scopes:
 - `admin:read`: read-only `/admin/` endpoints.
 - `admin:write`: mutating `/admin/` endpoints.
 
-When `OMNI_GATEWAY_API_KEY` is configured, it remains the master credential and bypasses scoped checks. Other persisted keys must carry the exact scope required by the route. Keys with no scopes, unknown scopes, or duplicate scopes are rejected. If the master key is unset, the existing explicitly open development mode remains enabled; configure the master key before exposing the service to a network.
+When `OMNI_GATEWAY_API_KEY` is configured, it remains the master credential and bypasses scoped checks. Other persisted keys must carry the exact scope required by the route. Keys with no scopes, unknown scopes, or duplicate scopes are rejected. If the master key is unset, open development mode is permitted only on a loopback listener (`127.0.0.1`, `::1`, or `localhost`). Startup rejects wildcard, LAN, public-IP, and hostname binds without `OMNI_GATEWAY_API_KEY`. Reverse proxies, tunnels, and container port publishing still expose the service beyond loopback, so configure the key before using them.
 
 
 Provider runtime policy can be changed without replacing its credential: `PATCH /admin/providers/{id}/policy` persists `enabled`, `priority`, and `weight`, then refreshes the scheduler's candidate set. A disabled provider remains configured but is excluded from routing; it can be re-enabled later.

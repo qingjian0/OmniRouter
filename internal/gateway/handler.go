@@ -150,7 +150,7 @@ func (h *Handler) models(w http.ResponseWriter, r *http.Request) {
 	for _, p := range h.registry.List() {
 		models, err := p.ListModels(r.Context())
 		if err != nil {
-			writeError(w, http.StatusBadGateway, "provider_error", err.Error())
+			writeError(w, http.StatusBadGateway, "provider_error", "provider model discovery failed")
 			return
 		}
 		for _, model := range models {
@@ -386,7 +386,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		setRequestRoute(r, p, request.Model)
 		setRequestError(r, classifyRequestError(r, err, false))
-		writeError(w, http.StatusBadGateway, "upstream_error", err.Error())
+		writeError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
 		return
 	}
 	setRequestRoute(r, p, request.Model)
@@ -470,7 +470,7 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		setRequestRoute(r, p, model)
 		setRequestError(r, classifyRequestError(r, err, false))
-		writeError(w, http.StatusBadGateway, "upstream_error", err.Error())
+		writeError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
 		return
 	}
 	setRequestRoute(r, p, model)
@@ -478,7 +478,7 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 	output, err := anthropic.FromOpenAI(response.Output, model)
 	if err != nil {
 		setRequestError(r, "upstream_protocol_error")
-		writeError(w, http.StatusBadGateway, "upstream_error", err.Error())
+		writeError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -565,7 +565,7 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		setRequestRoute(r, p, model)
 		setRequestError(r, classifyRequestError(r, err, false))
-		writeError(w, http.StatusBadGateway, "upstream_error", err.Error())
+		writeError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
 		return
 	}
 	setRequestRoute(r, p, model)
@@ -573,7 +573,7 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 	output, err := gemini.FromOpenAI(response.Output)
 	if err != nil {
 		setRequestError(r, "upstream_protocol_error")
-		writeError(w, http.StatusBadGateway, "upstream_error", err.Error())
+		writeError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -1337,6 +1337,27 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, map[string]any{"error": map[string]string{"type": code, "message": message}})
 }
 
+func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any, maxBytes int64) error {
+	if maxBytes <= 0 {
+		return fmt.Errorf("JSON body limit must be positive")
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("request must contain exactly one JSON value")
+		}
+		return err
+	}
+	return nil
+}
+
+
 func (h *Handler) lookupAccount(ctx context.Context, id string) (account.Account, error) {
 	if h.accountRepo != nil {
 		return h.accountRepo.Get(ctx, id)
@@ -1439,10 +1460,8 @@ func (h *Handler) createAccount(w http.ResponseWriter, r *http.Request) {
 		Name       string         `json:"name"`
 		Status     account.Status `json:"status"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid account JSON: "+err.Error())
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid account JSON")
 		return
 	}
 	if _, ok := h.registry.Get(strings.TrimSpace(input.ProviderID)); !ok {
@@ -1497,9 +1516,7 @@ func (h *Handler) setAccountStatus(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Status account.Status `json:"status"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid status JSON")
 		return
 	}
@@ -1640,13 +1657,13 @@ func (h *Handler) createCredential(w http.ResponseWriter, r *http.Request) {
 		Value     string          `json:"value"`
 		ExpiresAt *time.Time      `json:"expires_at"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid credential JSON")
 		return
 	}
-	if _, err := h.lookupAccount(r.Context(), strings.TrimSpace(input.AccountID)); err != nil {
+	input.ID = strings.TrimSpace(input.ID)
+	input.AccountID = strings.TrimSpace(input.AccountID)
+	if _, err := h.lookupAccount(r.Context(), input.AccountID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusBadRequest, "invalid_request_error", "account_id must reference an existing account")
 		} else {
@@ -1658,8 +1675,12 @@ func (h *Handler) createCredential(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "value is required")
 		return
 	}
-	meta, err := h.credentials.Put(credential.Metadata{ID: input.ID, AccountID: input.AccountID, Type: string(input.Kind), ExpiresAt: input.ExpiresAt}, input.Kind, []byte(input.Value))
+	secret := []byte(input.Value)
 	input.Value = ""
+	meta, err := h.credentials.Put(credential.Metadata{ID: input.ID, AccountID: input.AccountID, Type: string(input.Kind), ExpiresAt: input.ExpiresAt}, input.Kind, secret)
+	for i := range secret {
+		secret[i] = 0
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
@@ -1679,9 +1700,7 @@ func (h *Handler) setCredentialStatus(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Status credential.Status `json:"status"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid credential status JSON")
 		return
 	}
@@ -1758,10 +1777,8 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		Status    session.Status `json:"status"`
 		ExpiresAt *time.Time     `json:"expires_at"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid session JSON: "+err.Error())
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid session JSON")
 		return
 	}
 	if h.accountRepo != nil {
@@ -1832,9 +1849,7 @@ func (h *Handler) setSessionStatus(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Status session.Status `json:"status"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid session status JSON")
 		return
 	}
@@ -1927,11 +1942,32 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		Weight             uint32              `json:"weight"`
 		Enabled            *bool               `json:"enabled"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid provider JSON")
 		return
 	}
 	kind := adapter.NormalizeKind(input.Kind)
+	input.ID = strings.TrimSpace(input.ID)
+	input.Name = strings.TrimSpace(input.Name)
+	input.BaseURL = strings.TrimSpace(input.BaseURL)
+	if input.Priority < 0 || input.Weight > 1000000 {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "priority must be non-negative and weight must not exceed 1000000")
+		return
+	}
+	seenModels := make(map[string]struct{}, len(input.Models))
+	for i, modelID := range input.Models {
+		modelID = strings.TrimSpace(modelID)
+		if modelID == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request_error", "model IDs must not be empty")
+			return
+		}
+		if _, exists := seenModels[modelID]; exists {
+			writeError(w, http.StatusBadRequest, "invalid_request_error", "model IDs must be unique")
+			return
+		}
+		seenModels[modelID] = struct{}{}
+		input.Models[i] = modelID
+	}
 	if strings.TrimSpace(input.BaseURL) == "" {
 		input.BaseURL = adapter.DefaultBaseURL(kind)
 	}
@@ -2142,9 +2178,7 @@ func (h *Handler) setProviderPolicy(w http.ResponseWriter, r *http.Request) {
 		Priority int    `json:"priority"`
 		Weight   uint32 `json:"weight"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid provider policy JSON")
 		return
 	}
@@ -2311,7 +2345,7 @@ func (h *Handler) adminModels(w http.ResponseWriter, r *http.Request) {
 	for _, p := range h.registry.List() {
 		models, err := p.ListModels(r.Context())
 		if err != nil {
-			writeError(w, http.StatusBadGateway, "provider_error", err.Error())
+			writeError(w, http.StatusBadGateway, "provider_error", "provider model discovery failed")
 			return
 		}
 		items = append(items, models...)
@@ -2328,7 +2362,7 @@ func (h *Handler) setModelStatus(w http.ResponseWriter, r *http.Request) {
 		ProviderID string `json:"provider_id"`
 		Enabled    bool   `json:"enabled"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err != nil || strings.TrimSpace(input.ProviderID) == "" {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil || strings.TrimSpace(input.ProviderID) == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider_id and enabled are required")
 		return
 	}
@@ -2353,7 +2387,7 @@ func (h *Handler) setModelPricing(w http.ResponseWriter, r *http.Request) {
 		InputCostPerMillionUSD  *float64 `json:"input_cost_per_million_usd"`
 		OutputCostPerMillionUSD *float64 `json:"output_cost_per_million_usd"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err != nil ||
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil ||
 		strings.TrimSpace(input.ProviderID) == "" || input.InputCostPerMillionUSD == nil || input.OutputCostPerMillionUSD == nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider_id, input_cost_per_million_usd and output_cost_per_million_usd are required")
 		return
@@ -2432,9 +2466,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		Name   string   `json:"name"`
 		Scopes []string `json:"scopes"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil || strings.TrimSpace(input.Name) == "" {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil || strings.TrimSpace(input.Name) == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "valid name is required")
 		return
 	}
@@ -2466,7 +2498,7 @@ func (h *Handler) setAPIKeyStatus(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Enabled bool `json:"enabled"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid status JSON")
 		return
 	}
