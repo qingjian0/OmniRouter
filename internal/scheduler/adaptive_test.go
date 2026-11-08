@@ -337,3 +337,16 @@ func TestAdaptiveMetricCountersSaturateAtUint64Maximum(t *testing.T) {
 	}
 }
 
+
+
+func TestSaturatingFailureIncrementAtUint32Maximum(t *testing.T) {
+	if got := saturatingFailureIncrement(^uint32(0)); got != ^uint32(0) {
+		t.Fatalf("failure counter wrapped at uint32 maximum: got %d", got)
+	}
+	if got := saturatingFailureIncrement(^uint32(0) - 1); got != ^uint32(0) {
+		t.Fatalf("failure counter did not reach uint32 maximum: got %d", got)
+	}
+	if got := saturatingFailureIncrement(0); got != 1 {
+		t.Fatalf("first failure count = %d, want 1", got)
+	}
+}
