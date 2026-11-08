@@ -240,7 +240,9 @@ func TestGenerateGeminiDoesNotExposeUpstreamErrorBody(t *testing.T) {
 	}))
 	defer server.Close()
 	p, err := New(Config{ID: "gemini", BaseURL: server.URL})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = p.GenerateGemini(context.Background(), &provider.Request{
 		Model: "m", Input: []byte(`{"contents":[{"parts":[{"text":"hi"}]}]}`),
 	})
