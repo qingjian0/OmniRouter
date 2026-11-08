@@ -217,7 +217,9 @@ func TestGenerateResponsesDoesNotExposeUpstreamErrorBody(t *testing.T) {
 	}))
 	defer server.Close()
 	p, err := New(Config{ID: "responses", BaseURL: server.URL})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = p.GenerateResponses(context.Background(), &provider.Request{
 		Model: "m", Input: []byte(`{"model":"m","input":"hi"}`),
 	})
