@@ -90,7 +90,7 @@ func New(cfg Config) (provider.Provider, error) {
 		if strings.TrimSpace(cfg.BaseURL) != "" && strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/") != deepseekweb.DefaultOrigin {
 			return nil, fmt.Errorf("DeepSeek Web origin is fixed to %s", deepseekweb.DefaultOrigin)
 		}
-		return deepseekweb.NewRegistrationProvider(cfg.ID, cfg.Name), nil
+		return deepseekweb.NewRegistrationProvider(cfg.ID, cfg.Name, cfg.Models...), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider kind %q", kind)
 	}
