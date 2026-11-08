@@ -374,7 +374,7 @@ func TestRemovedProviderCannotPublishStaleHealthAndProbeLockIsRetired(t *testing
 		release: make(chan struct{}),
 	}
 	newProvider := adaptiveTestProvider{id: "shared-id"}
-	s.Replace("m", []Candidate{{Provider: replacement, Enabled: true, Weight: 1}})
+	s.Replace("m", []Candidate{{Provider: oldProvider, Enabled: true, Weight: 1}})
 
 	selection := make(chan error, 1)
 	go func() {
