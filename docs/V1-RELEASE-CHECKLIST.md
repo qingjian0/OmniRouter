@@ -97,16 +97,16 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
 
 ## Product scope gaps requiring explicit V1 sign-off
 
-The implementation currently has an OpenAI-compatible outbound Provider adapter.
-Anthropic Messages and Gemini are inbound protocol adapters translated to that
-upstream; direct native Anthropic/Gemini outbound API adapters are not yet
-implemented. Independent web-session adapters are also not implemented.
-Scheduling currently provides priority/weight selection, health scoring, and
-cooldown/failover foundations, not full task/cost/latency adaptive optimization.
+The core integration is now present on dev. PR #12 added native OpenAI
+Responses, Anthropic Messages, and Gemini outbound adapters; PR #15 added the
+adaptive scheduler and model pricing integration. Do not use the older
+historical snapshots above to describe the current dev implementation.
 
-Before tagging V1.0.0, either implement and accept these capabilities or
-explicitly approve moving them to V1.1. Do not infer that inbound protocol
-translation means native upstream API support.
+Remaining V1 acceptance gaps are live-provider and operational evidence:
+real-key protocol behavior, multi-provider routing under representative
+traffic, security review of admin operations, production backup/restore, and
+Termux/Android device acceptance. DeepSeek consumer-web remains a separate
+Draft workstream and is not a V1 inference capability.
 
 ## Publication
 
@@ -117,17 +117,35 @@ translation means native upstream API support.
 - [ ] Publish binaries, source archive, and `SHA256SUMS`.
 - [ ] Verify public/private release visibility and asset downloads.
 
-## Current integration ledger (2026-11-08)
+## Current integration ledger (authoritative, 2026-11-08)
 
-The following PRs are open Draft branches. Their CI results are branch-local and must not be counted as merged dev functionality.
+Current dev integration commit:
+`87f16c3e447d0dc29077eb75f8b63f101cac448e`.
 
-| PR | Scope | Current evidence | Remaining gate |
+Current-head CI run
+[42455660802](https://github.com/qingjian0/OmniRouter/actions/runs/42455660802)
+completed successfully: Vue build, gofmt, shell/YAML checks, SQLite
+backup/restore, Go unit/integration tests, race tests, vet, version build, and
+Linux amd64/arm64, macOS amd64/arm64, Windows amd64 cross-build/package jobs
+all passed.
+
+| PR | Scope | Current state | Treatment |
 |---|---|---|---|
-| [#12](https://github.com/qingjian0/OmniRouter/pull/12) | Native OpenAI Responses, Anthropic Messages, Gemini outbound adapters | Run [42451617210](https://github.com/qingjian0/OmniRouter/actions/runs/42451617210): all 7 jobs passed | Review/integrate into dev, rerun integrated CI, perform live-provider acceptance |
-| [#8](https://github.com/qingjian0/OmniRouter/pull/8) | Adaptive task/latency/reliability/price scheduler | Run [42452050774](https://github.com/qingjian0/OmniRouter/actions/runs/42452050774): all 7 jobs passed | Review/integrate into dev; validate with real multi-provider traffic |
-| [#11](https://github.com/qingjian0/OmniRouter/pull/11) | Disabled-provider candidate filtering | Related scheduler files/tests also appear in PR #8 | Compare overlap; avoid duplicate changes |
-| [#7](https://github.com/qingjian0/OmniRouter/pull/7) | Authorized DeepSeek web-session pairing and encrypted credential lifecycle | Run [42451245405](https://github.com/qingjian0/OmniRouter/actions/runs/42451245405): all 7 jobs passed | Real browser/account validation and sanitized fixtures; inference transport, SSE, and multi-turn lineage remain unimplemented |
+| [#11](https://github.com/qingjian0/OmniRouter/pull/11) | Disabled-provider candidate filtering | Merged to dev | Included |
+| [#12](https://github.com/qingjian0/OmniRouter/pull/12) | Native OpenAI Responses, Anthropic Messages, Gemini egress adapters | Merged to dev | Included |
+| [#15](https://github.com/qingjian0/OmniRouter/pull/15) | Adaptive routing, persistent model pricing, native provider integration | Merged to dev; CI run 42455660802 green | Included |
+| [#8](https://github.com/qingjian0/OmniRouter/pull/8) | Earlier adaptive scheduler implementation | Closed, superseded by #15 | Do not merge separately |
+| [#16](https://github.com/qingjian0/OmniRouter/pull/16) | Earlier combined integration candidate | Closed, superseded by #15 | Do not merge separately |
+| [#7](https://github.com/qingjian0/OmniRouter/pull/7) | DeepSeek Web authorization/session design | Open Draft | Not in dev; pairing/transport acceptance pending |
+| [#17](https://github.com/qingjian0/OmniRouter/pull/17) | DeepSeek Web session registration integration candidate | Open Draft; branch requires reconciliation with current dev | Do not merge; rebase/review/CI required |
 
-PR #9 and PR #10 are earlier independent native-adapter branches; PR #12 is the consolidated integration candidate. Do not merge all three independently without reviewing overlap.
+PR #7 and #17 must not be described as an inference-capable DeepSeek Web
+Provider. Browser authorization, credential storage, private protocol
+transport, SSE normalization, conversation lineage, and model publication are
+separate gates. A successful pairing test would prove only that the user-owned
+browser session was imported.
 
-The branch graph was checked on 2026-11-08: dev is 98 commits ahead of main. The listed feature branches have not been merged. Keep main unchanged until all release gates pass.
+The current dev branch is 102 commits ahead of main; main remains unchanged.
+Do not promote to main or publish v1.0.0 until all release gates above are
+closed and a final release candidate has its own green CI and acceptance
+record.
