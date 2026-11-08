@@ -43,6 +43,19 @@ func TestAddOrReplaceProviderModelsRemovesDisabledProvider(t *testing.T) {
 	}
 }
 
+func TestAddOrReplaceProviderModelsDoesNotInsertInitiallyDisabledProvider(t *testing.T) {
+	s := New(0)
+	p := &disabledCandidateTestProvider{id: "provider-test"}
+	models, err := p.ListModels(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.AddOrReplaceProviderModels(p, models, 100, 1, false)
+	if selected, err := s.SelectWithRequirements(context.Background(), "model-test", []string{"streaming"}); err == nil {
+		t.Fatalf("initially disabled provider was selectable: %v", selected.ID())
+	}
+}
+
 func TestAddOrReplaceProviderDoesNotInsertDisabledProvider(t *testing.T) {
 	s := New(0)
 	p := &disabledCandidateTestProvider{id: "provider-test"}
