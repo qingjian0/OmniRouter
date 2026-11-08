@@ -419,7 +419,7 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			started := time.Now()
-			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, func(candidate provider.Provider) (*provider.Response, error) {
+			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, profile, func(candidate provider.Provider) (*provider.Response, error) {
 				candidateAnthropic, ok := candidate.(provider.AnthropicProvider)
 				if !ok {
 					return nil, fmt.Errorf("provider %q declares Anthropic capability but does not implement AnthropicProvider", candidate.ID())
@@ -430,7 +430,7 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 			if callErr == nil && response == nil {
 				callErr = fmt.Errorf("provider %q returned an empty Anthropic Messages response", native.ID())
 			}
-			h.reportProviderOutcome(native, time.Since(started), callErr == nil)
+			h.reportProviderOutcome(selected, time.Since(started), callErr == nil)
 			if callErr != nil {
 				setRequestError(r, classifyRequestError(r, callErr, false))
 				writeError(w, http.StatusBadGateway, "upstream_error", "native Anthropic upstream request failed")
@@ -512,14 +512,16 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 		required = append(required, "streaming")
 	}
 	nativeRequirements := append(append([]string(nil), required...), "gemini_generate_content")
-	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements); nativeErr == nil {
+	profile := adaptiveProfileForRequest(r, body, nativeRequirements)
+	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements, profile); nativeErr == nil {
 		if nativeGemini, ok := native.(provider.GeminiProvider); ok {
 			setRequestRoute(r, native, model)
 			if stream {
 				h.streamNativeGemini(w, r, nativeGemini, native, model, body)
 				return
 			}
-			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, func(candidate provider.Provider) (*provider.Response, error) {
+			started := time.Now()
+			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, profile, func(candidate provider.Provider) (*provider.Response, error) {
 				candidateGemini, ok := candidate.(provider.GeminiProvider)
 				if !ok {
 					return nil, fmt.Errorf("provider %q declares Gemini capability but does not implement GeminiProvider", candidate.ID())
@@ -527,6 +529,7 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 				return candidateGemini.GenerateGemini(r.Context(), &provider.Request{Model: model, Input: body})
 			})
 			setRequestRoute(r, selected, model)
+			h.reportProviderOutcome(selected, time.Since(started), callErr == nil)
 			if callErr != nil {
 				setRequestError(r, classifyRequestError(r, callErr, false))
 				writeError(w, http.StatusBadGateway, "upstream_error", "native Gemini upstream request failed")
@@ -673,7 +676,7 @@ func mergeGeminiStreamUsage(r *http.Request, current *tokenusage.Usage, raw []by
 
 // generateNativeWithFallback retries a failed non-streaming native-protocol
 // request only on another provider that declares the same required capabilities.
-func (h *Handler) generateNativeWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, generate func(provider.Provider) (*provider.Response, error)) (*provider.Response, provider.Provider, error) {
+func (h *Handler) generateNativeWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, profile scheduler.AdaptiveProfile, generate func(provider.Provider) (*provider.Response, error)) (*provider.Response, provider.Provider, error) {
 	if initial == nil {
 		return nil, nil, fmt.Errorf("no native provider selected")
 	}
@@ -704,7 +707,7 @@ func (h *Handler) generateNativeWithFallback(ctx context.Context, initial provid
 			break
 		}
 		h.selector.ReportFailure(current.ID())
-		next, selectErr := h.selectProviderFor(ctx, model, required)
+		next, selectErr := h.selectProviderFor(ctx, model, required, profile)
 		if selectErr != nil {
 			break
 		}
