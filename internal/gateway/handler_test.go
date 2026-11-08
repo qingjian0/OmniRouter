@@ -42,13 +42,24 @@ func TestClassifyRequestError(t *testing.T) {
 }
 
 type usageTestProvider struct {
-	stream func(context.Context, *provider.Request, func(provider.Event) error) error
+	id           string
+	capabilities []string
+	stream       func(context.Context, *provider.Request, func(provider.Event) error) error
 }
 
-func (p *usageTestProvider) ID() string   { return "provider-test" }
+func (p *usageTestProvider) ID() string {
+	if p.id == "" {
+		return "provider-test"
+	}
+	return p.id
+}
 func (p *usageTestProvider) Name() string { return "test" }
 func (p *usageTestProvider) ListModels(context.Context) ([]provider.Model, error) {
-	return []provider.Model{{ID: "model-test", Provider: p.ID(), Capabilities: []string{"responses", "streaming"}}}, nil
+	capabilities := p.capabilities
+	if capabilities == nil {
+		capabilities = []string{"responses", "streaming"}
+	}
+	return []provider.Model{{ID: "model-test", Provider: p.ID(), Capabilities: capabilities}}, nil
 }
 func (p *usageTestProvider) Generate(context.Context, *provider.Request) (*provider.Response, error) {
 	return &provider.Response{Model: "model-test", Output: []byte(`{"id":"x","choices":[],"usage":{"prompt_tokens":7,"completion_tokens":5,"total_tokens":12}}`)}, nil
