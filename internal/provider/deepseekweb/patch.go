@@ -77,6 +77,21 @@ func (d *PatchDecoder) DecodeEvent(event string, raw []byte) (PatchUpdate, error
 		return PatchUpdate{Title: title.Content}, nil
 	case "close":
 		return PatchUpdate{Done: true}, nil
+	case "hint":
+		var hint struct {
+			Type         string `json:"type"`
+			FinishReason string `json:"finish_reason"`
+		}
+		if err := json.Unmarshal(raw, &hint); err != nil {
+			return PatchUpdate{}, ErrUnsupportedPatch
+		}
+		if hint.Type == "error" {
+			if hint.FinishReason == "rate_limit_reached" {
+				return PatchUpdate{}, ErrRateLimited
+			}
+			return PatchUpdate{}, ErrPolicyBlocked
+		}
+		return PatchUpdate{}, nil
 	case "update_session":
 		// Session metadata is not a completion patch or terminal signal.
 		// Validate the JSON envelope, then leave lineage changes to the
