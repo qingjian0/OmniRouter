@@ -70,6 +70,20 @@ The NIyueE raw reference reports the following observed shape. These are third-p
 ### Model availability
 The 2026-10 NIyueE reference reports default as enabled/switchable and expert / vision as disabled in its observed /api/v0/client/settings response. This conflicts with older examples that map deepseek-reasoner to expert. OmniRouter must query/verify actual available models or keep its advertised model list conservative; do not hard-code historical model aliases as current availability.
 
+## Additional 2026-11-08 risk-control finding (research only)
+
+A subsequently inspected development document for the GPL-3.0 `NIyueeE/ds-free-api` reference reports that its current completion path obtains a short-lived HIF-LEIM value from `hif-leim.deepseek.com/query` and sends both `x-hif-leim` and `x-ds-pow-response` on completion requests. The same source describes this as an upstream risk-control requirement and reports that omitting the HIF header causes the request to be rejected.
+
+This is third-party, source-level evidence, not an official DeepSeek contract and not a live OmniRouter test. It materially changes the feasibility assessment: a basic cookie/token POST may not be sufficient for current web completion.
+
+**OmniRouter policy remains unchanged:**
+- Do not implement or import proof-of-work solvers, risk-token acquisition intended to satisfy anti-abuse challenges, browser/device impersonation, challenge replay, CAPTCHA/WAF bypass, or rate-limit evasion.
+- Do not fabricate `x-hif-leim` or `x-ds-pow-response`, and do not copy values from public repositories or captured profiles.
+- The transport may send only ordinary requests supported by the user's explicit authorization and verified fixtures. If the upstream requires an anti-abuse challenge that cannot be completed through the normal official user flow, return a typed fail-closed policy/protocol error.
+- Do not advertise DeepSeek Web models or mark live inference as supported until an ordinary authorized request succeeds without bypassing these controls and a sanitized two-turn fixture confirms session continuity.
+
+Reference: [NIyueeE/ds-free-api development notes](https://git.xszz.org/NIyueeE/ds-free-api/blob/main/docs/development.md). GPL-3.0 source remains research-only; no code is copied.
+
 ## Cross-project comparison and implications
 
 | Concern | What the references show | OmniRouter decision |
