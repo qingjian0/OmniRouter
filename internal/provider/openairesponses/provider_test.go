@@ -208,3 +208,23 @@ func TestGenerateResponsesRejectsNonJSONContentType(t *testing.T) {
 		t.Fatalf("expected non-JSON content type error, got %v", err)
 	}
 }
+
+func TestGenerateResponsesDoesNotExposeUpstreamErrorBody(t *testing.T) {
+	const privateDetail = "upstream-private-prompt-or-secret"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(privateDetail))
+	}))
+	defer server.Close()
+	p, err := New(Config{ID: "responses", BaseURL: server.URL})
+	if err != nil { t.Fatal(err) }
+	_, err = p.GenerateResponses(context.Background(), &provider.Request{
+		Model: "m", Input: []byte(`{"model":"m","input":"hi"}`),
+	})
+	if err == nil || !strings.Contains(err.Error(), "HTTP 401") {
+		t.Fatalf("expected sanitized HTTP status error, got %v", err)
+	}
+	if strings.Contains(err.Error(), privateDetail) {
+		t.Fatal("upstream error body leaked through provider error")
+	}
+}
