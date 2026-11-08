@@ -210,6 +210,19 @@ func (s *AdaptiveScheduler) SelectAdaptive(ctx context.Context, modelID string, 
 	return tied[0].Provider, nil
 }
 
+// RemoveProvider removes the provider from routing and discards its learned
+// performance metrics. Disabling a provider does not call this method, so its
+// history remains available if the operator later re-enables it.
+func (s *AdaptiveScheduler) RemoveProvider(providerID string) {
+	if providerID == "" {
+		return
+	}
+	s.Scheduler.RemoveProvider(providerID)
+	s.metricsMu.Lock()
+	delete(s.metrics, providerID)
+	s.metricsMu.Unlock()
+}
+
 // ReportOutcome updates the reliability and latency model. Circuit-breaker
 // state remains owned by Scheduler.ReportFailure to avoid double-counting.
 func (s *AdaptiveScheduler) ReportOutcome(providerID string, latency time.Duration, success bool) {
