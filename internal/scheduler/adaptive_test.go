@@ -236,3 +236,26 @@ func TestAdaptiveSchedulerHandlesExtremePriorityRange(t *testing.T) {
 		t.Fatalf("selected %q, want highest-priority provider", got.ID())
 	}
 }
+
+func TestAddOrReplaceProviderModelsPreservesPricingAcrossDisableAndEnable(t *testing.T) {
+	s := NewAdaptive(time.Minute)
+	p := adaptiveTestProvider{id: "priced-provider"}
+	models := []provider.Model{{ID: "model-test", Provider: p.ID(), Capabilities: []string{"chat", "streaming"}}}
+	s.AddOrReplaceProviderModels(p, models, 100, 1, true)
+	if !s.SetModelPricing("model-test", p.ID(), 0.25, 0.75) {
+		t.Fatal("expected initial pricing update")
+	}
+	s.AddOrReplaceProviderModels(p, models, 100, 1, false)
+	if _, err := s.SelectWithRequirements(context.Background(), "model-test", []string{"chat"}); err == nil {
+		t.Fatal("disabled provider remained selectable")
+	}
+	s.AddOrReplaceProviderModels(p, models, 100, 1, true)
+	candidates := s.candidates["model-test"]
+	if len(candidates) != 1 {
+		t.Fatalf("candidate count = %d, want 1", len(candidates))
+	}
+	got := candidates[0]
+	if !got.PricingKnown || got.InputCostPerMillionUSD != 0.25 || got.OutputCostPerMillionUSD != 0.75 {
+		t.Fatalf("pricing was lost across disable/enable: %+v", got)
+	}
+}
