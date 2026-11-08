@@ -367,8 +367,8 @@ func TestRemovedProviderCannotPublishStaleHealthAndProbeLockIsRetired(t *testing
 	s := New(time.Minute)
 	oldProvider := &blockingHealthProvider{
 		adaptiveTestProvider: adaptiveTestProvider{id: "shared-id"},
-		started             : make(chan struct{}),
-		release             : make(chan struct{}),
+		started:              make(chan struct{}),
+		release:              make(chan struct{}),
 	}
 	newProvider := adaptiveTestProvider{id: "shared-id"}
 	s.Replace("m", []Candidate{{Provider: oldProvider, Enabled: true, Weight: 1}})
