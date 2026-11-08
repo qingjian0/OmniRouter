@@ -2,7 +2,7 @@ name: OmniRouter CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, integration/v1-final]
   pull_request:
     branches: [main, dev]
   workflow_dispatch:
