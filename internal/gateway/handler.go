@@ -190,7 +190,12 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 	setRequestRoute(r, upstream, request.Model)
 	input := &provider.Request{Model: request.Model, Input: body, Stream: request.Stream}
 	if !request.Stream {
+		started := time.Now()
 		result, callErr := responsesProvider.GenerateResponses(r.Context(), input)
+		if callErr == nil && result == nil {
+			callErr = fmt.Errorf("provider %q returned an empty Responses API response", upstream.ID())
+		}
+		h.reportProviderOutcome(upstream, time.Since(started), callErr == nil)
 		if callErr != nil {
 			setRequestError(r, classifyRequestError(r, callErr, false))
 			if h.selector != nil {
