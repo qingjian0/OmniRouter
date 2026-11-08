@@ -40,6 +40,8 @@ func DefaultBaseURL(kind string) string {
 	switch NormalizeKind(kind) {
 	case KindDeepSeek:
 		return deepseek.DefaultBaseURL
+	case KindOpenAIResponses:
+		return openairesponses.DefaultBaseURL
 	default:
 		return ""
 	}
