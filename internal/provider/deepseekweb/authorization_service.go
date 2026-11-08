@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -23,6 +24,44 @@ type AuthorizationService struct {
 	accounts *account.Repository
 	sessions *session.Repository
 	vault    *credential.Vault
+	locks    accountOperationLocks
+}
+
+type accountOperationLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+// accountOperationLocks serializes restore and revoke operations per account
+// without retaining an unbounded mutex entry for every historical account.
+type accountOperationLocks struct {
+	mu      sync.Mutex
+	entries map[string]*accountOperationLock
+}
+
+func (l *accountOperationLocks) lock(accountID string) func() {
+	l.mu.Lock()
+	if l.entries == nil {
+		l.entries = make(map[string]*accountOperationLock)
+	}
+	entry := l.entries[accountID]
+	if entry == nil {
+		entry = &accountOperationLock{}
+		l.entries[accountID] = entry
+	}
+	entry.refs++
+	l.mu.Unlock()
+
+	entry.mu.Lock()
+	return func() {
+		entry.mu.Unlock()
+		l.mu.Lock()
+		entry.refs--
+		if entry.refs == 0 {
+			delete(l.entries, accountID)
+		}
+		l.mu.Unlock()
+	}
 }
 
 type AuthorizationRecord struct {
@@ -117,6 +156,9 @@ func (s *AuthorizationService) Authorize(ctx context.Context, providerID, accoun
 // Revoke disables the account and irreversibly revokes all credentials and
 // sessions owned by it. Re-authentication must create a fresh account.
 func (s *AuthorizationService) Revoke(ctx context.Context, accountID string) error {
+	unlock := s.locks.lock(accountID)
+	defer unlock()
+
 	// Disable the account before touching individual credentials or sessions.
 	// If any later storage operation fails, LoadAuthorization remains fail-closed.
 	if err := s.accounts.SetStatus(ctx, accountID, account.StatusDisabled); err != nil {
@@ -155,6 +197,9 @@ func (s *AuthorizationService) Revoke(ctx context.Context, accountID string) err
 // requires exactly one active access token and one active cookie credential
 // for the account; incomplete or ambiguous pairs fail closed.
 func (s *AuthorizationService) LoadAuthorization(ctx context.Context, accountID string) (AuthorizationMaterial, error) {
+	unlock := s.locks.lock(accountID)
+	defer unlock()
+
 	owner, err := s.accounts.Get(ctx, accountID)
 	if err != nil || owner.Status != account.StatusActive {
 		return AuthorizationMaterial{}, ErrAuthorizationRequired
