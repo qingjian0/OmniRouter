@@ -548,7 +548,7 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
 	}
-	profile := adaptiveProfileForRequest(r, body, required)
+	profile = adaptiveProfileForRequest(r, body, required)
 	p, err := h.selectProviderFor(r.Context(), model, required, profile)
 	if err != nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = model })
