@@ -145,9 +145,6 @@ func (t *HTTPCompletionTransport) Stream(
 	result := CompletionResult{UpstreamConversationID: sessionID}
 	terminal := false
 	err = ParseSSE(response.Body, 1<<20, func(frame SSEFrame) error {
-		if terminal {
-			return fmt.Errorf("%w: data received after terminal event", ErrUpstreamChanged)
-		}
 		update, decodeErr := decoder.DecodeFrame(frame)
 		if decodeErr != nil {
 			return decodeErr
@@ -156,8 +153,10 @@ func (t *HTTPCompletionTransport) Stream(
 			result.ResponseMessageID = update.ResponseMessageID
 		}
 		if update.Done {
+			// DeepSeek may emit search_results after FINISHED. Delay the
+			// normalized terminal signal until the complete SSE body drains.
 			terminal = true
-			result.Completed = true
+			return nil
 		}
 		return emit(update)
 	})
@@ -167,6 +166,10 @@ func (t *HTTPCompletionTransport) Stream(
 	if !terminal || result.ResponseMessageID == "" {
 		return CompletionResult{}, ErrIncompleteCompletion
 	}
+	if err := emit(PatchUpdate{Done: true}); err != nil {
+		return CompletionResult{}, err
+	}
+	result.Completed = true
 	return result, nil
 }
 
