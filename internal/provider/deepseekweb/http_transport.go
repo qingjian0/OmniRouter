@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	usersCurrentPath = "/api/v0/users/current"
-	createSessionPath = "/api/v0/chat_session/create"
-	completionPath = "/api/v0/chat/completion"
+	usersCurrentPath     = "/api/v0/users/current"
+	createSessionPath    = "/api/v0/chat_session/create"
+	completionPath       = "/api/v0/chat/completion"
 	maxJSONResponseBytes = 1 << 20
 )
 
@@ -39,8 +39,8 @@ func NewHTTPCompletionTransport() (*HTTPCompletionTransport, error) {
 }
 
 type usersCurrentResponse struct {
-	Code int `json:"code"`
-	Msg string `json:"msg"`
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
 	Data struct {
 		BizData struct {
 			Token string `json:"token"`
@@ -103,23 +103,23 @@ func (t *HTTPCompletionTransport) Stream(
 	}
 
 	payload := struct {
-		ChatSessionID string   `json:"chat_session_id"`
-		ParentMessageID *string `json:"parent_message_id"`
-		ModelType string         `json:"model_type"`
-		Prompt string            `json:"prompt"`
-		RefFileIDs []string      `json:"ref_file_ids"`
+		ChatSessionID   string   `json:"chat_session_id"`
+		ParentMessageID *string  `json:"parent_message_id"`
+		ModelType       string   `json:"model_type"`
+		Prompt          string   `json:"prompt"`
+		RefFileIDs      []string `json:"ref_file_ids"`
 		ThinkingEnabled bool     `json:"thinking_enabled"`
-		SearchEnabled bool       `json:"search_enabled"`
-		Preempt bool             `json:"preempt"`
+		SearchEnabled   bool     `json:"search_enabled"`
+		Preempt         bool     `json:"preempt"`
 	}{
-		ChatSessionID: sessionID,
+		ChatSessionID:   sessionID,
 		ParentMessageID: optionalString(lineage.ParentMessageID),
-		ModelType: input.ModelType,
-		Prompt: input.Prompt,
-		RefFileIDs: input.RefFileIDs,
+		ModelType:       input.ModelType,
+		Prompt:          input.Prompt,
+		RefFileIDs:      input.RefFileIDs,
 		ThinkingEnabled: input.ThinkingEnabled,
-		SearchEnabled: input.SearchEnabled,
-		Preempt: false,
+		SearchEnabled:   input.SearchEnabled,
+		Preempt:         false,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
