@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
 )
 
 func TestConversationCoordinatorLoadsAndCommitsLineageUnderLease(t *testing.T) {
