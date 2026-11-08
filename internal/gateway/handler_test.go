@@ -584,4 +584,11 @@ func TestRequiredCapabilitiesDetectsResponsesTextFormat(t *testing.T) {
 			t.Fatalf("plain text format must not require JSON capability: %v", plain)
 		}
 	}
+	imageBlock := requiredCapabilities([]byte(`{"model":"gpt-test","input":[{"content":[{"type":"input_image"}]}]}`))
+	for _, capability := range imageBlock {
+		if capability == "vision" {
+			return
+		}
+	}
+	t.Fatalf("Responses input_image block must require vision capability: %v", imageBlock)
 }
