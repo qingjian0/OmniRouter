@@ -130,6 +130,11 @@ jobs:
           else
             tar -C dist -czf "dist/${name}.tar.gz" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md DEEPSEEK-ADAPTER.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/deepseek-smoke.sh scripts/termux-smoke.sh browser-extension/README.md browser-extension/manifest.json browser-extension/popup.html browser-extension/popup.js browser-extension/popup.css
           fi
+          if [ "${GOOS}" = "windows" ]; then
+            unzip -l "dist/${name}.zip" | grep -F "browser-extension/manifest.json"
+          else
+            tar -tzf "dist/${name}.tar.gz" | grep -Fx "browser-extension/manifest.json"
+          fi
 
       - name: Upload release asset
         uses: actions/upload-artifact@v4
