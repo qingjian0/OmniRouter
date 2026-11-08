@@ -47,16 +47,20 @@ func (r *LineageRepository) Save(ctx context.Context, item Lineage) (Lineage, er
 	if item.ProviderID == "" || item.AccountID == "" || item.LocalConversationID == "" || item.UpstreamConversationID == "" {
 		return Lineage{}, fmt.Errorf("provider, account, local conversation, and upstream conversation IDs are required")
 	}
-	for label, value := range map[string]string{
-		"provider_id":             item.ProviderID,
-		"account_id":              item.AccountID,
-		"local_conversation_id":    item.LocalConversationID,
-		"upstream_conversation_id": item.UpstreamConversationID,
-		"parent_message_id":        item.ParentMessageID,
-	} {
-		if len(value) > maxLineageIDBytes {
-			return Lineage{}, fmt.Errorf("%s exceeds %d bytes", label, maxLineageIDBytes)
-		}
+	if len(item.ProviderID) > maxLineageIDBytes {
+		return Lineage{}, fmt.Errorf("provider_id exceeds %d bytes", maxLineageIDBytes)
+	}
+	if len(item.AccountID) > maxLineageIDBytes {
+		return Lineage{}, fmt.Errorf("account_id exceeds %d bytes", maxLineageIDBytes)
+	}
+	if len(item.LocalConversationID) > maxLineageIDBytes {
+		return Lineage{}, fmt.Errorf("local_conversation_id exceeds %d bytes", maxLineageIDBytes)
+	}
+	if len(item.UpstreamConversationID) > maxLineageIDBytes {
+		return Lineage{}, fmt.Errorf("upstream_conversation_id exceeds %d bytes", maxLineageIDBytes)
+	}
+	if len(item.ParentMessageID) > maxLineageIDBytes {
+		return Lineage{}, fmt.Errorf("parent_message_id exceeds %d bytes", maxLineageIDBytes)
 	}
 	now := time.Now().UTC()
 	if item.CreatedAt.IsZero() {
