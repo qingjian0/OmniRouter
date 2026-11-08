@@ -117,6 +117,12 @@ func (s *AuthorizationService) Authorize(ctx context.Context, providerID, accoun
 // Revoke disables the account and irreversibly revokes all credentials and
 // sessions owned by it. Re-authentication must create a fresh account.
 func (s *AuthorizationService) Revoke(ctx context.Context, accountID string) error {
+	// Disable the account before touching individual credentials or sessions.
+	// If any later storage operation fails, LoadAuthorization remains fail-closed.
+	if err := s.accounts.SetStatus(ctx, accountID, account.StatusDisabled); err != nil {
+		return err
+	}
+
 	items, err := s.vault.ListContext(ctx, accountID)
 	if err != nil {
 		return err
@@ -142,7 +148,7 @@ func (s *AuthorizationService) Revoke(ctx context.Context, accountID string) err
 			}
 		}
 	}
-	return s.accounts.SetStatus(ctx, accountID, account.StatusDisabled)
+	return nil
 }
 
 // LoadAuthorization restores the encrypted pair after process restart. It
