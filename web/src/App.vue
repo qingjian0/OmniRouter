@@ -244,6 +244,25 @@ function setModelEnabled(m: Row, enabled: boolean) {
     enabled
   }, "模型状态已更新");
 }
+
+function saveModelPricing(m: Row) {
+  if (m.input_cost_per_million_usd === undefined || m.input_cost_per_million_usd === null || m.input_cost_per_million_usd === "" ||
+      m.output_cost_per_million_usd === undefined || m.output_cost_per_million_usd === null || m.output_cost_per_million_usd === "") {
+    error.value = "请输入输入和输出价格；填写 0 表示该项免费，未填写代表未知价格";
+    return;
+  }
+  const input = Number(m.input_cost_per_million_usd);
+  const output = Number(m.output_cost_per_million_usd);
+  if (!Number.isFinite(input) || input < 0 || !Number.isFinite(output) || output < 0) {
+    error.value = "模型价格必须是有限的非负数字（USD / 1M tokens）";
+    return;
+  }
+  return mutate(`/admin/models/${encodeURIComponent(m.id)}/pricing`, "PATCH", {
+    provider_id: m.provider_id,
+    input_cost_per_million_usd: input,
+    output_cost_per_million_usd: output
+  }, "模型价格与调度策略已更新");
+}
 function removeModel(m: Row) {
   if (window.confirm(`确定删除模型 ${m.id} 在 Provider ${m.provider_id} 下的路由？`)) {
     return mutate(`/admin/models/${encodeURIComponent(m.id)}?provider_id=${encodeURIComponent(m.provider_id)}`, "DELETE", undefined, "模型路由已删除");
@@ -355,9 +374,10 @@ onMounted(refresh);
 
         <section v-else-if="activeTab === 'models'" class="stack">
           <article class="panel"><div class="panel-title"><h2>模型路由</h2><span class="muted">{{ models.length }} 项</span></div>
-            <div class="table-wrap"><table><thead><tr><th>模型</th><th>Provider</th><th>能力</th><th>上下文</th><th>启用</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="m in models" :key="m.provider_id + ':' + m.id"><td><b>{{ m.display_name || m.id }}</b><small>{{ m.id }}</small></td><td>{{ m.provider_id }}</td><td>{{ (m.capabilities || []).join(", ") || "—" }}</td><td>{{ m.context_limit || "—" }}</td><td>{{ m.enabled ? "是" : "否" }}</td><td class="actions"><button class="secondary" @click="setModelEnabled(m, !m.enabled)">{{ m.enabled ? "停用" : "启用" }}</button><button class="danger" @click="removeModel(m)">删除路由</button></td></tr><tr v-if="!models.length"><td colspan="6" class="empty">暂无模型</td></tr></tbody>
+            <div class="table-wrap"><table><thead><tr><th>模型</th><th>Provider</th><th>能力</th><th>上下文</th><th>输入价格 USD/1M</th><th>输出价格 USD/1M</th><th>启用</th><th>操作</th></tr></thead>
+              <tbody><tr v-for="m in models" :key="m.provider_id + ':' + m.id"><td><b>{{ m.display_name || m.id }}</b><small>{{ m.id }}</small></td><td>{{ m.provider_id }}</td><td>{{ (m.capabilities || []).join(", ") || "—" }}</td><td>{{ m.context_limit || "—" }}</td><td><input v-model.number="m.input_cost_per_million_usd" class="small-input" type="number" min="0" step="any" placeholder="未知" /></td><td><input v-model.number="m.output_cost_per_million_usd" class="small-input" type="number" min="0" step="any" placeholder="未知" /></td><td>{{ m.enabled ? "是" : "否" }}</td><td class="actions"><button class="secondary" @click="saveModelPricing(m)">保存价格</button><button class="secondary" @click="setModelEnabled(m, !m.enabled)">{{ m.enabled ? "停用" : "启用" }}</button><button class="danger" @click="removeModel(m)">删除路由</button></td></tr><tr v-if="!models.length"><td colspan="8" class="empty">暂无模型</td></tr></tbody>
             </table></div>
+            <p class="hint">价格单位为 USD / 1M tokens。空值代表未知价格；输入 0 代表该项免费。修改后即时影响调度，不作为实际账单。</p>
           </article>
         </section>
 

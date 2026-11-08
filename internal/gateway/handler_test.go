@@ -13,6 +13,7 @@ import (
 
 	"omnirouter/internal/observability"
 	"omnirouter/internal/provider"
+	"omnirouter/internal/scheduler"
 )
 
 func TestClassifyRequestError(t *testing.T) {
@@ -353,6 +354,45 @@ func TestGatewayStreamsNativeAnthropicEvents(t *testing.T) {
 	}
 }
 
+func TestAdaptiveProfileForRequestUsesRoutingHeadersAndTokenEstimates(t *testing.T) {
+	body := []byte(`{"model":"model-a","max_tokens":256,"messages":[{"role":"user","content":"hello"}]}`)
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(string(body)))
+	request.Header.Set("X-OmniRouter-Objective", "economy")
+	request.Header.Set("X-OmniRouter-Input-Tokens", "1200")
+	request.Header.Set("X-OmniRouter-Output-Tokens", "300")
+
+	got := adaptiveProfileForRequest(request, body, []string{"streaming", "tools"})
+	if got.TaskType != "economy" || got.EstimatedInputTokens != 1200 || got.EstimatedOutputTokens != 300 {
+		t.Fatalf("unexpected adaptive profile: %+v", got)
+	}
+}
+
+func TestAdaptiveProfileForRequestInfersObjectiveAndOutputLimit(t *testing.T) {
+	body := []byte(`{"model":"model-a","max_completion_tokens":768,"messages":[{"role":"user","content":"hello"}]}`)
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(string(body)))
+	request.Header.Set("X-OmniRouter-Objective", "not-a-supported-objective")
+
+	got := adaptiveProfileForRequest(request, body, []string{"streaming", "reasoning"})
+	if got.TaskType != "reasoning" {
+		t.Fatalf("objective = %q, want reasoning", got.TaskType)
+	}
+	if got.EstimatedInputTokens != int64((len(body)+3)/4) || got.EstimatedOutputTokens != 768 {
+		t.Fatalf("unexpected inferred token estimates: %+v", got)
+	}
+}
+
+func TestAdaptiveProfileForRequestBoundsExplicitTokenEstimates(t *testing.T) {
+	body := []byte(`{"model":"model-a"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(string(body)))
+	request.Header.Set("X-OmniRouter-Input-Tokens", "999999999")
+	request.Header.Set("X-OmniRouter-Output-Tokens", "-10")
+
+	got := adaptiveProfileForRequest(request, body, nil)
+	if got.EstimatedInputTokens != int64((len(body)+3)/4) || got.EstimatedOutputTokens != 512 {
+		t.Fatalf("out-of-range estimates were not safely defaulted: %+v", got)
+	}
+}
+
 type legacySelectorTest struct {
 	upstream provider.Provider
 }
@@ -369,7 +409,7 @@ func TestSelectProviderForFailsClosedWithoutCapabilityAwareSelector(t *testing.T
 		t.Fatal(err)
 	}
 	h := &Handler{registry: registry, selector: legacySelectorTest{upstream: p}}
-	if _, err := h.selectProviderFor(context.Background(), "model-test", []string{"responses"}); err == nil {
+	if _, err := h.selectProviderFor(context.Background(), "model-test", []string{"responses"}, scheduler.AdaptiveProfile{}); err == nil {
 		t.Fatal("expected capability filtering error")
 	}
 }
@@ -377,7 +417,7 @@ func TestSelectProviderForFailsClosedWithoutCapabilityAwareSelector(t *testing.T
 func TestSelectProviderForAllowsLegacySelectorWithoutRequirements(t *testing.T) {
 	p := &usageTestProvider{}
 	h := &Handler{registry: provider.NewRegistry(), selector: legacySelectorTest{upstream: p}}
-	got, err := h.selectProviderFor(context.Background(), "model-test", nil)
+	got, err := h.selectProviderFor(context.Background(), "model-test", nil, scheduler.AdaptiveProfile{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -555,7 +595,7 @@ func TestNativeGeminiNonStreamingRetriesAnotherCapabilityCompatibleProvider(t *t
 	}
 	selector := &nativeFallbackSelectorTest{providers: []provider.Provider{first, second}}
 	h := &Handler{registry: registry, selector: selector}
-	response, selected, err := h.generateNativeWithFallback(context.Background(), first, "model-test", []string{"gemini_generate_content"}, func(candidate provider.Provider) (*provider.Response, error) {
+	response, selected, err := h.generateNativeWithFallback(context.Background(), first, "model-test", []string{"gemini_generate_content"}, scheduler.AdaptiveProfile{}, func(candidate provider.Provider) (*provider.Response, error) {
 		geminiProvider, ok := candidate.(provider.GeminiProvider)
 		if !ok {
 			return nil, fmt.Errorf("not a Gemini provider")

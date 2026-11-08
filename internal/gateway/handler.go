@@ -27,6 +27,7 @@ import (
 	"omnirouter/internal/protocol/anthropic"
 	"omnirouter/internal/protocol/gemini"
 	"omnirouter/internal/provider"
+	"omnirouter/internal/scheduler"
 	"omnirouter/internal/session"
 	"omnirouter/internal/storage"
 	"omnirouter/internal/tokenusage"
@@ -104,6 +105,7 @@ func NewHandlerWithFullRepositories(registry *provider.Registry, apiKey string, 
 	h.mux.Handle("DELETE /admin/sessions/{id}", h.protect(http.HandlerFunc(h.deleteSession)))
 	h.mux.Handle("GET /admin/models", h.protect(http.HandlerFunc(h.adminModels)))
 	h.mux.Handle("PATCH /admin/models/{id}/status", h.protect(http.HandlerFunc(h.setModelStatus)))
+	h.mux.Handle("PATCH /admin/models/{id}/pricing", h.protect(http.HandlerFunc(h.setModelPricing)))
 	h.mux.Handle("DELETE /admin/models/{id}", h.protect(http.HandlerFunc(h.deleteModel)))
 	h.mux.Handle("GET /admin/api-keys", h.protect(http.HandlerFunc(h.adminAPIKeys)))
 	h.mux.Handle("POST /admin/api-keys", h.protect(http.HandlerFunc(h.createAPIKey)))
@@ -166,7 +168,8 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 	var upstream provider.Provider
 	if h.selector != nil {
 		requirements := append(requiredCapabilities(body), "responses")
-		upstream, err = h.selectProviderFor(r.Context(), request.Model, requirements)
+		profile := adaptiveProfileForRequest(r, body, requirements)
+		upstream, err = h.selectProviderFor(r.Context(), request.Model, requirements, profile)
 	} else {
 		requirements := append(requiredCapabilities(body), "responses")
 		upstream, err = h.resolveResponsesProvider(r.Context(), request.Model, requirements)
@@ -185,7 +188,12 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 	setRequestRoute(r, upstream, request.Model)
 	input := &provider.Request{Model: request.Model, Input: body, Stream: request.Stream}
 	if !request.Stream {
+		started := time.Now()
 		result, callErr := responsesProvider.GenerateResponses(r.Context(), input)
+		if callErr == nil && result == nil {
+			callErr = fmt.Errorf("provider %q returned an empty Responses API response", upstream.ID())
+		}
+		h.reportProviderOutcome(upstream, time.Since(started), callErr == nil)
 		if callErr != nil {
 			setRequestError(r, classifyRequestError(r, callErr, false))
 			if h.selector != nil {
@@ -213,6 +221,7 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 	beginStreamRequest(r)
 	var usage *tokenusage.Usage
 	terminal := false
+	streamStarted := time.Now()
 	streamErr := responsesProvider.StreamResponses(r.Context(), input, func(event provider.Event) error {
 		if len(event.Data) > 0 {
 			usage = mergeResponsesStreamUsage(r, usage, event.Data, event.Done && event.ExplicitDone)
@@ -230,6 +239,7 @@ func (h *Handler) responses(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	})
+	h.reportProviderOutcome(upstream, time.Since(streamStarted), streamErr == nil && terminal)
 	if streamErr != nil {
 		storeRequestUsage(r, usage)
 		setRequestError(r, classifyRequestError(r, streamErr, true))
@@ -293,7 +303,9 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "valid JSON with a model is required")
 		return
 	}
-	p, err := h.selectProviderFor(r.Context(), request.Model, requiredCapabilities(body))
+	required := requiredCapabilities(body)
+	profile := adaptiveProfileForRequest(r, body, required)
+	p, err := h.selectProviderFor(r.Context(), request.Model, required, profile)
 	if err != nil || p == nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = request.Model })
 		setRequestError(r, "provider_unavailable")
@@ -314,6 +326,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 		beginStreamRequest(r)
 		var usage *tokenusage.Usage
 		terminal := false
+		streamStarted := time.Now()
 		err := p.Stream(r.Context(), &provider.Request{Model: request.Model, Input: body, Stream: true}, func(event provider.Event) error {
 			chunk := "data: [DONE]\n\n"
 			if !event.Done {
@@ -337,6 +350,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 			return nil
 		})
+		h.reportProviderOutcome(p, time.Since(streamStarted), err == nil && terminal)
 		if err != nil {
 			storeRequestUsage(r, usage)
 			setRequestError(r, classifyRequestError(r, err, true))
@@ -351,7 +365,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	response, p, err := h.generateWithFallback(r.Context(), p, request.Model, requiredCapabilities(body), body)
+	response, p, err := h.generateWithFallback(r.Context(), p, request.Model, requiredCapabilities(body), adaptiveProfileForRequest(r, body, requiredCapabilities(body)), body)
 	if err != nil {
 		setRequestRoute(r, p, request.Model)
 		setRequestError(r, classifyRequestError(r, err, false))
@@ -387,14 +401,15 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 	if stream {
 		nativeRequirements = append(nativeRequirements, "streaming")
 	}
-	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements); nativeErr == nil {
+	profile := adaptiveProfileForRequest(r, body, nativeRequirements)
+	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements, profile); nativeErr == nil {
 		if nativeAnthropic, ok := native.(provider.AnthropicProvider); ok {
 			setRequestRoute(r, native, model)
 			if stream {
 				h.streamNativeAnthropic(w, r, nativeAnthropic, native, model, body)
 				return
 			}
-			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, func(candidate provider.Provider) (*provider.Response, error) {
+			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, profile, func(candidate provider.Provider) (*provider.Response, error) {
 				candidateAnthropic, ok := candidate.(provider.AnthropicProvider)
 				if !ok {
 					return nil, fmt.Errorf("provider %q declares Anthropic capability but does not implement AnthropicProvider", candidate.ID())
@@ -420,7 +435,9 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
 	}
-	p, err := h.selectProviderFor(r.Context(), model, requiredCapabilities(body))
+	required := requiredCapabilities(body)
+	profile = adaptiveProfileForRequest(r, body, required)
+	p, err := h.selectProviderFor(r.Context(), model, required, profile)
 	if err != nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = model })
 		setRequestError(r, "provider_unavailable")
@@ -432,7 +449,7 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 		h.streamAnthropic(w, r, p, model, openAIRequest)
 		return
 	}
-	response, p, err := h.generateWithFallback(r.Context(), p, model, requiredCapabilities(body), openAIRequest)
+	response, p, err := h.generateWithFallback(r.Context(), p, model, requiredCapabilities(body), profile, openAIRequest)
 	if err != nil {
 		setRequestRoute(r, p, model)
 		setRequestError(r, classifyRequestError(r, err, false))
@@ -481,14 +498,15 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 		required = append(required, "streaming")
 	}
 	nativeRequirements := append(append([]string(nil), required...), "gemini_generate_content")
-	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements); nativeErr == nil {
+	profile := adaptiveProfileForRequest(r, body, nativeRequirements)
+	if native, nativeErr := h.selectProviderFor(r.Context(), model, nativeRequirements, profile); nativeErr == nil {
 		if nativeGemini, ok := native.(provider.GeminiProvider); ok {
 			setRequestRoute(r, native, model)
 			if stream {
 				h.streamNativeGemini(w, r, nativeGemini, native, model, body)
 				return
 			}
-			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, func(candidate provider.Provider) (*provider.Response, error) {
+			response, selected, callErr := h.generateNativeWithFallback(r.Context(), native, model, nativeRequirements, profile, func(candidate provider.Provider) (*provider.Response, error) {
 				candidateGemini, ok := candidate.(provider.GeminiProvider)
 				if !ok {
 					return nil, fmt.Errorf("provider %q declares Gemini capability but does not implement GeminiProvider", candidate.ID())
@@ -514,7 +532,7 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
 	}
-	p, err := h.selectProviderFor(r.Context(), model, required)
+	p, err := h.selectProviderFor(r.Context(), model, required, profile)
 	if err != nil {
 		observability.SetRequestDetails(r, func(d *observability.RequestDetails) { d.ModelID = model })
 		setRequestError(r, "provider_unavailable")
@@ -526,7 +544,7 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 		h.streamGemini(w, r, p, model, payload)
 		return
 	}
-	response, p, err := h.generateWithFallback(r.Context(), p, model, required, payload)
+	response, p, err := h.generateWithFallback(r.Context(), p, model, required, profile, payload)
 	if err != nil {
 		setRequestRoute(r, p, model)
 		setRequestError(r, classifyRequestError(r, err, false))
@@ -546,10 +564,23 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 	_, _ = w.Write(output)
 }
 
+// reportProviderOutcome feeds observed request latency and success into schedulers
+// that implement optional adaptive outcome reporting.
+func (h *Handler) reportProviderOutcome(p provider.Provider, latency time.Duration, success bool) {
+	if p == nil || h.selector == nil {
+		return
+	}
+	if reporter, ok := h.selector.(interface {
+		ReportOutcome(string, time.Duration, bool)
+	}); ok {
+		reporter.ReportOutcome(p.ID(), latency, success)
+	}
+}
+
 // generateWithFallback retries a failed non-streaming request on another
 // healthy provider for the same model. It never retries a provider twice in
 // one request and preserves the original capability requirements.
-func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, payload []byte) (*provider.Response, provider.Provider, error) {
+func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, profile scheduler.AdaptiveProfile, payload []byte) (*provider.Response, provider.Provider, error) {
 	if initial == nil {
 		return nil, nil, fmt.Errorf("no provider selected")
 	}
@@ -565,19 +596,22 @@ func (h *Handler) generateWithFallback(ctx context.Context, initial provider.Pro
 			break
 		}
 		attempted[current.ID()] = struct{}{}
+		started := time.Now()
 		response, err := current.Generate(ctx, &provider.Request{Model: model, Input: payload})
 		if err == nil && response == nil {
 			err = fmt.Errorf("provider %q returned an empty response", current.ID())
 		}
 		if err == nil {
+			h.reportProviderOutcome(current, time.Since(started), true)
 			return response, current, nil
 		}
+		h.reportProviderOutcome(current, time.Since(started), false)
 		lastErr = err
 		if h.selector == nil || ctx.Err() != nil {
 			break
 		}
 		h.selector.ReportFailure(current.ID())
-		next, selectErr := h.selectProviderFor(ctx, model, required)
+		next, selectErr := h.selectProviderFor(ctx, model, required, profile)
 		if selectErr != nil {
 			break
 		}
@@ -625,7 +659,7 @@ func mergeGeminiStreamUsage(r *http.Request, current *tokenusage.Usage, raw []by
 
 // generateNativeWithFallback retries a failed non-streaming native-protocol
 // request only on another provider that declares the same required capabilities.
-func (h *Handler) generateNativeWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, generate func(provider.Provider) (*provider.Response, error)) (*provider.Response, provider.Provider, error) {
+func (h *Handler) generateNativeWithFallback(ctx context.Context, initial provider.Provider, model string, required []string, profile scheduler.AdaptiveProfile, generate func(provider.Provider) (*provider.Response, error)) (*provider.Response, provider.Provider, error) {
 	if initial == nil {
 		return nil, nil, fmt.Errorf("no native provider selected")
 	}
@@ -656,7 +690,7 @@ func (h *Handler) generateNativeWithFallback(ctx context.Context, initial provid
 			break
 		}
 		h.selector.ReportFailure(current.ID())
-		next, selectErr := h.selectProviderFor(ctx, model, required)
+		next, selectErr := h.selectProviderFor(ctx, model, required, profile)
 		if selectErr != nil {
 			break
 		}
@@ -681,6 +715,7 @@ func (h *Handler) streamNativeGemini(w http.ResponseWriter, r *http.Request, nat
 	beginStreamRequest(r)
 	var usage *tokenusage.Usage
 	terminal := false
+	streamStarted := time.Now()
 	err := native.StreamGemini(r.Context(), &provider.Request{Model: model, Input: body, Stream: true}, func(event provider.Event) error {
 		if len(event.Data) > 0 {
 			usage = mergeGeminiStreamUsage(r, usage, event.Data, false)
@@ -698,6 +733,7 @@ func (h *Handler) streamNativeGemini(w http.ResponseWriter, r *http.Request, nat
 		}
 		return nil
 	})
+	h.reportProviderOutcome(upstream, time.Since(streamStarted), err == nil && terminal)
 	if err != nil {
 		storeRequestUsage(r, usage)
 		setRequestError(r, classifyRequestError(r, err, true))
@@ -779,6 +815,7 @@ func (h *Handler) streamAnthropic(w http.ResponseWriter, r *http.Request, p prov
 	beginStreamRequest(r)
 	var usage *tokenusage.Usage
 	terminal := false
+	streamStarted := time.Now()
 	err := p.Stream(r.Context(), &provider.Request{Model: model, Input: payload, Stream: true}, func(event provider.Event) error {
 		if event.Done {
 			terminal = event.ExplicitDone
@@ -814,6 +851,7 @@ func (h *Handler) streamAnthropic(w http.ResponseWriter, r *http.Request, p prov
 		flusher.Flush()
 		return nil
 	})
+	h.reportProviderOutcome(p, time.Since(streamStarted), err == nil && terminal)
 	if err != nil {
 		storeRequestUsage(r, usage)
 		setRequestError(r, classifyRequestError(r, err, true))
@@ -842,6 +880,7 @@ func (h *Handler) streamGemini(w http.ResponseWriter, r *http.Request, p provide
 	beginStreamRequest(r)
 	var usage *tokenusage.Usage
 	terminal := false
+	streamStarted := time.Now()
 	err := p.Stream(r.Context(), &provider.Request{Model: model, Input: payload, Stream: true}, func(event provider.Event) error {
 		if event.Done {
 			terminal = event.ExplicitDone
@@ -885,6 +924,7 @@ func (h *Handler) streamGemini(w http.ResponseWriter, r *http.Request, p provide
 		flusher.Flush()
 		return nil
 	})
+	h.reportProviderOutcome(p, time.Since(streamStarted), err == nil && terminal)
 	if err != nil {
 		storeRequestUsage(r, usage)
 		setRequestError(r, classifyRequestError(r, err, true))
@@ -1025,7 +1065,12 @@ func eventData(raw []byte) []byte {
 	return []byte(strings.Join(lines, "\n"))
 }
 
-func (h *Handler) selectProviderFor(ctx context.Context, model string, required []string) (provider.Provider, error) {
+func (h *Handler) selectProviderFor(ctx context.Context, model string, required []string, profile scheduler.AdaptiveProfile) (provider.Provider, error) {
+	if selector, ok := h.selector.(interface {
+		SelectAdaptive(context.Context, string, []string, scheduler.AdaptiveProfile) (provider.Provider, error)
+	}); ok {
+		return selector.SelectAdaptive(ctx, model, required, profile)
+	}
 	if selector, ok := h.selector.(interface {
 		SelectWithRequirements(context.Context, string, []string) (provider.Provider, error)
 	}); ok {
@@ -1066,6 +1111,93 @@ func hasDeclaredCapabilities(available, required []string) bool {
 		}
 	}
 	return true
+}
+
+func adaptiveProfileForRequest(r *http.Request, body []byte, required []string) scheduler.AdaptiveProfile {
+	objective := strings.ToLower(strings.TrimSpace(r.Header.Get("X-OmniRouter-Objective")))
+	switch objective {
+	case "balanced", "economy", "speed", "reasoning", "vision", "tools":
+	default:
+		objective = objectiveForCapabilities(required)
+	}
+	inputTokens := positiveTokenEstimate(r.Header.Get("X-OmniRouter-Input-Tokens"), 2_000_000)
+	if inputTokens == 0 {
+		inputTokens = int64((len(body) + 3) / 4)
+		if inputTokens < 1 {
+			inputTokens = 1
+		}
+	}
+	outputTokens := positiveTokenEstimate(r.Header.Get("X-OmniRouter-Output-Tokens"), 1_000_000)
+	if outputTokens == 0 {
+		outputTokens = declaredOutputTokenLimit(body)
+	}
+	if outputTokens == 0 {
+		outputTokens = 512
+	}
+	return scheduler.AdaptiveProfile{
+		TaskType: objective, EstimatedInputTokens: inputTokens, EstimatedOutputTokens: outputTokens,
+	}
+}
+
+func objectiveForCapabilities(required []string) string {
+	for _, capability := range required {
+		if capability == "reasoning" {
+			return "reasoning"
+		}
+	}
+	for _, capability := range required {
+		if capability == "vision" {
+			return "vision"
+		}
+	}
+	for _, capability := range required {
+		if capability == "tools" {
+			return "tools"
+		}
+	}
+	for _, capability := range required {
+		if capability == "streaming" {
+			return "speed"
+		}
+	}
+	return "balanced"
+}
+
+func positiveTokenEstimate(raw string, maximum int64) int64 {
+	value, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || value <= 0 || value > maximum {
+		return 0
+	}
+	return value
+}
+
+func declaredOutputTokenLimit(body []byte) int64 {
+	var value any
+	if json.Unmarshal(body, &value) != nil {
+		return 0
+	}
+	var maximum int64
+	var walk func(any)
+	walk = func(item any) {
+		switch current := item.(type) {
+		case map[string]any:
+			for key, child := range current {
+				switch key {
+				case "max_tokens", "max_completion_tokens", "max_output_tokens", "maxOutputTokens":
+					if number, ok := child.(float64); ok && number > 0 && number <= 1_000_000 && int64(number) > maximum {
+						maximum = int64(number)
+					}
+				}
+				walk(child)
+			}
+		case []any:
+			for _, child := range current {
+				walk(child)
+			}
+		}
+	}
+	walk(value)
+	return maximum
 }
 
 // requiredCapabilities performs conservative structural detection. It does not
@@ -2192,6 +2324,43 @@ func (h *Handler) setModelStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": r.PathValue("id"), "provider_id": input.ProviderID, "enabled": input.Enabled, "persisted": true})
+}
+
+func (h *Handler) setModelPricing(w http.ResponseWriter, r *http.Request) {
+	if h.modelRepo == nil {
+		writeError(w, http.StatusServiceUnavailable, "storage_unavailable", "model repository is unavailable")
+		return
+	}
+	var input struct {
+		ProviderID              string   `json:"provider_id"`
+		InputCostPerMillionUSD  *float64 `json:"input_cost_per_million_usd"`
+		OutputCostPerMillionUSD *float64 `json:"output_cost_per_million_usd"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err != nil ||
+		strings.TrimSpace(input.ProviderID) == "" || input.InputCostPerMillionUSD == nil || input.OutputCostPerMillionUSD == nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider_id, input_cost_per_million_usd and output_cost_per_million_usd are required")
+		return
+	}
+	if err := h.modelRepo.SetPricing(r.Context(), r.PathValue("id"), input.ProviderID, *input.InputCostPerMillionUSD, *input.OutputCostPerMillionUSD); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not_found", "model not found")
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid_request_error", err.Error())
+		}
+		return
+	}
+	runtimeUpdated := false
+	if updater, ok := h.selector.(interface {
+		SetModelPricing(string, string, float64, float64) bool
+	}); ok {
+		runtimeUpdated = updater.SetModelPricing(r.PathValue("id"), input.ProviderID, *input.InputCostPerMillionUSD, *input.OutputCostPerMillionUSD)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id": r.PathValue("id"), "provider_id": input.ProviderID,
+		"input_cost_per_million_usd":  *input.InputCostPerMillionUSD,
+		"output_cost_per_million_usd": *input.OutputCostPerMillionUSD,
+		"runtime_updated":             runtimeUpdated, "persisted": true,
+	})
 }
 
 func (h *Handler) deleteModel(w http.ResponseWriter, r *http.Request) {
