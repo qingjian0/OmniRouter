@@ -218,3 +218,39 @@ func TestStreamAnthropicRejectsMalformedTerminalPayload(t *testing.T) {
 		t.Fatalf("expected malformed terminal payload to fail, got %v", err)
 	}
 }
+
+func TestStreamAnthropicRejectsErrorAndConflictingSSEEvents(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "error event",
+			body: "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"api_error\"}}\n\n",
+			want: "error event",
+		},
+		{
+			name: "event payload mismatch",
+			body: "event: message_stop\ndata: {\"type\":\"content_block_delta\"}\n\n",
+			want: "conflicts with payload type",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer server.Close()
+			p, err := New(Config{ID: "anthropic", BaseURL: server.URL})
+			if err != nil { t.Fatal(err) }
+			err = p.StreamAnthropic(context.Background(), &provider.Request{
+				Model: "m", Input: []byte(`{"model":"m","max_tokens":8}`),
+			}, func(provider.Event) error { return nil })
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %q error, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
