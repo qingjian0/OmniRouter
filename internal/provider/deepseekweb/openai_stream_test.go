@@ -27,8 +27,8 @@ func TestOpenAIStreamEncoderMapsContentAndReasoning(t *testing.T) {
 		Object  string `json:"object"`
 		Model   string `json:"model"`
 		Choices []struct {
-			Delta map[string]string `json:"delta"`
-			FinishReason *string `json:"finish_reason"`
+			Delta        map[string]string `json:"delta"`
+			FinishReason *string           `json:"finish_reason"`
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal([]byte(strings.TrimPrefix(string(payload), "data: ")), &chunk); err != nil {
