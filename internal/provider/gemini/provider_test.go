@@ -212,3 +212,22 @@ func TestNewRejectsUnsafeBaseURL(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateGeminiRejectsNonJSONContentType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `{"candidates":[]}`)
+	}))
+	defer server.Close()
+
+	p, err := New(Config{ID: "gemini", BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.GenerateGemini(context.Background(), &provider.Request{
+		Model: "m", Input: []byte(`{"contents":[{"parts":[{"text":"hi"}]}]}`),
+	})
+	if err == nil || !strings.Contains(err.Error(), "unexpected content type") {
+		t.Fatalf("expected non-JSON content type error, got %v", err)
+	}
+}
