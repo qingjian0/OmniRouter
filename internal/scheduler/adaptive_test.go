@@ -199,3 +199,40 @@ func TestModelRefreshPreservesConfiguredPricing(t *testing.T) {
 		t.Fatalf("model refresh lost operator pricing: %+v", candidate)
 	}
 }
+
+func TestEstimatedCostRejectsOverflowingTokenCost(t *testing.T) {
+	profile := AdaptiveProfile{
+		TaskType: "economy",
+		EstimatedInputTokens: int64(^uint64(0) >> 1),
+		EstimatedOutputTokens: int64(^uint64(0) >> 1),
+	}
+	candidate := Candidate{
+		PricingKnown: true,
+		InputCostPerMillionUSD: math.MaxFloat64,
+		OutputCostPerMillionUSD: math.MaxFloat64,
+	}
+	if _, known := estimatedCost(candidate, profile); known {
+		t.Fatal("overflowing estimated cost must not enter adaptive ranking")
+	}
+}
+
+func TestAdaptiveSchedulerHandlesExtremePriorityRange(t *testing.T) {
+	s := NewAdaptive(time.Minute)
+	minInt := -int(^uint(0)>>1) - 1
+	maxInt := int(^uint(0) >> 1)
+	lowest := adaptiveTestProvider{id: "lowest"}
+	middle := adaptiveTestProvider{id: "middle"}
+	highest := adaptiveTestProvider{id: "highest"}
+	s.Replace("m", []Candidate{
+		{Provider: lowest, Enabled: true, Weight: 1, Priority: minInt},
+		{Provider: middle, Enabled: true, Weight: 1, Priority: 0},
+		{Provider: highest, Enabled: true, Weight: 1, Priority: maxInt},
+	})
+	got, err := s.SelectAdaptive(context.Background(), "m", nil, AdaptiveProfile{TaskType: "balanced"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID() != "highest" {
+		t.Fatalf("selected %q, want highest-priority provider", got.ID())
+	}
+}
