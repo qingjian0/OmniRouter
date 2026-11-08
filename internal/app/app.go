@@ -83,7 +83,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		return nil, err
 	}
 	registry := provider.NewRegistry()
-	router := scheduler.New(20 * time.Second)
+	router := scheduler.NewAdaptive(20 * time.Second)
 	candidates := make(map[string][]scheduler.Candidate)
 	for _, providerConfig := range cfg.Providers {
 		providerName := providerConfig.Name
@@ -227,7 +227,13 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 				for _, cap := range m.Capabilities {
 					caps = append(caps, string(cap))
 				}
-				candidates[m.ID] = append(candidates[m.ID], scheduler.Candidate{Provider: upstream, Priority: priority, Weight: weight, Enabled: true, Capabilities: caps, ContextLimit: m.ContextLimit})
+				candidates[m.ID] = append(candidates[m.ID], scheduler.Candidate{
+					Provider: upstream, Priority: priority, Weight: weight, Enabled: true,
+					Capabilities: caps, ContextLimit: m.ContextLimit,
+					InputCostPerMillionUSD:  modelPrice(m.InputCostPerMillionUSD),
+					OutputCostPerMillionUSD: modelPrice(m.OutputCostPerMillionUSD),
+					PricingKnown:            m.InputCostPerMillionUSD != nil || m.OutputCostPerMillionUSD != nil,
+				})
 			}
 		}
 	}
@@ -286,4 +292,11 @@ func domainModelFromProvider(item provider.Model, providerID string) domainmodel
 		displayName = item.ID
 	}
 	return domainmodel.Model{ID: item.ID, ProviderID: providerID, DisplayName: displayName, ContextLimit: item.ContextLimit, Enabled: true}
+}
+
+func modelPrice(value *float64) float64 {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
