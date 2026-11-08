@@ -81,7 +81,7 @@ Do not conflate an inbound protocol endpoint with a native upstream adapter.
 | Native OpenAI Responses egress | Implemented |
 | Native Anthropic Messages egress | Implemented |
 | Native Gemini egress | Implemented |
-| DeepSeek consumer-web session egress | Not merged / not inference-capable |
+| DeepSeek consumer-web session egress | Pairing/authorization scaffold integrated on dev; registration-only, zero models, not inference-capable |
 
 The same public ingress may be served by different egress adapters only when
 the selected Provider explicitly implements the corresponding interface. A
@@ -156,9 +156,10 @@ The consumer website is not the official API. Its browser session, private
 protocol, model catalogue, rate limits, and policy responses must not share
 assumptions with kind: deepseek.
 
-The current DeepSeek Web work is a Draft-only pairing/session scaffold. It is
-not part of the merged dev provider registry and does not provide inference.
-If continued, implement it in independently reviewable stages:
+The DeepSeek Web pairing/authorization scaffold is integrated on `dev` as a
+separate trust domain and registration-only Provider. It advertises zero models
+and fails closed; no inference transport is implemented. Continue only in
+independently reviewable stages, without re-implementing the integrated pairing slice:
 
 1. **Authorization** — user signs in normally; a narrow browser extension reads only the active chat.deepseek.com tab after an explicit click; one-time pairing is loopback-only, origin-allowlisted, short-lived, and single-use.
 2. **Credential lifecycle** — validate and encrypt only the minimum accepted token/cookie material; support expiry, revoke, replace, and status checks.
