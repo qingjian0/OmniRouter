@@ -2,14 +2,12 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-
-	"omnirouter/internal/observability"
 	"testing"
 	"time"
 
