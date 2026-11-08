@@ -246,7 +246,15 @@ func (t *HTTPCompletionTransport) headers(token, cookie []byte) http.Header {
 	return headers
 }
 
-func optionalString(value string) *string {\n\tif strings.TrimSpace(value) == "" {\n\t\treturn nil\n\t}\n\ttrimmed := strings.TrimSpace(value)\n\treturn &trimmed\n}\n\n// drainAndClose is retained as a small helper for transports that may later\n// add bounded response-body diagnostics; it never returns upstream body text.
+func optionalString(value string) *string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	trimmed := strings.TrimSpace(value)
+	return &trimmed
+}
+
+// drainAndClose is retained as a small helper for transports that may later\n// add bounded response-body diagnostics; it never returns upstream body text.
 func drainAndClose(body io.ReadCloser) {
 	if body == nil {
 		return
