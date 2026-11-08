@@ -224,3 +224,8 @@ The Chat Completions gateway now accepts an optional `X-OmniRouter-Conversation-
 - Tests cover first-turn creation, second-turn restoration/advance, incomplete identity rejection, idempotent close, and context cancellation.
 
 This is now a reusable orchestration primitive, but it is not yet instantiated by the DeepSeek provider. The provider must call `Begin` only after selecting a concrete authorized account, use the returned lineage to construct a fixture-verified request, and call `Commit` only after parsing a verified successful response. The coordinator deliberately does not define private DeepSeek wire fields.
+
+
+## Expanded reference audit (2026-11-08)
+
+A broader source-level comparison covering NIyueE/ds-free-api, deep-proxy, kittors/deepseek-web-api, nv-hoai/deepseek-rp, and additional projects is documented in [DEEPSEEK-WEB-REFERENCE-AUDIT.md](./DEEPSEEK-WEB-REFERENCE-AUDIT.md). It records the newer observed completion field set (including source), SSE event semantics, incremental-prompt versus rolling-history differences, model availability caveats, account concurrency considerations, and license/security exclusions. The audit is research evidence only; it does not enable live inference or replace current sanitized fixtures.
