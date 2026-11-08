@@ -89,6 +89,34 @@ func TestPatchDecoderKeepsSearchChannelSeparate(t *testing.T) {
 	}
 }
 
+func TestPatchDecoderMapsHintErrorsToTypedFailures(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want error
+	}{
+		{name: "policy blocked", data: `{"type":"error","finish_reason":"policy_blocked"}`, want: ErrPolicyBlocked},
+		{name: "rate limited", data: `{"type":"error","finish_reason":"rate_limit_reached"}`, want: ErrRateLimited},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			decoder := &PatchDecoder{}
+			_, err := decoder.DecodeEvent("hint", []byte(test.data))
+			if !errors.Is(err, test.want) {
+				t.Fatalf("hint error=%v, want errors.Is(_, %v)", err, test.want)
+			}
+		})
+	}
+}
+
+func TestPatchDecoderRejectsMalformedHintError(t *testing.T) {
+	decoder := &PatchDecoder{}
+	_, err := decoder.DecodeEvent("hint", []byte(`not-json`))
+	if !errors.Is(err, ErrUnsupportedPatch) {
+		t.Fatalf("malformed hint must fail closed, got %v", err)
+	}
+}
+
 func TestPatchDecoderRecognizesExplicitTerminal(t *testing.T) {
 	decoder := &PatchDecoder{}
 	update, err := decoder.Decode([]byte(`{"p":"response/status","v":"FINISHED"}`))
