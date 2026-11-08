@@ -4,6 +4,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -206,12 +207,29 @@ func (s *Scheduler) acquireProbeLock(providerID string) (*probeLockEntry, func()
 	}
 }
 
+// sameProviderInstance compares pointer-backed adapters by identity. Value
+// adapters are compared structurally without risking an interface-comparison
+// panic when their concrete type contains maps or slices.
+func sameProviderInstance(left, right provider.Provider) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	leftValue, rightValue := reflect.ValueOf(left), reflect.ValueOf(right)
+	if leftValue.Type() != rightValue.Type() {
+		return false
+	}
+	if leftValue.Kind() == reflect.Pointer {
+		return leftValue.Pointer() == rightValue.Pointer()
+	}
+	return reflect.DeepEqual(left, right)
+}
+
 // hasProviderLocked rejects health results from an instance no longer present
 // in any route. Caller must hold s.mu.
 func (s *Scheduler) hasProviderLocked(p provider.Provider) bool {
 	for _, candidates := range s.candidates {
 		for _, candidate := range candidates {
-			if candidate.Enabled && candidate.Provider == p {
+			if candidate.Enabled && sameProviderInstance(candidate.Provider, p) {
 				return true
 			}
 		}
