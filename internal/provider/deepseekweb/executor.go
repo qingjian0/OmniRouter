@@ -2,6 +2,8 @@ package deepseekweb
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -183,8 +185,20 @@ func (p *ExecutorProvider) Stream(ctx context.Context, req *provider.Request, em
 }
 
 func (p *ExecutorProvider) execute(ctx context.Context, req *provider.Request, consume func(PatchUpdate) error, afterCommit ...func() error) error {
-	if req == nil || strings.TrimSpace(req.ConversationID) == "" {
-		return fmt.Errorf("request and stable local conversation ID are required")
+	if req == nil {
+		return fmt.Errorf("request is required")
+	}
+	// The gateway conversation header is optional. Without it, use a unique
+	// one-turn lease key and deliberately do not persist lineage: callers that
+	// want continuity must supply the same local ID on every request.
+	localConversationID := strings.TrimSpace(req.ConversationID)
+	persistLineage := localConversationID != ""
+	if !persistLineage {
+		var raw [16]byte
+		if _, err := rand.Read(raw[:]); err != nil {
+			return fmt.Errorf("generate one-turn conversation ID: %w", err)
+		}
+		localConversationID = "ephemeral_" + hex.EncodeToString(raw[:])
 	}
 	input, err := MapChatCompletionInput(req.Input)
 	if err != nil {
@@ -211,7 +225,7 @@ func (p *ExecutorProvider) execute(ctx context.Context, req *provider.Request, c
 	defer zeroBytes(material.Token)
 	defer zeroBytes(material.CookieHeader)
 
-	lease, err := p.leases.BeginLease(ctx, p.id, p.accountID, req.ConversationID)
+	lease, err := p.leases.BeginLease(ctx, p.id, p.accountID, localConversationID)
 	if err != nil {
 		return err
 	}
@@ -237,8 +251,10 @@ func (p *ExecutorProvider) execute(ctx context.Context, req *provider.Request, c
 	if !result.Completed || !sawTerminal || result.UpstreamConversationID == "" || result.ResponseMessageID == "" {
 		return ErrIncompleteCompletion
 	}
-	if _, err := lease.Commit(ctx, result.UpstreamConversationID, result.ResponseMessageID); err != nil {
-		return fmt.Errorf("commit successful DeepSeek Web conversation lineage: %w", err)
+	if persistLineage {
+		if _, err := lease.Commit(ctx, result.UpstreamConversationID, result.ResponseMessageID); err != nil {
+			return fmt.Errorf("commit successful DeepSeek Web conversation lineage: %w", err)
+		}
 	}
 	for _, finish := range afterCommit {
 		if err := finish(); err != nil {
