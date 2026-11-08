@@ -313,7 +313,10 @@ func reliabilityScore(stat providerPerformance) float64 {
 }
 
 func (s *AdaptiveScheduler) SetModelPricing(modelID, providerID string, inputCost, outputCost float64) bool {
-	if modelID == "" || providerID == "" {
+	if modelID == "" || providerID == "" ||
+		math.IsNaN(inputCost) || math.IsInf(inputCost, 0) ||
+		math.IsNaN(outputCost) || math.IsInf(outputCost, 0) ||
+		inputCost < 0 || outputCost < 0 {
 		return false
 	}
 	s.mu.Lock()
