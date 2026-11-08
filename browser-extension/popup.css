@@ -1,0 +1,56 @@
+:root {
+  color-scheme: light dark;
+  font: 14px/1.5 system-ui, sans-serif;
+}
+body {
+  width: 340px;
+  margin: 0;
+  padding: 16px;
+}
+main {
+  display: grid;
+  gap: 10px;
+}
+h1 {
+  margin: 0;
+  font-size: 18px;
+}
+.notice {
+  margin: 0;
+  color: #777;
+  font-size: 12px;
+}
+label {
+  font-weight: 600;
+}
+input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px;
+  border: 1px solid #8888;
+  border-radius: 7px;
+}
+button {
+  padding: 10px;
+  border: 0;
+  border-radius: 7px;
+  background: #2563eb;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+#status {
+  min-height: 20px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+#status[data-state="error"] {
+  color: #dc2626;
+}
+#status[data-state="success"] {
+  color: #16a34a;
+}
