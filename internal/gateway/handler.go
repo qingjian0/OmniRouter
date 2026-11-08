@@ -1460,10 +1460,8 @@ func (h *Handler) createAccount(w http.ResponseWriter, r *http.Request) {
 		Name       string         `json:"name"`
 		Status     account.Status `json:"status"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid account JSON: "+err.Error())
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid account JSON")
 		return
 	}
 	if _, ok := h.registry.Get(strings.TrimSpace(input.ProviderID)); !ok {
@@ -1518,9 +1516,7 @@ func (h *Handler) setAccountStatus(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Status account.Status `json:"status"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid status JSON")
 		return
 	}
@@ -1704,9 +1700,7 @@ func (h *Handler) setCredentialStatus(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Status credential.Status `json:"status"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid credential status JSON")
 		return
 	}
@@ -1783,10 +1777,8 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		Status    session.Status `json:"status"`
 		ExpiresAt *time.Time     `json:"expires_at"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid session JSON: "+err.Error())
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid session JSON")
 		return
 	}
 	if h.accountRepo != nil {
@@ -1857,9 +1849,7 @@ func (h *Handler) setSessionStatus(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Status session.Status `json:"status"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid session status JSON")
 		return
 	}
@@ -2188,9 +2178,7 @@ func (h *Handler) setProviderPolicy(w http.ResponseWriter, r *http.Request) {
 		Priority int    `json:"priority"`
 		Weight   uint32 `json:"weight"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid provider policy JSON")
 		return
 	}
@@ -2374,7 +2362,7 @@ func (h *Handler) setModelStatus(w http.ResponseWriter, r *http.Request) {
 		ProviderID string `json:"provider_id"`
 		Enabled    bool   `json:"enabled"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err != nil || strings.TrimSpace(input.ProviderID) == "" {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil || strings.TrimSpace(input.ProviderID) == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider_id and enabled are required")
 		return
 	}
@@ -2399,7 +2387,7 @@ func (h *Handler) setModelPricing(w http.ResponseWriter, r *http.Request) {
 		InputCostPerMillionUSD  *float64 `json:"input_cost_per_million_usd"`
 		OutputCostPerMillionUSD *float64 `json:"output_cost_per_million_usd"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err != nil ||
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil ||
 		strings.TrimSpace(input.ProviderID) == "" || input.InputCostPerMillionUSD == nil || input.OutputCostPerMillionUSD == nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider_id, input_cost_per_million_usd and output_cost_per_million_usd are required")
 		return
@@ -2478,9 +2466,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		Name   string   `json:"name"`
 		Scopes []string `json:"scopes"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil || strings.TrimSpace(input.Name) == "" {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil || strings.TrimSpace(input.Name) == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "valid name is required")
 		return
 	}
@@ -2512,7 +2498,7 @@ func (h *Handler) setAPIKeyStatus(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Enabled bool `json:"enabled"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err != nil {
+	if err := decodeJSONRequest(w, r, &input, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid status JSON")
 		return
 	}
