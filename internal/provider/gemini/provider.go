@@ -229,8 +229,9 @@ func (p *Provider) do(ctx context.Context, model string, input []byte, stream bo
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
-		message, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nil, fmt.Errorf("Gemini API returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
+		// Upstream error bodies may echo prompts or credential material. Keep
+		// them out of errors, logs, and persisted request diagnostics.
+		return nil, fmt.Errorf("Gemini API returned HTTP %d", resp.StatusCode)
 	}
 	mediaType, _, parseErr := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if parseErr != nil {
