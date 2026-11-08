@@ -33,6 +33,8 @@ const credentials = ref<Row[]>([]);
 const apiKeys = ref<Row[]>([]);
 const requests = ref<Row[]>([]);
 const oneTimeSecret = ref("");
+const pairingTicket = ref<Row | null>(null);
+const pairingProviders = computed(() => providers.value.filter((item) => item.kind === "deepseek-web"));
 
 const providerForm = reactive({
   kind: "openai-compatible", id: "", name: "", base_url: "", api_key: "", models: "",
@@ -40,6 +42,7 @@ const providerForm = reactive({
   capabilities: ""
 });
 const accountForm = reactive({ provider_id: "", name: "" });
+const pairingForm = reactive({ provider_id: "", account_name: "Personal DeepSeek Web" });
 const sessionForm = reactive({ account_id: "", status: "unknown", expires_at: "" });
 const credentialForm = reactive({ account_id: "", kind: "api_key", value: "", expires_at: "" });
 const apiKeyForm = reactive({ name: "" });
@@ -160,6 +163,29 @@ async function createProvider() {
   }
 }
 
+async function createDeepSeekWebPairing() {
+  error.value = "";
+  notice.value = "";
+  pairingTicket.value = null;
+  try {
+    const result = await api("/admin/deepseek-web/pairings", "POST", pairingForm);
+    pairingTicket.value = result;
+    notice.value = "一次性配对码已创建，有效期 2 分钟。";
+  } catch (e) {
+    error.value = messageOf(e);
+  }
+}
+
+async function copyPairingNonce() {
+  if (!pairingTicket.value?.nonce) return;
+  try {
+    await navigator.clipboard.writeText(pairingTicket.value.nonce);
+    notice.value = "配对码已复制；请在浏览器扩展中粘贴并立即使用。";
+  } catch {
+    error.value = "剪贴板不可用，请手动复制配对码。";
+  }
+}
+
 function refreshProviderModels(p: Row) {
   return mutate(`/admin/providers/${encodeURIComponent(p.id)}/models/refresh`, "POST", {}, "Provider 模型目录已刷新");
 }
@@ -187,6 +213,16 @@ function setAccountStatus(a: Row, status: string) {
 function removeAccount(a: Row) {
   if (window.confirm(`确定删除账户 ${a.name || a.id}？请先处理关联会话和凭据。`)) {
     return mutate(`/admin/accounts/${encodeURIComponent(a.id)}`, "DELETE", undefined, "账户已删除");
+  }
+}
+
+function isDeepSeekWebAccount(a: Row) {
+  return providers.value.some((item) => item.id === a.provider_id && item.kind === "deepseek-web");
+}
+
+function revokeDeepSeekWebAccount(a: Row) {
+  if (window.confirm(`确定撤销 DeepSeek Web 账户 ${a.name || a.id}？其访问令牌、Cookie 和所有会话将被永久撤销。`)) {
+    return mutate(`/admin/deepseek-web/accounts/${encodeURIComponent(a.id)}/revoke`, "POST", undefined, "DeepSeek Web 授权已撤销");
   }
 }
 function isoDate(value: string): string | undefined {
@@ -391,7 +427,7 @@ onMounted(refresh);
           </article>
           <article class="panel"><div class="panel-title"><h2>账户列表</h2></div>
             <div class="table-wrap"><table><thead><tr><th>名称 / ID</th><th>Provider</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="a in accounts" :key="a.id"><td><b>{{ a.name }}</b><small>{{ a.id }}</small></td><td>{{ a.provider_id }}</td><td><select :value="a.status" @change="setAccountStatus(a, eventValue($event))"><option>active</option><option>disabled</option><option>error</option></select></td><td>{{ shortTime(a.created_at) }}</td><td><button class="danger" @click="removeAccount(a)">删除</button></td></tr><tr v-if="!accounts.length"><td colspan="5" class="empty">暂无账户</td></tr></tbody>
+              <tbody><tr v-for="a in accounts" :key="a.id"><td><b>{{ a.name }}</b><small>{{ a.id }}</small></td><td>{{ a.provider_id }}</td><td><select :value="a.status" @change="setAccountStatus(a, eventValue($event))"><option>active</option><option>disabled</option><option>error</option></select></td><td>{{ shortTime(a.created_at) }}</td><td class="actions"><button v-if="isDeepSeekWebAccount(a)" class="secondary" @click="revokeDeepSeekWebAccount(a)">撤销网页授权</button><button class="danger" @click="removeAccount(a)">删除</button></td></tr><tr v-if="!accounts.length"><td colspan="5" class="empty">暂无账户</td></tr></tbody>
             </table></div>
           </article>
         </section>
