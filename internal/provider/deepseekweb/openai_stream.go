@@ -19,6 +19,7 @@ type OpenAIStreamEncoder struct {
 	model    string
 	created  int64
 	finished bool
+	started  bool
 }
 
 func NewOpenAIStreamEncoder(model string) (*OpenAIStreamEncoder, error) {
@@ -47,7 +48,11 @@ func (e *OpenAIStreamEncoder) Encode(update PatchUpdate) ([]byte, error) {
 		return nil, fmt.Errorf("%w: search metadata requires a dedicated OpenAI extension mapping", ErrUnsupportedOpenAIStreamUpdate)
 	}
 
-	delta := make(map[string]string, 2)
+	delta := make(map[string]string, 3)
+	if !e.started {
+		delta["role"] = "assistant"
+		e.started = true
+	}
 	if update.ContentDelta != "" {
 		delta["content"] = update.ContentDelta
 	}
