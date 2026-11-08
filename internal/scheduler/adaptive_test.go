@@ -216,12 +216,12 @@ func TestModelRefreshPreservesConfiguredPricing(t *testing.T) {
 
 func TestEstimatedCostRejectsOverflowingTokenCost(t *testing.T) {
 	profile := AdaptiveProfile{
-		TaskType: "economy",
-		EstimatedInputTokens: int64(^uint64(0) >> 1),
+		TaskType:              "economy",
+		EstimatedInputTokens:  int64(^uint64(0) >> 1),
 		EstimatedOutputTokens: int64(^uint64(0) >> 1),
 	}
 	candidate := Candidate{
-		PricingKnown: true,
+		PricingKnown:           true,
 		InputCostPerMillionUSD: math.MaxFloat64,
 		OutputCostPerMillionUSD: math.MaxFloat64,
 	}
