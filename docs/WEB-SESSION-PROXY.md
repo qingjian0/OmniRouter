@@ -191,3 +191,15 @@ The Go deep-proxy parser is useful as a compact baseline, but its current implem
 The kittors update decoder explicitly tracks the current fragment channel for content-only APPEND patches, defaults the initial channel to reasoning, and recognizes event-level `ready`, `title`, and `close` while continuing to decode patch payloads carried by other named SSE events. OmniRouter now mirrors those channel semantics, but exposes SEARCH/SEARCH_REF on a distinct `SearchDelta` field rather than mixing search metadata into reasoning text. Its session store also documents explicit-ID, previous-response-ID, and normalized-history matching. These are the primary behavioral references for future lineage integration.
 
 Chat2API's DeepSeek adapter currently contains browser/protocol-specific assumptions that must not be imported blindly. In particular, any generated cookie, secret-bearing diagnostic output, or challenge-solving dependency is outside OmniRouter's trust boundary. Its GPL-3.0 license also means its source code is not directly copied into this repository by default.
+
+### OpenAI streaming response projection
+
+A per-completion encoder now exists in `internal/provider/deepseekweb/openai_stream.go`:
+- Converts normalized answer deltas to OpenAI Chat Completions SSE data fields (`data: {...}`).
+- Keeps reasoning in the separate `reasoning_content` delta instead of leaking it into `content`.
+- Emits a final `finish_reason: "stop"` chunk only when the normalized patch carries an explicit terminal signal.
+- Does not emit the downstream `[DONE]` marker itself. The existing Gateway owns that marker and must receive `provider.Event{Done: true, ExplicitDone: true}` only after a verified upstream terminal event.
+- Rejects search metadata until a documented OpenAI-compatible metadata mapping exists; it does not silently append citations or search results to assistant text.
+- Rejects writes after completion and uses a distinct completion ID per encoder instance.
+
+The encoder is a tested serialization boundary only. It is not connected to the DeepSeek HTTP transport, `PatchDecoder`, or `RegistrationProvider`; no upstream request or live inference is enabled. Completion-token usage is not yet projected into downstream chunks. A provider integration must also preserve the Gateway's explicit terminal-event contract and cancellation behavior.
