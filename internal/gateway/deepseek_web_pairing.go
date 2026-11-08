@@ -20,6 +20,10 @@ func (h *Handler) createDeepSeekWebPairing(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusServiceUnavailable, "admin_auth_required", "set OMNI_GATEWAY_API_KEY before creating DeepSeek web pairing tickets")
 		return
 	}
+	if h.deepSeekWebExtensionOrigin == "" {
+		writeError(w, http.StatusServiceUnavailable, "pairing_unavailable", "configure OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN before creating pairing tickets")
+		return
+	}
 	if h.deepSeekWebAuthorization == nil || h.providerRepo == nil || h.deepSeekWebPairings == nil {
 		writeError(w, http.StatusServiceUnavailable, "storage_unavailable", "persistent DeepSeek web authorization is not configured")
 		return
