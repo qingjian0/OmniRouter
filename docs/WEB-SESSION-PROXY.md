@@ -41,7 +41,7 @@ Reference projects are not automatically trusted: compare behavior across implem
 - SSE framing must be parsed independently of network chunk boundaries and preserve event names; `ready`, `title`, and `close` are distinct event types in the kittors reference.
 - Patch decoding must track the active fragment channel. Content-only append operations inherit the active fragment type; THINK text must never be appended to normal assistant content.
 - Public implementations differ on fragment names: `RESPONSE` and `ANSWER` both appear. Treat them as answer-channel aliases only when covered by tests.
-- Batch updates may carry `accumulated_token_usage` and terminal status. Search results/status are metadata and must not be blindly concatenated into assistant text.
+- Batch updates may carry `accumulated_token_usage` and terminal status. Search fragments/results are preserved on a separate metadata channel; they must not be blindly concatenated into assistant text.
 - Session continuity requires the upstream `response_message_id` from the previous completed turn as the next `parent_message_id`. Do not infer or fabricate this ID.
 - Some references treat an explicit SSE `close` event as terminal. EOF or a generic `[DONE]` sentinel alone is not accepted as proof of successful completion until confirmed by current sanitized fixtures.
 - Chat2API is GPL-3.0. Its code is not copied into OmniRouter by default; its current adapter and stream handler are behavioral references only.
@@ -138,7 +138,7 @@ The isolated Go patch decoder now follows cross-checked public reference behavio
 - Initial fragments and append patches.
 - `THINK` separated from answer text.
 - `RESPONSE` and `ANSWER` answer aliases.
-- Search metadata suppression from assistant text.
+- Search fragment/result metadata preserved separately from answer and reasoning channels.
 - Batch token usage and explicit terminal status.
 - Unknown event/patch fail-closed behavior.
 
@@ -153,6 +153,6 @@ The audit is based on concrete implementation files, not README claims alone:
 
 The Go deep-proxy parser is useful as a compact baseline, but its current implementation only consumes the first fragment in some initial/append cases and treats malformed or unknown operations as empty updates. OmniRouter's provisional decoder intentionally processes all recognized fragments, keeps reasoning separate, and fails closed on unknown structural operations. This is a deliberate correctness/security improvement rather than a literal copy.
 
-The kittors update decoder explicitly tracks the current fragment channel for content-only APPEND patches and recognizes event-level `ready`, `title`, and `close`. Its session store also documents explicit-ID, previous-response-ID, and normalized-history matching. These are the primary behavioral references for future lineage integration.
+The kittors update decoder explicitly tracks the current fragment channel for content-only APPEND patches, defaults the initial channel to reasoning, and recognizes event-level `ready`, `title`, and `close` while continuing to decode patch payloads carried by other named SSE events. OmniRouter now mirrors those channel semantics, but exposes SEARCH/SEARCH_REF on a distinct `SearchDelta` field rather than mixing search metadata into reasoning text. Its session store also documents explicit-ID, previous-response-ID, and normalized-history matching. These are the primary behavioral references for future lineage integration.
 
 Chat2API's DeepSeek adapter currently contains browser/protocol-specific assumptions that must not be imported blindly. In particular, any generated cookie, secret-bearing diagnostic output, or challenge-solving dependency is outside OmniRouter's trust boundary. Its GPL-3.0 license also means its source code is not directly copied into this repository by default.
