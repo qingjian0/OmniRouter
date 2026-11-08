@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"path/filepath"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -60,7 +61,25 @@ func TestPersistentVaultSurvivesSQLiteRestartWithoutExposingPlaintext(t *testing
 		t.Fatal(err)
 	}
 
-	reopened, err := storage.OpenSQLiteRuntime(ctx, path, storage.SQLiteOptions{WAL: true})
+	restorePath := path
+	if sqlite3, lookupErr := exec.LookPath("sqlite3"); lookupErr == nil {
+		backupPath := filepath.Join(t.TempDir(), "credentials.backup.db")
+		backup := exec.Command("bash", "../../scripts/backup-sqlite.sh", path, backupPath)
+		if output, err := backup.CombinedOutput(); err != nil {
+			t.Fatalf("SQLite backup script failed: %v: %s", err, output)
+		}
+		restorePath = filepath.Join(t.TempDir(), "credentials-restored.db")
+		seed := exec.Command(sqlite3, restorePath, "CREATE TABLE pre_restore_marker(value TEXT); INSERT INTO pre_restore_marker VALUES('old');")
+		if output, err := seed.CombinedOutput(); err != nil {
+			t.Fatalf("seed restore destination: %v: %s", err, output)
+		}
+		restore := exec.Command("bash", "../../scripts/restore-sqlite.sh", restorePath, backupPath)
+		if output, err := restore.CombinedOutput(); err != nil {
+			t.Fatalf("SQLite restore script failed: %v: %s", err, output)
+		}
+	}
+
+	reopened, err := storage.OpenSQLiteRuntime(ctx, restorePath, storage.SQLiteOptions{WAL: true})
 	if err != nil {
 		t.Fatal(err)
 	}
