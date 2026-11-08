@@ -145,6 +145,7 @@ func TestNewRejectsInvalidBaseURL(t *testing.T) {
 
 func TestGenerateAnthropicRejectsOversizedResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.Copy(w, strings.NewReader(strings.Repeat("x", (32<<20)+1)))
 	}))
