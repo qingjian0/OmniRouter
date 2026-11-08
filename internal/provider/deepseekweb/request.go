@@ -160,10 +160,13 @@ func messagesToDeepSeekPrompt(messages []chatMessage, historyWindow int) (string
 			if content != "" {
 				systemParts = append(systemParts, content)
 			}
-		case "user", "assistant":
+		case "user":
 			if content != "" {
-				conversation = append(conversation, promptTurn{role: message.Role, text: content})
+				conversation = append(conversation, promptTurn{role: "user", text: content})
 			}
+		case "assistant":
+			var assistant strings.Builder
+			assistant.WriteString(content)
 			for _, call := range message.ToolCalls {
 				if strings.TrimSpace(call.ID) == "" || strings.TrimSpace(call.Function.Name) == "" || len(call.Function.Arguments) == 0 {
 					return "", fmt.Errorf("%w: malformed historical tool call in message %d", ErrUnsupportedChatRequest, index)
@@ -173,10 +176,13 @@ func messagesToDeepSeekPrompt(messages []chatMessage, historyWindow int) (string
 					return "", fmt.Errorf("%w: invalid tool arguments in message %d", ErrUnsupportedChatRequest, index)
 				}
 				callNameByID[call.ID] = call.Function.Name
-				conversation = append(conversation, promptTurn{
-					role: "tool_call",
-					text: fmt.Sprintf("<tool_call name=\"%s\">%s</tool_call>", html.EscapeString(call.Function.Name), arguments),
-				})
+				if assistant.Len() > 0 {
+					assistant.WriteByte('\n')
+				}
+				assistant.WriteString(fmt.Sprintf("<tool_call name=\"%s\">%s</tool_call>", html.EscapeString(call.Function.Name), arguments))
+			}
+			if assistant.Len() > 0 {
+				conversation = append(conversation, promptTurn{role: "assistant", text: assistant.String()})
 			}
 		case "tool":
 			if content != "" {
@@ -208,8 +214,6 @@ func messagesToDeepSeekPrompt(messages []chatMessage, historyWindow int) (string
 		switch turn.role {
 		case "assistant":
 			parts = append(parts, "[Assistant]: "+turn.text)
-		case "tool_call":
-			parts = append(parts, "[Assistant tool call]: "+turn.text)
 		case "tool":
 			parts = append(parts, turn.text)
 		default:
