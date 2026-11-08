@@ -143,3 +143,16 @@ The isolated Go patch decoder now follows cross-checked public reference behavio
 - Unknown event/patch fail-closed behavior.
 
 This decoder remains isolated and is not wired into `RegistrationProvider`. It does not establish current protocol compatibility and must not enable model advertisement or inference before current sanitized fixtures and end-to-end acceptance tests pass.
+
+### Source-level audit notes
+
+The audit is based on concrete implementation files, not README claims alone:
+- deep-proxy: [deepseek_chunk.go](https://github.com/JuanCMPDev/deep-proxy/blob/main/internal/proxy/deepseek_chunk.go), [translate_stream.go](https://github.com/JuanCMPDev/deep-proxy/blob/main/internal/proxy/translate_stream.go), [translate_request.go](https://github.com/JuanCMPDev/deep-proxy/blob/main/internal/proxy/translate_request.go), and [translate_stream_test.go](https://github.com/JuanCMPDev/deep-proxy/blob/main/internal/proxy/translate_stream_test.go).
+- deepseek-web-api: [updates.ts](https://github.com/kittors/deepseek-web-api/blob/main/src/deepseek/updates.ts), [sse.ts](https://github.com/kittors/deepseek-web-api/blob/main/src/deepseek/sse.ts), [completion.ts](https://github.com/kittors/deepseek-web-api/blob/main/src/deepseek/completion.ts), and [sessionStore.ts](https://github.com/kittors/deepseek-web-api/blob/main/src/deepseek/sessionStore.ts).
+- Chat2API: [deepseek.ts](https://github.com/xiaoY233/Chat2API/blob/main/src/main/proxy/adapters/deepseek.ts), [deepseek-stream.ts](https://github.com/xiaoY233/Chat2API/blob/main/src/main/proxy/adapters/deepseek-stream.ts), and [DeepSeek provider guide](https://github.com/xiaoY233/Chat2API/blob/main/docs/providers/deepseek.md).
+
+The Go deep-proxy parser is useful as a compact baseline, but its current implementation only consumes the first fragment in some initial/append cases and treats malformed or unknown operations as empty updates. OmniRouter's provisional decoder intentionally processes all recognized fragments, keeps reasoning separate, and fails closed on unknown structural operations. This is a deliberate correctness/security improvement rather than a literal copy.
+
+The kittors update decoder explicitly tracks the current fragment channel for content-only APPEND patches and recognizes event-level `ready`, `title`, and `close`. Its session store also documents explicit-ID, previous-response-ID, and normalized-history matching. These are the primary behavioral references for future lineage integration.
+
+Chat2API's DeepSeek adapter currently contains browser/protocol-specific assumptions that must not be imported blindly. In particular, any generated cookie, secret-bearing diagnostic output, or challenge-solving dependency is outside OmniRouter's trust boundary. Its GPL-3.0 license also means its source code is not directly copied into this repository by default.
