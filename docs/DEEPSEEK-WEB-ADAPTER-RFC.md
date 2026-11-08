@@ -1,7 +1,23 @@
 # DeepSeek consumer-web adapter RFC
 
-Status: Draft — authorization, encrypted credential lifecycle, browser pairing, Gateway/App/config/UI wiring are integrated on the feature branch. Browser acceptance and sanitized protocol fixtures remain outstanding; no inference transport is implemented.  
-Target branch: `feature/deepseek-web-pairing-v2` (rebuilt from current `dev`)
+Status: Pairing and authorization integration is merged to `dev`. Browser acceptance and sanitized protocol fixtures remain outstanding; no inference transport is implemented.
+Target branch for this integrated slice: `dev`
+Integration commit: `2c727e7e0e752865fd6cd2218213ffe13f0a89cb`
+
+## Current implementation and acceptance status
+
+| Capability | Status | Evidence / remaining work |
+|---|---|---|
+| Strict authorization input validation | Implemented | `ds_session_id` only; token and cookie validation tests |
+| Encrypted credential lifecycle | Implemented | Persistent Vault, restart restore, account-wide revoke tests |
+| One-time browser pairing | Implemented | Two-minute nonce, exact extension origin, loopback-only submission |
+| Gateway / App / Config wiring | Implemented | Authenticated admin endpoints and extension-origin setting |
+| Admin UI | Implemented | Provider registration, nonce creation/copy, account revoke |
+| Chromium real-browser acceptance | Pending | Must test against a user-owned profile and local Gateway |
+| Session validity / re-authentication UX | Pending | Stored credentials are not proof that upstream accepts the session |
+| DeepSeek Web inference transport | Not implemented | Requires authorized sanitized fixtures and separate protocol review |
+
+**Important:** a successful pairing response means authorization material was stored in the local encrypted vault. It does not mean the session was validated by DeepSeek, and it does not make the `deepseek-web` provider routable. The provider intentionally advertises no models until a separate transport implementation is accepted.
 
 ## 1. Scope and trust boundary
 
