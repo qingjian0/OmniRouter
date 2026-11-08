@@ -214,3 +214,13 @@ The Chat Completions gateway now accepts an optional `X-OmniRouter-Conversation-
 - The adapter must scope lineage by provider and authorized account in addition to this local key, and serialize turns with `ConversationLocks`.
 - The header is opt-in and does not change the behavior of other providers. It is not currently persisted by the Gateway itself; the DeepSeek Web coordinator still needs to connect it to `LineageRepository`.
 
+### Conversation coordinator boundary
+
+`internal/websession/coordinator.go` now provides a lease-based coordinator over the existing SQLite lineage repository and per-conversation locks:
+- `Begin` acquires the (provider, account, local conversation) lock before reading lineage. Missing lineage is represented as a new conversation; storage errors release the lock and fail.
+- `Lineage` exposes the snapshot loaded under the lock.
+- `Commit` persists upstream conversation and parent-message IDs and advances the generation. Empty upstream conversation IDs fail through repository validation.
+- `Close` releases the lock idempotently. The caller must hold the lease for the entire upstream turn and close it on every path.
+- Tests cover first-turn creation, second-turn restoration/advance, incomplete identity rejection, idempotent close, and context cancellation.
+
+This is now a reusable orchestration primitive, but it is not yet instantiated by the DeepSeek provider. The provider must call `Begin` only after selecting a concrete authorized account, use the returned lineage to construct a fixture-verified request, and call `Commit` only after parsing a verified successful response. The coordinator deliberately does not define private DeepSeek wire fields.
