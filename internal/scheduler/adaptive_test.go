@@ -425,3 +425,26 @@ func TestSameProviderInstanceHandlesNonComparableValueAdapters(t *testing.T) {
 		t.Fatal("different value adapters must not match")
 	}
 }
+
+
+func TestReplaceInvalidatesHealthForReplacedProviderID(t *testing.T) {
+	s := New(time.Minute)
+	oldProvider := &blockingHealthProvider{
+		adaptiveTestProvider: adaptiveTestProvider{id: "replace-id"},
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	// Use an immediately healthy provider to seed the positive health cache.
+	seed := adaptiveTestProvider{id: "replace-id"}
+	s.Replace("m", []Candidate{{Provider: seed, Enabled: true, Weight: 1}})
+	if _, err := s.Select(context.Background(), "m"); err != nil {
+		t.Fatal(err)
+	}
+	if healthy, decided := s.cachedHealth("replace-id", time.Now()); !healthy || !decided {
+		t.Fatal("expected seeded positive health cache")
+	}
+	s.Replace("m", []Candidate{{Provider: oldProvider, Enabled: true, Weight: 1}})
+	if _, exists := s.health["replace-id"]; exists {
+		t.Fatal("route replacement retained the previous provider's health cache")
+	}
+}
