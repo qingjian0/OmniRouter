@@ -28,7 +28,7 @@ type chatCompletionRequest struct {
 	Messages        []chatMessage `json:"messages"`
 	ReasoningEffort string        `json:"reasoning_effort"`
 	ThinkingEnabled *bool         `json:"thinking_enabled"`
-	SearchEnabled   *bool          `json:"search_enabled"`
+	SearchEnabled   *bool         `json:"search_enabled"`
 }
 
 type chatMessage struct {
