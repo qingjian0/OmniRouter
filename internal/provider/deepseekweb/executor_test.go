@@ -127,16 +127,19 @@ func TestExecutorProviderDoesNotCommitOnTransportError(t *testing.T) {
 	}
 }
 
-func TestExecutorProviderRejectsMissingConversationID(t *testing.T) {
+func TestExecutorProviderTreatsMissingConversationIDAsOneTurn(t *testing.T) {
 	lease := &testConversationLease{}
-	p := newTestExecutor(t, testCompletionTransport{}, lease)
+	p := newTestExecutor(t, testCompletionTransport{
+		result: CompletionResult{UpstreamConversationID: "remote", ResponseMessageID: "response", Completed: true},
+		updates: []PatchUpdate{{ContentDelta: "answer"}, {Done: true}},
+	}, lease)
 	req := testRequest()
 	req.ConversationID = ""
-	if err := p.Stream(context.Background(), req, func(provider.Event) error { return nil }); err == nil {
-		t.Fatal("expected missing conversation ID error")
+	if err := p.Stream(context.Background(), req, func(provider.Event) error { return nil }); err != nil {
+		t.Fatalf("one-turn request without conversation ID failed: %v", err)
 	}
-	if lease.commits != 0 {
-		t.Fatal("invalid request committed lineage")
+	if lease.commits != 0 || !lease.closed {
+		t.Fatalf("one-turn request must not persist lineage: commits=%d closed=%v", lease.commits, lease.closed)
 	}
 }
 
