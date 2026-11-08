@@ -113,9 +113,14 @@ jobs:
           test -s docs/ANDROID-TERMUX-ACCEPTANCE.md
           test -s docs/DATABASE-BACKUP-RESTORE.md
           test -s docs/DEEPSEEK-ADAPTER.md
+          test -s docs/PROVIDER-ACCEPTANCE.md
+          test -s docs/LIVE-PROVIDER-MATRIX.md
+          test -s docs/P0-SYSTEM-ACCEPTANCE.md
           test -s scripts/deepseek-smoke.sh
+          test -s scripts/native-provider-smoke.sh
           test -s .github/workflows/deepseek-live-smoke.yml
           test -s .github/workflows/live-provider-smoke.yml
+          test -s .github/workflows/native-provider-live.yml
           test -s .github/workflows/release.yml
 
       - name: Unit and integration tests
