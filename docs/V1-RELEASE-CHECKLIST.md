@@ -125,10 +125,15 @@ incomplete. It is not a V1 inference capability.
 
 ## Current integration ledger (authoritative, 2026-11-08)
 
-Current dev integration commit:
+Core routing/provider integration commit:
 `87f16c3e447d0dc29077eb75f8b63f101cac448e`.
 
-Current-head CI run
+DeepSeek Web pairing scaffold integration commit:
+`2c727e7e0e752865fd6cd2218213ffe13f0a89cb`.
+
+The current dev head also contains the documentation reconciliation commits. The CI run below validates the core routing/provider integration; PR #7 records feature-branch CI evidence for the pairing changes. A dedicated CI run on the integrated pairing commit is still required.
+
+Core integration CI run
 [42455660802](https://github.com/qingjian0/OmniRouter/actions/runs/42455660802)
 completed successfully: Vue build, gofmt, shell/YAML checks, SQLite
 backup/restore, Go unit/integration tests, race tests, vet, version build, and
@@ -155,7 +160,7 @@ transport, SSE normalization, conversation lineage, and model publication. A
 successful pairing test proves only that user-owned authorization material was
 stored locally; it does not prove that DeepSeek accepts the session.
 
-The current dev branch is 107 commits ahead of main (compare result checked 2026-11-08); main remains unchanged.
+`dev` remains ahead of `main`; use the live Git compare for the exact commit count. `main` remains unchanged.
 Do not promote to main or publish v1.0.0 until all release gates above are
 closed and a final release candidate has its own green CI and acceptance
 record.
