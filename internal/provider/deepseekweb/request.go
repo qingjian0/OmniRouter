@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"strings"
 )
@@ -13,6 +14,8 @@ var (
 	ErrInvalidChatRequest     = errors.New("invalid DeepSeek Web chat request")
 	ErrUnsupportedChatRequest = errors.New("unsupported DeepSeek Web chat request")
 )
+
+const DefaultAutoHistoryWindow = 20
 
 type ChatCompletionInput struct {
 	Model           string
@@ -24,29 +27,50 @@ type ChatCompletionInput struct {
 }
 
 type chatCompletionRequest struct {
-	Model           string        `json:"model"`
-	Messages        []chatMessage `json:"messages"`
-	ReasoningEffort string        `json:"reasoning_effort"`
-	ThinkingEnabled *bool         `json:"thinking_enabled"`
-	SearchEnabled   *bool         `json:"search_enabled"`
+	Model           string          `json:"model"`
+	Messages        []chatMessage   `json:"messages"`
+	Tools           json.RawMessage `json:"tools,omitempty"`
+	ReasoningEffort string          `json:"reasoning_effort"`
+	ThinkingEnabled *bool           `json:"thinking_enabled"`
+	Thinking        *bool           `json:"thinking"`
+	SearchEnabled   *bool           `json:"search_enabled"`
+	Search          *bool           `json:"search"`
+	WebSearch       *bool           `json:"web_search"`
 }
 
 type chatMessage struct {
-	Role      string          `json:"role"`
-	Content   json.RawMessage `json:"content"`
-	Name      string          `json:"name,omitempty"`
-	ToolCalls json.RawMessage `json:"tool_calls,omitempty"`
+	Role       string          `json:"role"`
+	Content    json.RawMessage `json:"content"`
+	Name       string          `json:"name,omitempty"`
+	ToolCallID string          `json:"tool_call_id,omitempty"`
+	ToolCalls  []chatToolCall  `json:"tool_calls,omitempty"`
 }
 
-// MapChatCompletionInput converts the text-only OpenAI Chat Completions
-// envelope into a protocol-neutral DeepSeek Web completion input. It does not
-// build an upstream HTTP payload: session IDs, parent IDs, auth headers, and
-// private wire fields remain the responsibility of a fixture-verified runtime.
+type chatToolCall struct {
+	ID       string           `json:"id"`
+	Function chatToolFunction `json:"function"`
+}
+
+type chatToolFunction struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+type promptTurn struct {
+	role string
+	text string
+}
+
+// MapChatCompletionInput converts the OpenAI Chat Completions envelope into a
+// protocol-neutral DeepSeek Web input. DeepSeek Web accepts one prompt string,
+// not an OpenAI messages array. This mapper handles text and prior tool history;
+// current tools[] generation remains fail-closed until tool-call response
+// parsing and OpenAI tool_calls emission are implemented together.
 //
-// The role-tagged prompt projection follows the MIT-licensed deep-proxy
-// reference (internal/proxy/translate_request.go), while model-option aliases
-// are cross-checked against that adapter and the MIT OmniRoute DeepSeek Web
-// executor. Unsupported multimodal/tool structures fail closed.
+// Prompt serialization follows the MIT deep-proxy reference
+// (internal/proxy/translate_request.go). Model option aliases are cross-checked
+// against the MIT OmniRoute DeepSeek Web executor. No private HTTP fields,
+// credentials, challenge responses, or session IDs are constructed here.
 func MapChatCompletionInput(raw []byte) (ChatCompletionInput, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	var request chatCompletionRequest
@@ -62,67 +86,159 @@ func MapChatCompletionInput(raw []byte) (ChatCompletionInput, error) {
 	if request.Model == "" || len(request.Messages) == 0 {
 		return ChatCompletionInput{}, fmt.Errorf("%w: model and at least one message are required", ErrInvalidChatRequest)
 	}
+	if hasJSONValues(request.Tools) {
+		return ChatCompletionInput{}, fmt.Errorf("%w: tools[] response translation is not implemented", ErrUnsupportedChatRequest)
+	}
 
-	modelType := resolveDeepSeekModelType(request.Model)
-	thinkingEnabled := modelType == "expert" || (strings.TrimSpace(request.ReasoningEffort) != "" && !strings.EqualFold(request.ReasoningEffort, "none"))
+	modelType, modelThinking, modelSearch := resolveDeepSeekModelOptions(request.Model)
+	thinkingEnabled := modelThinking || (strings.TrimSpace(request.ReasoningEffort) != "" && !strings.EqualFold(request.ReasoningEffort, "none"))
 	if request.ThinkingEnabled != nil {
 		thinkingEnabled = *request.ThinkingEnabled
+	} else if request.Thinking != nil {
+		thinkingEnabled = *request.Thinking
 	}
-	searchEnabled := false
+	searchEnabled := modelSearch
 	if request.SearchEnabled != nil {
 		searchEnabled = *request.SearchEnabled
+	} else if request.Search != nil {
+		searchEnabled = *request.Search
+	} else if request.WebSearch != nil {
+		searchEnabled = *request.WebSearch
 	}
 
-	var prompt strings.Builder
-	for index, message := range request.Messages {
-		toolCalls := bytes.TrimSpace(message.ToolCalls)
-		if len(toolCalls) > 0 && !bytes.Equal(toolCalls, []byte("null")) && !bytes.Equal(toolCalls, []byte("[]")) {
-			return ChatCompletionInput{}, fmt.Errorf("%w: tool_calls are not supported (message %d)", ErrUnsupportedChatRequest, index)
-		}
-		contentRaw := bytes.TrimSpace(message.Content)
-		var content string
-		if len(contentRaw) == 0 || bytes.Equal(contentRaw, []byte("null")) {
-			return ChatCompletionInput{}, fmt.Errorf("%w: text content is required (message %d)", ErrUnsupportedChatRequest, index)
-		}
-		if err := json.Unmarshal(contentRaw, &content); err != nil {
-			return ChatCompletionInput{}, fmt.Errorf("%w: message %d content must be a string", ErrUnsupportedChatRequest, index)
-		}
-
-		var label string
-		switch message.Role {
-		case "system":
-			label = "System"
-		case "user":
-			label = "User"
-		case "assistant":
-			label = "Assistant"
-		default:
-			return ChatCompletionInput{}, fmt.Errorf("%w: unsupported message role %q", ErrUnsupportedChatRequest, message.Role)
-		}
-		if index > 0 {
-			prompt.WriteString("\n\n")
-		}
-		prompt.WriteByte('[')
-		prompt.WriteString(label)
-		prompt.WriteString("]: ")
-		prompt.WriteString(content)
+	prompt, err := messagesToDeepSeekPrompt(request.Messages, DefaultAutoHistoryWindow)
+	if err != nil {
+		return ChatCompletionInput{}, err
+	}
+	if prompt == "" {
+		return ChatCompletionInput{}, fmt.Errorf("%w: prompt is empty", ErrInvalidChatRequest)
 	}
 
 	return ChatCompletionInput{
 		Model:           request.Model,
 		ModelType:       modelType,
-		Prompt:          prompt.String(),
+		Prompt:          prompt,
 		ThinkingEnabled: thinkingEnabled,
 		SearchEnabled:   searchEnabled,
 		RefFileIDs:      []string{},
 	}, nil
 }
 
-func resolveDeepSeekModelType(model string) string {
-	switch strings.ToLower(strings.TrimSpace(model)) {
-	case "deepseek-reasoner", "deepseek-r1", "deepseek-expert":
-		return "expert"
-	default:
-		return "default"
+func hasJSONValues(raw json.RawMessage) bool {
+	value := bytes.TrimSpace(raw)
+	return len(value) > 0 && !bytes.Equal(value, []byte("null")) && !bytes.Equal(value, []byte("[]"))
+}
+
+func resolveDeepSeekModelOptions(model string) (modelType string, thinking, search bool) {
+	name := strings.ToLower(strings.TrimSpace(model))
+	modelType = "default"
+	if strings.Contains(name, "pro") || strings.Contains(name, "expert") ||
+		name == "deepseek-reasoner" || name == "deepseek-r1" {
+		modelType = "expert"
 	}
+	thinking = strings.Contains(name, "r1") || strings.Contains(name, "think") || strings.Contains(name, "reason")
+	search = strings.Contains(name, "search")
+	return modelType, thinking, search
+}
+
+func messagesToDeepSeekPrompt(messages []chatMessage, historyWindow int) (string, error) {
+	if len(messages) == 0 {
+		return "", nil
+	}
+
+	var systemParts []string
+	var conversation []promptTurn
+	callNameByID := make(map[string]string)
+	for index, message := range messages {
+		content, err := decodeTextContent(message.Content)
+		if err != nil {
+			return "", fmt.Errorf("%w: message %d: %v", ErrUnsupportedChatRequest, index, err)
+		}
+
+		switch message.Role {
+		case "system", "developer":
+			if content != "" {
+				systemParts = append(systemParts, content)
+			}
+		case "user", "assistant":
+			if content != "" {
+				conversation = append(conversation, promptTurn{role: message.Role, text: content})
+			}
+			for _, call := range message.ToolCalls {
+				if strings.TrimSpace(call.ID) == "" || strings.TrimSpace(call.Function.Name) == "" || len(call.Function.Arguments) == 0 {
+					return "", fmt.Errorf("%w: malformed historical tool call in message %d", ErrUnsupportedChatRequest, index)
+				}
+				arguments := compactJSON(call.Function.Arguments)
+				if !json.Valid(arguments) {
+					return "", fmt.Errorf("%w: invalid tool arguments in message %d", ErrUnsupportedChatRequest, index)
+				}
+				callNameByID[call.ID] = call.Function.Name
+				conversation = append(conversation, promptTurn{
+					role: "tool_call",
+					text: fmt.Sprintf("<tool_call name=\"%s\">%s</tool_call>", html.EscapeString(call.Function.Name), arguments),
+				})
+			}
+		case "tool":
+			if content != "" {
+				name := callNameByID[message.ToolCallID]
+				if name == "" {
+					name = message.Name
+				}
+				if name == "" {
+					name = "tool"
+				}
+				conversation = append(conversation, promptTurn{role: "tool", text: fmt.Sprintf("[Tool result for %s]: %s", name, content)})
+			}
+		default:
+			return "", fmt.Errorf("%w: unsupported message role %q", ErrUnsupportedChatRequest, message.Role)
+		}
+	}
+
+	parts := make([]string, 0, 2)
+	if len(systemParts) > 0 {
+		parts = append(parts, "[System]: "+strings.Join(systemParts, "\n\n"))
+	}
+	if historyWindow <= 0 {
+		historyWindow = DefaultAutoHistoryWindow
+	}
+	if len(conversation) > historyWindow {
+		conversation = conversation[len(conversation)-historyWindow:]
+	}
+	for _, turn := range conversation {
+		switch turn.role {
+		case "assistant":
+			parts = append(parts, "[Assistant]: "+turn.text)
+		case "tool_call":
+			parts = append(parts, "[Assistant tool call]: "+turn.text)
+		case "tool":
+			parts = append(parts, turn.text)
+		default:
+			parts = append(parts, "[User]: "+turn.text)
+		}
+	}
+	return strings.TrimRight(strings.Join(parts, "\n\n"), "\n"), nil
+}
+
+func decodeTextContent(raw json.RawMessage) (string, error) {
+	value := bytes.TrimSpace(raw)
+	if len(value) == 0 || bytes.Equal(value, []byte("null")) {
+		return "", nil
+	}
+	var content string
+	if err := json.Unmarshal(value, &content); err != nil {
+		return "", fmt.Errorf("content must be a string")
+	}
+	return content, nil
+}
+
+func compactJSON(raw json.RawMessage) []byte {
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return raw
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return raw
+	}
+	return encoded
 }
