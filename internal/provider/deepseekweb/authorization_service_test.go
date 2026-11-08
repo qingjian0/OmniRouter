@@ -260,4 +260,3 @@ func TestAccountOperationLocksDoNotBlockDifferentAccounts(t *testing.T) {
 	second := <-done
 	second()
 }
-
