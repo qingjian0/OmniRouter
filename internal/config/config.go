@@ -101,6 +101,7 @@ func Load() (Config, error) {
 	}
 	cfg.GatewayAPIKey = os.Getenv("OMNI_GATEWAY_API_KEY")
 	cfg.CredentialEncryptionKey = strings.TrimSpace(os.Getenv("OMNI_CREDENTIAL_ENCRYPTION_KEY"))
+	cfg.DeepSeekWebExtensionOrigin = strings.TrimSpace(os.Getenv("OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN"))
 	if raw := strings.TrimSpace(os.Getenv("OMNI_PROVIDERS")); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &cfg.Providers); err != nil {
 			return Config{}, fmt.Errorf("OMNI_PROVIDERS: %w", err)
