@@ -35,6 +35,7 @@ func TestHTTPCompletionTransportAuthorizedMultiTurnFlow(t *testing.T) {
 			_, _ = w.Write([]byte("event: ready\ndata: {\"request_message_id\":\"request-1\",\"response_message_id\":\"response-1\"}\n\n"))
 			_, _ = w.Write([]byte("data: {\"p\":\"response/fragments\",\"o\":\"APPEND\",\"v\":[{\"type\":\"RESPONSE\",\"content\":\"hello\"}]}\n\n"))
 			_, _ = w.Write([]byte("data: {\"p\":\"response/status\",\"v\":\"FINISHED\"}\n\n"))
+			_, _ = w.Write([]byte("data: {\"p\":\"response/search_results\",\"o\":\"APPEND\",\"v\":[{\"title\":\"source\"}]}\n\n"))
 		default:
 			http.NotFound(w, r)
 		}
