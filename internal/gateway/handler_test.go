@@ -43,9 +43,9 @@ func TestClassifyRequestError(t *testing.T) {
 }
 
 type usageTestProvider struct {
-	id           string
-	capabilities []string
-	stream       func(context.Context, *provider.Request, func(provider.Event) error) error
+	id                 string
+	capabilities       []string
+	stream             func(context.Context, *provider.Request, func(provider.Event) error) error
 	lastConversationID string
 }
 
