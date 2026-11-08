@@ -84,11 +84,11 @@ func TestMapChatCompletionInputRejectsMalformedAndTrailingJSON(t *testing.T) {
 }
 
 func TestMapChatCompletionInputPreservesMessageWhitespace(t *testing.T) {
-	got, err := MapChatCompletionInput([]byte(`{"model":"deepseek-chat","messages":[{"role":"user","content":"  keep\nspacing  "}]}`))
+	got, err := MapChatCompletionInput([]byte(`{"model":"deepseek-chat","messages":[{"role":"user","content":"  keep\nspacing  \n"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got.Prompt, "  keep\nspacing  ") {
+	if !strings.Contains(got.Prompt, "  keep\nspacing  \n") {
 		t.Fatalf("message content was normalized: %q", got.Prompt)
 	}
 }
