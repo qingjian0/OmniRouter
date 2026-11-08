@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -214,22 +215,29 @@ func TestAuthorizationServiceRollsBackPartialPersistence(t *testing.T) {
 func TestAccountOperationLocksSerializeSameAccountAndReleaseEntries(t *testing.T) {
 	var locks accountOperationLocks
 	first := locks.lock("account-a")
-	entered := make(chan struct{})
 	release := make(chan func(), 1)
-	go func() {
-		close(entered)
-		release <- locks.lock("account-a")
-	}()
-	<-entered
+	go func() { release <- locks.lock("account-a") }()
 
-	locks.mu.Lock()
-	entry := locks.entries["account-a"]
-	if entry == nil || entry.refs != 2 {
+	deadline := time.After(time.Second)
+	for {
+		locks.mu.Lock()
+		entry := locks.entries["account-a"]
+		refs := 0
+		if entry != nil {
+			refs = entry.refs
+		}
 		locks.mu.Unlock()
-		first()
-		t.Fatalf("expected two references while second operation waits, got %#v", entry)
+		if refs == 2 {
+			break
+		}
+		select {
+		case <-deadline:
+			first()
+			t.Fatal("second operation did not register its account lock reference")
+		default:
+			runtime.Gosched()
+		}
 	}
-	locks.mu.Unlock()
 
 	first()
 	second := <-release
