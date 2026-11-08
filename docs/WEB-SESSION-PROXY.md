@@ -138,13 +138,24 @@ Record browser version, capture date, visible DeepSeek web build/version if avai
 - A paired account can be restored after SQLite restart without exposing credentials.
 - One non-streaming text completion succeeds with a current user-authorized session.
 - One streaming completion reaches a verified terminal event; EOF without terminal marker is an error.
-- Two sequential turns continue the same upstream conversation using the verified parent message ID.
+- Two sequential turns reuse the same upstream chat-session ID and rolling prompt. The current implementation keeps `parent_message_id: null`; this strategy remains subject to live compatibility verification.
 - Concurrent turns for one conversation are serialized; separate conversations can proceed independently.
 - Downstream cancellation cancels upstream I/O and releases locks.
 - Expired sessions fail closed and request re-authentication.
 - Policy blocks and rate limits are not retried or bypassed.
 - Logs, errors, metrics, request history, and backups contain no credentials.
-- The provider remains unadvertised/unroutable until these gates pass.
+- The provider remains unadvertised/unroutable until pairing, persistent credential storage, and an explicit model allowlist are present. Live upstream compatibility remains a separate acceptance gate; a locally passing simulation must never be reported as live acceptance.
+
+## Authoritative implementation status (2026-11-08)
+
+The historical implementation-slice notes below describe earlier checkpoints and are superseded where they conflict with the current branch status above and here.
+
+- Concrete HTTP transport, request mapper, SSE patch decoder, OpenAI stream encoder, executor, credential vault integration, SQLite lineage coordinator, pairing-time activation, and startup restoration are implemented and wired on `feature/web-session-proxy`.
+- Local tests exercise the ordinary authorized request sequence (`users/current` → session creation when needed → completion SSE), session reuse, rolling prompt, terminal handling, cancellation, and policy-error handling.
+- HTTP 401 maps to expired authorization; HTTP 403 maps to a typed policy-blocked error; HTTP 429 maps to rate limiting. An SSE `hint` error maps to a typed policy/rate-limit error. The current adapter does not call a challenge endpoint or generate proof material.
+- Challenge-specific online compatibility has not been verified. If the current upstream requires an attestation/PoW response outside the ordinary user-initiated authorization flow, the request remains blocked and is surfaced as an upstream policy error. No fabricated challenge values, copied proof values, synthetic browser identity, or solver are part of this implementation.
+- The current supported scope is text Chat Completions only. Search metadata is drained rather than exposed; active tools, image input, and file upload are not implemented.
+- **Not yet proven:** live DeepSeek acceptance, exact current request schema, the selected rolling-prompt session strategy, and successful two-turn continuity against the live service.
 
 ## Current code status
 
@@ -157,7 +168,7 @@ The isolated Go patch decoder now follows cross-checked public reference behavio
 - Batch token usage and explicit terminal status.
 - Unknown event/patch fail-closed behavior.
 
-This decoder remains isolated and is not wired into `RegistrationProvider`. It does not establish current protocol compatibility and must not enable model advertisement or inference before current sanitized fixtures and end-to-end acceptance tests pass.
+This decoder is now wired into the concrete HTTP transport and `ExecutorProvider`. Runtime activation still requires a paired account, persistent encrypted credentials, and at least one enabled model. Local fixtures validate the adapter's behavior, not current DeepSeek live compatibility.
 
 
 ### OpenAI request projection and bounded conversation history
@@ -170,7 +181,7 @@ A protocol-neutral mapper now exists in `internal/provider/deepseekweb/request.g
 - Rejects a current `tools[]` definition because translating model output back into OpenAI `tool_calls` is not implemented yet. It also rejects unsupported content blocks and malformed historical tool-call payloads.
 - Preserves message whitespace, including trailing newlines.
 
-This is request normalization only. It is not yet called by the gateway or provider runtime, does not implement tool execution, does not establish whether DeepSeek currently accepts this prompt convention, and does not imply that session IDs or parent-message IDs are known. The provider remains inert and advertises zero models.
+The mapper is called by `ExecutorProvider` for incoming Chat Completions requests. It does not implement active tool execution, and its rolling-prompt convention remains unverified against the live upstream. The runtime advertises only explicitly enabled text Chat Completions models after account pairing.
 
 The OmniRoute reference's persistent-session design also demonstrates that session reuse and rolling prompt history are separate controls: its implementation keeps an upstream session cache and separately limits the prompt transcript. OmniRouter will keep its durable per-provider-account lineage model and conversation lock, but will not key sessions by raw tokens or copy the reference's generated-cookie/browser-fingerprint/challenge logic. A verified two-turn fixture must determine whether upstream parent IDs are required and how stale-session responses are represented.
 
@@ -208,7 +219,7 @@ A per-completion encoder now exists in `internal/provider/deepseekweb/openai_str
 - Rejects search metadata until a documented OpenAI-compatible metadata mapping exists; it does not silently append citations or search results to assistant text.
 - Rejects writes after completion and uses a distinct completion ID per encoder instance.
 
-The encoder is a tested serialization boundary only. It is not connected to the DeepSeek HTTP transport, `PatchDecoder`, or `RegistrationProvider`; no upstream request or live inference is enabled. Completion-token usage is not yet projected into downstream chunks. A provider integration must also preserve the Gateway's explicit terminal-event contract and cancellation behavior.
+The encoder is connected to `ExecutorProvider`, which consumes normalized transport updates and preserves the Gateway's explicit terminal-event contract. Completion-token usage is not currently projected into downstream chunks. Local serialization tests do not prove live upstream compatibility.
 
 ### Local conversation identity contract
 
@@ -218,7 +229,7 @@ The Chat Completions gateway now accepts an optional `X-OmniRouter-Conversation-
 - It is not a DeepSeek `chat_session_id`, parent message ID, cookie, or credential.
 - Callers that want cross-request DeepSeek Web continuity must send the same header value on every turn. If omitted, the executor creates a cryptographically random one-turn lease key, does not persist lineage, and never guesses identity from message text or API key.
 - The adapter scopes lineage by provider and authorized account in addition to this local key, and serializes turns with `ConversationLocks`.
-- The header is opt-in and does not change the behavior of other providers. The executor now enforces the independent-turn behavior when it is invoked; runtime provider wiring remains pending.
+- The header is opt-in and does not change the behavior of other providers. The runtime provider is activated after successful pairing and restored on startup when persistent credentials are available.
 
 ### Conversation coordinator boundary
 
