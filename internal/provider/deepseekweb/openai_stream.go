@@ -15,9 +15,9 @@ var ErrUnsupportedOpenAIStreamUpdate = errors.New("deepseek web: unsupported Ope
 // payload expected by OmniRouter's existing Chat Completions gateway. It is
 // scoped to one completion and must not be shared across concurrent streams.
 type OpenAIStreamEncoder struct {
-	id      string
-	model   string
-	created int64
+	id       string
+	model    string
+	created  int64
 	finished bool
 }
 
