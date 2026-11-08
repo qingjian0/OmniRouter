@@ -97,6 +97,27 @@ func TestAuthorizationServicePersistsRestoresAndRevokes(t *testing.T) {
 		}
 	}
 
+	// Simulate a credential-store failure. Revocation must still disable the
+	// account first so that no partially retained credential pair can restore.
+	if _, err := runtime.Store().DB().ExecContext(ctx, `CREATE TRIGGER reject_test_credential_revoke BEFORE UPDATE OF status ON credentials WHEN NEW.status='revoked' BEGIN SELECT RAISE(ABORT, 'injected credential revoke failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Revoke(ctx, record.AccountID); err == nil {
+		t.Fatal("expected injected credential revocation failure")
+	}
+	if _, err := service.LoadAuthorization(ctx, record.AccountID); !errors.Is(err, ErrAuthorizationRequired) {
+		t.Fatalf("partially failed revocation must remain fail-closed, got %v", err)
+	}
+	owner, err := accountRepo.Get(ctx, record.AccountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owner.Status != account.StatusDisabled {
+		t.Fatalf("account must be disabled before credential cleanup, got %s", owner.Status)
+	}
+	if _, err := runtime.Store().DB().ExecContext(ctx, "DROP TRIGGER reject_test_credential_revoke"); err != nil {
+		t.Fatal(err)
+	}
 	if err := service.Revoke(ctx, record.AccountID); err != nil {
 		t.Fatal(err)
 	}
