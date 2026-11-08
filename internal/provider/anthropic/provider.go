@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"mime"
 	"net/url"
 	"strings"
 
@@ -99,7 +100,7 @@ func (p *Provider) GenerateAnthropic(ctx context.Context, req *provider.Request)
 	if req == nil {
 		return nil, fmt.Errorf("request is required")
 	}
-	body, err := p.do(ctx, req.Input)
+	body, err := p.do(ctx, req.Input, false)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +128,7 @@ func (p *Provider) StreamAnthropic(ctx context.Context, req *provider.Request, e
 	if req == nil {
 		return fmt.Errorf("request is required")
 	}
-	body, err := p.do(ctx, req.Input)
+	body, err := p.do(ctx, req.Input, true)
 	if err != nil {
 		return err
 	}
@@ -198,7 +199,7 @@ func (p *Provider) StreamAnthropic(ctx context.Context, req *provider.Request, e
 	return nil
 }
 
-func (p *Provider) do(ctx context.Context, input []byte) (io.ReadCloser, error) {
+func (p *Provider) do(ctx context.Context, input []byte, stream bool) (io.ReadCloser, error) {
 	var payload map[string]json.RawMessage
 	if err := json.Unmarshal(input, &payload); err != nil {
 		return nil, fmt.Errorf("invalid Anthropic Messages payload: %w", err)
@@ -209,6 +210,8 @@ func (p *Provider) do(ctx context.Context, input []byte) (io.ReadCloser, error) 
 	if _, ok := payload["max_tokens"]; !ok {
 		return nil, fmt.Errorf("max_tokens is required")
 	}
+	streamValue, _ := json.Marshal(stream)
+	payload["stream"] = streamValue
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -231,6 +234,15 @@ func (p *Provider) do(ctx context.Context, input []byte) (io.ReadCloser, error) 
 		defer resp.Body.Close()
 		message, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return nil, fmt.Errorf("Anthropic Messages API returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
+	}
+	mediaType, _, parseErr := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if parseErr != nil || (stream && !strings.EqualFold(mediaType, "text/event-stream")) ||
+		(!stream && !strings.EqualFold(mediaType, "application/json") && !strings.HasSuffix(strings.ToLower(mediaType), "+json")) {
+		resp.Body.Close()
+		if stream {
+			return nil, fmt.Errorf("Anthropic streaming endpoint returned unexpected content type %q", resp.Header.Get("Content-Type"))
+		}
+		return nil, fmt.Errorf("Anthropic Messages endpoint returned unexpected content type %q", resp.Header.Get("Content-Type"))
 	}
 	return resp.Body, nil
 }
