@@ -470,7 +470,7 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		setRequestRoute(r, p, model)
 		setRequestError(r, classifyRequestError(r, err, false))
-		writeError(w, http.StatusBadGateway, "upstream_error", err.Error())
+		writeError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
 		return
 	}
 	setRequestRoute(r, p, model)
@@ -478,7 +478,7 @@ func (h *Handler) anthropicMessages(w http.ResponseWriter, r *http.Request) {
 	output, err := anthropic.FromOpenAI(response.Output, model)
 	if err != nil {
 		setRequestError(r, "upstream_protocol_error")
-		writeError(w, http.StatusBadGateway, "upstream_error", err.Error())
+		writeError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -565,7 +565,7 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		setRequestRoute(r, p, model)
 		setRequestError(r, classifyRequestError(r, err, false))
-		writeError(w, http.StatusBadGateway, "upstream_error", err.Error())
+		writeError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
 		return
 	}
 	setRequestRoute(r, p, model)
@@ -573,7 +573,7 @@ func (h *Handler) geminiGenerateContent(w http.ResponseWriter, r *http.Request) 
 	output, err := gemini.FromOpenAI(response.Output)
 	if err != nil {
 		setRequestError(r, "upstream_protocol_error")
-		writeError(w, http.StatusBadGateway, "upstream_error", err.Error())
+		writeError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
