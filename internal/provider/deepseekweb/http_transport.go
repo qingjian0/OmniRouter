@@ -113,7 +113,10 @@ func (t *HTTPCompletionTransport) Stream(
 		Preempt         bool     `json:"preempt"`
 	}{
 		ChatSessionID:   sessionID,
-		ParentMessageID: optionalString(lineage.ParentMessageID),
+		// OmniRoute's MIT reference uses persistent chat sessions with a rolling
+		// prompt and keeps parent_message_id null. Do not mix this with the
+		// alternative explicit-parent strategy used by other references.
+		ParentMessageID: nil,
 		ModelType:       input.ModelType,
 		Prompt:          input.Prompt,
 		RefFileIDs:      input.RefFileIDs,
