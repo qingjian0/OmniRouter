@@ -110,6 +110,13 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	}
 	registry := provider.NewRegistry()
 	router := scheduler.NewAdaptive(20 * time.Second)
+	var webRegistrar gateway.DeepSeekWebRegistrar
+	if webAuthorization != nil && webTransport != nil {
+		webRegistrar = &deepSeekWebRuntimeRegistrar{
+			registry: registry, router: router, models: modelRepo, providers: providerRepo,
+			authorization: webAuthorization, leases: leaseManager, transport: webTransport,
+		}
+	}
 	candidates := make(map[string][]scheduler.Candidate)
 	for _, providerConfig := range cfg.Providers {
 		providerName := providerConfig.Name
@@ -298,7 +305,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	}
 	server := &http.Server{
 		Addr:         cfg.HTTP.Address,
-		Handler:      gateway.NewHandlerWithDeepSeekWeb(registry, cfg.GatewayAPIKey, router, vault, providerRepo, accountRepo, sessionRepo, modelRepo, apiKeyRepo, cfg.DeepSeekWebExtensionOrigin, requestLogRepo),
+		Handler:      gateway.NewHandlerWithDeepSeekWebRegistrar(registry, cfg.GatewayAPIKey, router, vault, providerRepo, accountRepo, sessionRepo, modelRepo, apiKeyRepo, cfg.DeepSeekWebExtensionOrigin, webRegistrar, requestLogRepo),
 		ReadTimeout:  cfg.HTTP.ReadTimeout,
 		WriteTimeout: cfg.HTTP.WriteTimeout,
 		IdleTimeout:  cfg.HTTP.IdleTimeout,
