@@ -7,6 +7,7 @@ import (
 	"omnirouter/internal/provider"
 	anthropicprovider "omnirouter/internal/provider/anthropic"
 	"omnirouter/internal/provider/deepseek"
+	"omnirouter/internal/provider/deepseekweb"
 	geminiprovider "omnirouter/internal/provider/gemini"
 	openairesponses "omnirouter/internal/provider/openairesponses"
 )
