@@ -273,12 +273,19 @@ func (p *Provider) do(ctx context.Context, input []byte, stream bool) (io.ReadCl
 		message, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBytes))
 		return nil, fmt.Errorf("OpenAI Responses API returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
 	}
+	mediaType, _, parseErr := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if parseErr != nil {
+		resp.Body.Close()
+		return nil, fmt.Errorf("OpenAI Responses endpoint returned unexpected content type %q", resp.Header.Get("Content-Type"))
+	}
 	if stream {
-		mediaType, _, parseErr := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-		if parseErr != nil || !strings.EqualFold(mediaType, "text/event-stream") {
+		if !strings.EqualFold(mediaType, "text/event-stream") {
 			resp.Body.Close()
 			return nil, fmt.Errorf("OpenAI Responses streaming endpoint returned non-SSE content type %q", resp.Header.Get("Content-Type"))
 		}
+	} else if !strings.EqualFold(mediaType, "application/json") && !strings.HasSuffix(strings.ToLower(mediaType), "+json") {
+		resp.Body.Close()
+		return nil, fmt.Errorf("OpenAI Responses endpoint returned unexpected content type %q", resp.Header.Get("Content-Type"))
 	}
 	return resp.Body, nil
 }
