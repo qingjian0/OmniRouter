@@ -4,6 +4,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -13,12 +14,15 @@ import (
 )
 
 type Candidate struct {
-	Provider     provider.Provider
-	Priority     int
-	Weight       uint32
-	Enabled      bool
-	Capabilities []string
-	ContextLimit int
+	Provider                provider.Provider
+	Priority                int
+	Weight                  uint32
+	Enabled                 bool
+	Capabilities            []string
+	ContextLimit            int
+	InputCostPerMillionUSD  float64
+	OutputCostPerMillionUSD float64
+	PricingKnown            bool
 }
 
 type Scheduler struct {
@@ -27,7 +31,12 @@ type Scheduler struct {
 	cursor     map[string]*atomic.Uint64
 	healthTTL  time.Duration
 	health     map[string]healthRecord
-	probeLocks map[string]*sync.Mutex
+	probeLocks map[string]*probeLockEntry
+}
+
+type probeLockEntry struct {
+	mu   sync.Mutex
+	refs int
 }
 
 type healthRecord struct {
@@ -46,7 +55,7 @@ func New(healthTTL time.Duration) *Scheduler {
 		cursor:     make(map[string]*atomic.Uint64),
 		healthTTL:  healthTTL,
 		health:     make(map[string]healthRecord),
-		probeLocks: make(map[string]*sync.Mutex),
+		probeLocks: make(map[string]*probeLockEntry),
 	}
 }
 
@@ -63,6 +72,16 @@ func (s *Scheduler) Replace(modelID string, candidates []Candidate) {
 	sort.SliceStable(filtered, func(i, j int) bool { return filtered[i].Priority > filtered[j].Priority })
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A route replacement may swap the concrete adapter behind an existing
+	// provider ID. Invalidate its shared health cache before publishing routes.
+	for _, candidate := range s.candidates[modelID] {
+		if candidate.Provider != nil {
+			delete(s.health, candidate.Provider.ID())
+		}
+	}
+	for _, candidate := range filtered {
+		delete(s.health, candidate.Provider.ID())
+	}
 	s.candidates[modelID] = filtered
 	if s.cursor[modelID] == nil {
 		s.cursor[modelID] = &atomic.Uint64{}
@@ -81,6 +100,13 @@ func (s *Scheduler) SelectWithRequirements(ctx context.Context, modelID string, 
 	candidates := append([]Candidate(nil), s.candidates[modelID]...)
 	cursor := s.cursor[modelID]
 	s.mu.RUnlock()
+	eligibleCandidates := candidates[:0]
+	for _, candidate := range candidates {
+		if candidate.Enabled && candidate.Provider != nil {
+			eligibleCandidates = append(eligibleCandidates, candidate)
+		}
+	}
+	candidates = eligibleCandidates
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no enabled provider for model %q", modelID)
 	}
@@ -137,15 +163,12 @@ func (s *Scheduler) isHealthy(ctx context.Context, p provider.Provider) bool {
 
 	// Only one half-open health probe may run per provider. Without this guard,
 	// a burst of requests after cooldown can stampede the upstream /models API.
-	s.mu.Lock()
-	probeLock := s.probeLocks[id]
-	if probeLock == nil {
-		probeLock = &sync.Mutex{}
-		s.probeLocks[id] = probeLock
-	}
-	s.mu.Unlock()
-	probeLock.Lock()
-	defer probeLock.Unlock()
+	probeLock, releaseProbeLock := s.acquireProbeLock(id)
+	probeLock.mu.Lock()
+	defer func() {
+		probeLock.mu.Unlock()
+		releaseProbeLock()
+	}()
 
 	// Another request may have completed the probe while this request waited.
 	if healthy, decided := s.cachedHealth(id, time.Now()); decided {
@@ -159,16 +182,68 @@ func (s *Scheduler) isHealthy(ctx context.Context, p provider.Provider) bool {
 	err := p.HealthCheck(ctx)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.hasProviderLocked(p) {
+		// The provider was removed or replaced while its health check was in
+		// flight. Never publish an old instance's result under the shared ID.
+		return false
+	}
 	previous := s.health[id]
 	if err == nil {
 		s.health[id] = healthRecord{checked: checkedAt, healthy: true}
 		return true
 	}
-	failures := previous.failures + 1
-	if failures == 0 {
-		failures = 1
-	}
+	failures := saturatingFailureIncrement(previous.failures)
 	s.health[id] = healthRecord{checked: checkedAt, healthy: false, failures: failures, unhealthyUntil: checkedAt.Add(failureCooldown(failures))}
+	return false
+}
+
+func (s *Scheduler) acquireProbeLock(providerID string) (*probeLockEntry, func()) {
+	s.mu.Lock()
+	entry := s.probeLocks[providerID]
+	if entry == nil {
+		entry = &probeLockEntry{}
+		s.probeLocks[providerID] = entry
+	}
+	entry.refs++
+	s.mu.Unlock()
+
+	return entry, func() {
+		s.mu.Lock()
+		entry.refs--
+		if entry.refs == 0 && s.probeLocks[providerID] == entry {
+			delete(s.probeLocks, providerID)
+		}
+		s.mu.Unlock()
+	}
+}
+
+// sameProviderInstance compares pointer-backed adapters by identity. Value
+// adapters are compared structurally without risking an interface-comparison
+// panic when their concrete type contains maps or slices.
+func sameProviderInstance(left, right provider.Provider) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	leftValue, rightValue := reflect.ValueOf(left), reflect.ValueOf(right)
+	if leftValue.Type() != rightValue.Type() {
+		return false
+	}
+	if leftValue.Kind() == reflect.Pointer {
+		return leftValue.Pointer() == rightValue.Pointer()
+	}
+	return reflect.DeepEqual(left, right)
+}
+
+// hasProviderLocked rejects health results from an instance no longer present
+// in any route. Caller must hold s.mu.
+func (s *Scheduler) hasProviderLocked(p provider.Provider) bool {
+	for _, candidates := range s.candidates {
+		for _, candidate := range candidates {
+			if candidate.Enabled && sameProviderInstance(candidate.Provider, p) {
+				return true
+			}
+		}
+	}
 	return false
 }
 
@@ -189,6 +264,13 @@ func (s *Scheduler) cachedHealth(providerID string, now time.Time) (healthy, dec
 		return false, true
 	}
 	return false, false
+}
+
+func saturatingFailureIncrement(value uint32) uint32 {
+	if value == ^uint32(0) {
+		return value
+	}
+	return value + 1
 }
 
 func failureCooldown(failures uint32) time.Duration {
@@ -217,10 +299,7 @@ func (s *Scheduler) ReportFailure(providerID string) {
 	defer s.mu.Unlock()
 	now := time.Now()
 	previous := s.health[providerID]
-	failures := previous.failures + 1
-	if failures == 0 {
-		failures = 1
-	}
+	failures := saturatingFailureIncrement(previous.failures)
 	s.health[providerID] = healthRecord{checked: now, healthy: false, failures: failures, unhealthyUntil: now.Add(failureCooldown(failures))}
 }
 
@@ -254,27 +333,38 @@ func (s *Scheduler) AddOrReplaceProvider(p provider.Provider, models []string, p
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.health, p.ID())
+	previous := make(map[string]Candidate)
 	for modelID, candidates := range s.candidates {
 		kept := candidates[:0]
 		for _, candidate := range candidates {
-			if candidate.Provider == nil || candidate.Provider.ID() != p.ID() {
-				kept = append(kept, candidate)
+			if candidate.Provider != nil && candidate.Provider.ID() == p.ID() {
+				previous[modelID] = candidate
+				continue
 			}
+			kept = append(kept, candidate)
 		}
 		s.candidates[modelID] = kept
 	}
 	for _, modelID := range models {
-		if !enabled {
+		old, found := previous[modelID]
+		if !enabled && !found {
 			continue
 		}
-		s.candidates[modelID] = append(s.candidates[modelID], Candidate{Provider: p, Priority: priority, Weight: weight, Enabled: true})
+		candidate := Candidate{Provider: p, Priority: priority, Weight: weight, Enabled: enabled}
+		if found {
+			candidate.Capabilities = append([]string(nil), old.Capabilities...)
+			candidate.ContextLimit = old.ContextLimit
+			candidate.InputCostPerMillionUSD = old.InputCostPerMillionUSD
+			candidate.OutputCostPerMillionUSD = old.OutputCostPerMillionUSD
+			candidate.PricingKnown = old.PricingKnown
+		}
+		s.candidates[modelID] = append(s.candidates[modelID], candidate)
 		sort.SliceStable(s.candidates[modelID], func(i, j int) bool { return s.candidates[modelID][i].Priority > s.candidates[modelID][j].Priority })
 		if s.cursor[modelID] == nil {
 			s.cursor[modelID] = &atomic.Uint64{}
 		}
 	}
 }
-
 func hasCapabilities(available, required []string) bool {
 	set := make(map[string]struct{}, len(available))
 	for _, capability := range available {
@@ -303,23 +393,33 @@ func (s *Scheduler) AddOrReplaceProviderModels(p provider.Provider, models []pro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.health, p.ID())
+	previousPricing := make(map[string]Candidate)
 	for modelID, candidates := range s.candidates {
 		kept := candidates[:0]
 		for _, candidate := range candidates {
-			if candidate.Provider == nil || candidate.Provider.ID() != p.ID() {
+			if candidate.Provider != nil && candidate.Provider.ID() == p.ID() {
+				previousPricing[modelID] = candidate
+			} else {
 				kept = append(kept, candidate)
 			}
 		}
 		s.candidates[modelID] = kept
 	}
 	for _, model := range models {
-		if !enabled {
+		previous, found := previousPricing[model.ID]
+		if !enabled && !found {
 			continue
 		}
-		s.candidates[model.ID] = append(s.candidates[model.ID], Candidate{
-			Provider: p, Priority: priority, Weight: weight, Enabled: true,
+		candidate := Candidate{
+			Provider: p, Priority: priority, Weight: weight, Enabled: enabled,
 			Capabilities: append([]string(nil), model.Capabilities...), ContextLimit: model.ContextLimit,
-		})
+		}
+		if found {
+			candidate.InputCostPerMillionUSD = previous.InputCostPerMillionUSD
+			candidate.OutputCostPerMillionUSD = previous.OutputCostPerMillionUSD
+			candidate.PricingKnown = previous.PricingKnown
+		}
+		s.candidates[model.ID] = append(s.candidates[model.ID], candidate)
 		sort.SliceStable(s.candidates[model.ID], func(i, j int) bool { return s.candidates[model.ID][i].Priority > s.candidates[model.ID][j].Priority })
 		if s.cursor[model.ID] == nil {
 			s.cursor[model.ID] = &atomic.Uint64{}
