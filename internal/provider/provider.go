@@ -19,10 +19,13 @@ type Model struct {
 	APICapabilities  []string `json:"api_capabilities,omitempty"`
 }
 
+// ConversationID is an optional caller-supplied stable conversation key. It is
+// opaque to providers and must never be treated as an upstream session ID.
 type Request struct {
-	Model  string
-	Input  []byte
-	Stream bool
+	Model          string
+	Input          []byte
+	Stream         bool
+	ConversationID string
 }
 type Response struct {
 	Model  string

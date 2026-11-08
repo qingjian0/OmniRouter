@@ -132,7 +132,7 @@ function applyProviderKindDefaults() {
     "openai-responses": { id: "openai-responses", name: "OpenAI Responses", base_url: "https://api.openai.com/v1", models: "gpt-4.1" },
     anthropic: { id: "anthropic", name: "Anthropic", base_url: "https://api.anthropic.com/v1", models: "claude-sonnet-4-5" },
     gemini: { id: "gemini", name: "Google Gemini", base_url: "https://generativelanguage.googleapis.com/v1beta", models: "gemini-2.5-flash" },
-    "deepseek-web": { id: "deepseek-web", name: "DeepSeek Web（仅会话登记）", base_url: "https://chat.deepseek.com", models: "" }
+    "deepseek-web": { id: "deepseek-web", name: "DeepSeek Web（网页登录态）", base_url: "https://chat.deepseek.com", models: "" }
   };
   const selected = defaults[providerForm.kind] ?? defaults["openai-compatible"];
   const known = Object.values(defaults);
@@ -384,7 +384,7 @@ onMounted(refresh);
           <article class="panel">
             <div class="panel-title"><h2>添加 Provider</h2><span class="muted">官方 API / OpenAI-compatible</span></div>
             <form class="form-grid" @submit.prevent="createProvider">
-              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="anthropic">Anthropic Messages API（原生）</option><option value="gemini">Google Gemini API（原生）</option><option value="deepseek">DeepSeek 官方 API</option><option value="deepseek-web">DeepSeek Web（浏览器会话登记，推理暂不可用）</option></select></label>
+              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="anthropic">Anthropic Messages API（原生）</option><option value="gemini">Google Gemini API（原生）</option><option value="deepseek">DeepSeek 官方 API</option><option value="deepseek-web">DeepSeek Web（浏览器授权；文本推理需在线验收）</option></select></label>
               <label>ID<input v-model="providerForm.id" required placeholder="deepseek-primary" /></label>
               <label>名称<input v-model="providerForm.name" placeholder="DeepSeek Primary" /></label>
               <label class="wide">Base URL<input v-model="providerForm.base_url" :required="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek-web' ? 'https://chat.deepseek.com' : providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'anthropic' ? 'https://api.anthropic.com/v1' : providerForm.kind === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : providerForm.kind === 'openai-responses' ? 'https://api.openai.com/v1' : 'https://api.example.com/v1'" /></label>
@@ -399,7 +399,7 @@ onMounted(refresh);
             <p class="hint">OpenAI Responses、Anthropic Messages、Gemini 均使用各自原生协议，不会伪装成 Chat Completions。配置上游密钥前，必须设置 OMNI_CREDENTIAL_ENCRYPTION_KEY。</p>
           </article>
           <article v-if="pairingProviders.length" class="panel">
-            <div class="panel-title"><h2>DeepSeek Web 浏览器授权</h2><span class="muted">仅登记会话，不提供推理</span></div>
+            <div class="panel-title"><h2>DeepSeek Web 浏览器授权</h2><span class="muted">浏览器授权 · 文本 Chat Completions</span></div>
             <form class="form-grid" @submit.prevent="createDeepSeekWebPairing">
               <label>DeepSeek Web Provider
                 <select v-model="pairingForm.provider_id" required>
@@ -416,7 +416,7 @@ onMounted(refresh);
               <button class="secondary" @click="copyPairingNonce">复制配对码</button>
               <p class="hint">在 Chrome / Edge 扩展弹窗中粘贴配对码并明确点击连接。不要将配对码发送给他人。</p>
             </div>
-            <p class="hint">必须先配置 OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN 并重启网关。当前 DeepSeek Web Provider 只支持浏览器会话加密登记和撤销；推理传输尚未实现，不能作为可用模型调用。</p>
+            <p class="hint">必须先配置 OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN 并重启网关。仓库已附带 Chromium Manifest V3 扩展（browser-extension/），需在 Chrome / Edge 开发者模式中加载未打包扩展；配对成功后会尝试即时激活文本 Chat Completions 执行器。扩展真机配对、当前网页会话字段兼容性、真实流式响应与多轮连续性仍未验收。不要把本地 CI 通过视为在线可用。</p>
           </article>
           <article class="panel">
             <div class="panel-title"><h2>Provider 列表</h2><span class="muted">{{ providers.length }} 项</span></div>

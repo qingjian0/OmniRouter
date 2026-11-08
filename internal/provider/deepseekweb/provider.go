@@ -6,27 +6,38 @@ import (
 	"omnirouter/internal/provider"
 )
 
-// RegistrationProvider is an intentionally inert registration shell. It allows
-// an administrator to create a DeepSeek Web provider record and pair a browser
-// session before the private request transport is implemented. It advertises
-// no models, so the scheduler cannot route inference to this provider.
+// RegistrationProvider is the pre-pairing registration shell. It advertises
+// only the explicitly configured model allowlist; inference remains unavailable
+// until a browser account is paired and the runtime replaces this shell with an
+// ExecutorProvider.
 type RegistrationProvider struct {
-	id   string
-	name string
+	id     string
+	name   string
+	models []string
 }
 
-func NewRegistrationProvider(id, name string) *RegistrationProvider {
+func NewRegistrationProvider(id, name string, models ...string) *RegistrationProvider {
 	if name == "" {
 		name = id
 	}
-	return &RegistrationProvider{id: id, name: name}
+	return &RegistrationProvider{id: id, name: name, models: append([]string(nil), models...)}
 }
 
 func (p *RegistrationProvider) ID() string   { return p.id }
 func (p *RegistrationProvider) Name() string { return p.name }
 
 func (p *RegistrationProvider) ListModels(context.Context) ([]provider.Model, error) {
-	return []provider.Model{}, nil
+	models := make([]provider.Model, 0, len(p.models))
+	for _, id := range p.models {
+		if id == "" {
+			continue
+		}
+		models = append(models, provider.Model{
+			ID: id, Name: id, Provider: p.id,
+			Capabilities: []string{"chat", "streaming"},
+		})
+	}
+	return models, nil
 }
 
 func (p *RegistrationProvider) Generate(context.Context, *provider.Request) (*provider.Response, error) {

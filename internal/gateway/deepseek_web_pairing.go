@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,10 @@ import (
 
 	"omnirouter/internal/provider/deepseekweb"
 )
+
+type DeepSeekWebRegistrar interface {
+	RegisterDeepSeekWebAccount(context.Context, string, string, string) error
+}
 
 // createDeepSeekWebPairing is an authenticated admin operation. The returned
 // nonce is a short-lived capability and must not be logged or persisted.
@@ -206,6 +211,13 @@ func (h *Handler) submitDeepSeekWebPairing(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_authorization", "DeepSeek web authorization material failed validation")
 		return
+	}
+	if h.deepSeekWebRegistrar != nil {
+		if err := h.deepSeekWebRegistrar.RegisterDeepSeekWebAccount(r.Context(), target.ProviderID, authorization.AccountID, target.AccountName); err != nil {
+			_ = h.deepSeekWebAuthorization.Revoke(r.Context(), authorization.AccountID)
+			writeError(w, http.StatusConflict, "provider_registration_failed", "DeepSeek Web account was stored but could not be activated for inference; configure at least one model and persistent credentials")
+			return
+		}
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"provider_id": target.ProviderID,

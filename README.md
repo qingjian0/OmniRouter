@@ -1,6 +1,6 @@
 # OmniRouter
 
-轻量化、跨平台的统一 AI 接入、反向代理与调度网关。核心采用 Go 模块化单体，优先保持低依赖、低资源占用；管理界面采用 Vue 3 + TypeScript，构建后通过 Go embed 嵌入单一可执行文件；Node.js 仅用于前端构建，运行时不需要 Node.js。
+轻量化、跨平台的统一 AI 接入、反向代理与调度网关。上游分为官方 API Provider 与消费级 Web 登录态 Provider 两条独立通道；当前 Web 反代工作范围仅为 DeepSeek 网页版，将用户正常登录获得的会话转换为本地 OpenAI 兼容 API。官方 API 与网页会话严格隔离。核心采用 Go 模块化单体，优先保持低依赖、低资源占用；管理界面采用 Vue 3 + TypeScript，构建后通过 Go embed 嵌入单一可执行文件；Node.js 仅用于前端构建，运行时不需要 Node.js。
 
 ## 当前实现状态（2026-11-08）
 
@@ -21,7 +21,7 @@ OmniRouter 已完成第一轮核心集成。当前开发基线为 `dev`，稳定
 - CI 证明确定性测试和构建通过，不等于真实上游密钥联调、生产恢复或 Android/Termux 真机验收。
 
 **仍未完成：**
-- DeepSeek consumer-web：配对与授权凭据框架已进入 dev；Chromium 真机配对验收、会话上游有效性/重新授权 UX、脱敏协议 fixtures、真实推理传输、SSE 规范化和多轮 lineage 仍未完成。
+- DeepSeek consumer-web（本 PR 分支，尚未合并 dev）：已实现 Chromium MV3 配对扩展、一次性授权、加密凭据持久化/启动恢复/撤销、文本 Chat Completions 请求映射、SSE/patch 解码与 OpenAI 流式输出；本地 fixtures 已覆盖主要传输路径。仍待 Chromium 真机配对、当前网页凭据字段兼容性、真实在线流式响应和第二轮会话连续性验收。
 - 真实 OpenAI-compatible / Anthropic / Gemini / DeepSeek 上游密钥验收与多 Provider 流量验证。
 - 管理 API 安全专项验收、真实部署备份恢复、Termux / Android arm64 实机验收。
 - V1.0.0 正式发布。
@@ -32,7 +32,7 @@ OmniRouter 已完成第一轮核心集成。当前开发基线为 `dev`，稳定
 - PR #7 仍为 Draft（后续协议/传输工作）；PR #17 已关闭且未合并；PR #19 已关闭；其 RFC 状态修正已直接提交到 dev，未重复合并。配对基础代码已由独立集成提交进入 dev。
 - `dev` 持续领先于 `main`；当前分支差异以 Git compare 为准，`main` 未被本轮修改。未完成发布门禁前不合并 main、不打 V1.0.0 标签。
 
-详细设计与调用链见 [架构与工程规范](docs/ARCHITECTURE.md)、[自适应调度](docs/ADAPTIVE-SCHEDULER.md) 和 [V1 发布清单](docs/V1-RELEASE-CHECKLIST.md)。
+网页登录态反代的目标范围、协议隔离、账号生命周期、会话连续性和验收门禁见 [DeepSeek 网页版反代设计](docs/WEB-SESSION-PROXY.md)。详细设计与调用链见 [架构与工程规范](docs/ARCHITECTURE.md)、[自适应调度](docs/ADAPTIVE-SCHEDULER.md) 和 [V1 发布清单](docs/V1-RELEASE-CHECKLIST.md)。
 
 ## 运行
 
@@ -79,7 +79,7 @@ export OMNI_PROVIDERS='[
 
 - DeepSeek official API: dedicated `kind: deepseek` adapter, official model discovery, current V4 model metadata, native Chat Completions, Responses API and Anthropic Messages transports, thinking/reasoning field pass-through, and protocol-specific SSE handling. See [DeepSeek adapter guide](docs/DEEPSEEK-ADAPTER.md) and the manual [DeepSeek live acceptance workflow](.github/workflows/deepseek-live-smoke.yml).
 - Generic OpenAI-compatible endpoints remain available as `kind: openai-compatible`.
-- DeepSeek consumer-web pairing/session authorization scaffolding is integrated into dev, but remains a separate non-inference-capable workstream. The Provider advertises zero models and fails closed until authorized fixtures, transport, SSE, lineage, and live acceptance are complete.
+- DeepSeek consumer-web (this PR branch; not yet merged into `dev`): Chromium MV3 pairing extension, one-time authorization, encrypted credential persistence/restore/revocation, text Chat Completions mapping, SSE/patch decoding, and OpenAI-compatible streaming output are implemented; local fixtures cover the main transport path. Still pending: real Chromium pairing, current website credential-field compatibility, live streamed completion, and second-turn continuity. CI is not live-service acceptance.
 
 ### API
 

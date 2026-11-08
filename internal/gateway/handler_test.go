@@ -43,9 +43,10 @@ func TestClassifyRequestError(t *testing.T) {
 }
 
 type usageTestProvider struct {
-	id           string
-	capabilities []string
-	stream       func(context.Context, *provider.Request, func(provider.Event) error) error
+	id                 string
+	capabilities       []string
+	stream             func(context.Context, *provider.Request, func(provider.Event) error) error
+	lastConversationID string
 }
 
 func (p *usageTestProvider) ID() string {
@@ -62,7 +63,8 @@ func (p *usageTestProvider) ListModels(context.Context) ([]provider.Model, error
 	}
 	return []provider.Model{{ID: "model-test", Provider: p.ID(), Capabilities: capabilities}}, nil
 }
-func (p *usageTestProvider) Generate(context.Context, *provider.Request) (*provider.Response, error) {
+func (p *usageTestProvider) Generate(_ context.Context, req *provider.Request) (*provider.Response, error) {
+	p.lastConversationID = req.ConversationID
 	return &provider.Response{Model: "model-test", Output: []byte(`{"id":"x","choices":[],"usage":{"prompt_tokens":7,"completion_tokens":5,"total_tokens":12}}`)}, nil
 }
 func (p *usageTestProvider) Stream(ctx context.Context, req *provider.Request, emit func(provider.Event) error) error {
@@ -103,6 +105,36 @@ func newUsageTestHandler(p provider.Provider) (*Handler, http.Handler) {
 	h := &Handler{registry: registry, metrics: recorder, mux: http.NewServeMux()}
 	h.mux.HandleFunc("POST /v1/chat/completions", h.chatCompletions)
 	return h, recorder.Middleware(h.mux)
+}
+
+func TestGatewayPropagatesExplicitConversationID(t *testing.T) {
+	p := &usageTestProvider{}
+	_, handler := newUsageTestHandler(p)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"model-test"}`))
+	request.Header.Set("X-OmniRouter-Conversation-ID", "client-session:turn_01")
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if p.lastConversationID != "client-session:turn_01" {
+		t.Fatalf("provider received conversation ID %q", p.lastConversationID)
+	}
+}
+
+func TestGatewayRejectsInvalidConversationID(t *testing.T) {
+	p := &usageTestProvider{}
+	_, handler := newUsageTestHandler(p)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"model-test"}`))
+	request.Header.Set("X-OmniRouter-Conversation-ID", "bad value with spaces")
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if p.lastConversationID != "" {
+		t.Fatalf("provider was called with invalid conversation ID %q", p.lastConversationID)
+	}
 }
 
 func TestGatewayPersistsProviderUsageFromNonStreamingResponse(t *testing.T) {

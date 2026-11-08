@@ -73,8 +73,20 @@ jobs:
           files="$(gofmt -l $(find . -name '*.go' -type f))"
           if [ -n "$files" ]; then
             printf '%s\n' "$files"
+            gofmt -d $files
             exit 1
           fi
+
+      - name: Set up Node for extension validation
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate Chromium extension package
+        run: |
+          ruby -rjson -e 'm=JSON.parse(File.read("browser-extension/manifest.json")); abort "Manifest V3 required" unless m["manifest_version"] == 3; %w[popup.html popup.js popup.css README.md].each { |f| abort "missing extension file: #{f}" unless File.file?("browser-extension/#{f}") }; abort "missing cookies permission" unless m.fetch("permissions", []).include?("cookies"); puts "Chromium extension package OK"'
+          node --check browser-extension/popup.js
+          node --test browser-extension/popup.test.js
 
       - name: Check smoke-test script syntax
         run: |
@@ -186,6 +198,7 @@ jobs:
           name="omnirouter-ci-${GOOS}-${GOARCH}"
           go build -trimpath -o "dist/${name}${EXT}" ./cmd/omnirouter
           cp README.md "dist/README.md"
+          cp -R browser-extension "dist/browser-extension"
           cp docs/INSTALL.md "dist/INSTALL.md"
           cp examples/omnirouter.env.example "dist/omnirouter.env.example"
           cp docs/DATABASE-BACKUP-RESTORE.md "dist/DATABASE-BACKUP-RESTORE.md"
@@ -195,10 +208,15 @@ jobs:
           mkdir -p dist/scripts
           cp scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/termux-smoke.sh dist/scripts/
           if [ "${GOOS}" = "windows" ]; then
-            (cd dist && zip -r "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts)
+            (cd dist && zip -r "${name}.zip" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts browser-extension)
             archive="dist/${name}.zip"
           else
             archive="dist/${name}.tar.gz"
-            tar -C dist -czf "${archive}" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/termux-smoke.sh
+            tar -C dist -czf "${archive}" "${name}${EXT}" README.md INSTALL.md omnirouter.env.example DATABASE-BACKUP-RESTORE.md PROVIDER-ACCEPTANCE.md ANDROID-TERMUX-ACCEPTANCE.md V1-RELEASE-CHECKLIST.md scripts/backup-sqlite.sh scripts/restore-sqlite.sh scripts/provider-smoke.sh scripts/termux-smoke.sh browser-extension/README.md browser-extension/manifest.json browser-extension/popup.html browser-extension/popup.js browser-extension/popup.css
           fi
           test -s "${archive}"
+          if [ "${GOOS}" = "windows" ]; then
+            unzip -l "dist/${name}.zip" | grep -F "browser-extension/manifest.json"
+          else
+            tar -tzf "${archive}" | grep -Fx "browser-extension/manifest.json"
+          fi
