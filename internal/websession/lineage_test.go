@@ -43,9 +43,9 @@ func TestLineagePersistsAcrossSQLiteRestartAndAdvancesGeneration(t *testing.T) {
 	}
 	first, err := repo.Save(ctx, Lineage{
 		ProviderID: "web-provider", AccountID: "web-account",
-		LocalConversationID: "local-conversation-1",
+		LocalConversationID:    "local-conversation-1",
 		UpstreamConversationID: "upstream-chat-1",
-		ParentMessageID: "parent-1",
+		ParentMessageID:        "parent-1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -55,9 +55,9 @@ func TestLineagePersistsAcrossSQLiteRestartAndAdvancesGeneration(t *testing.T) {
 	}
 	second, err := repo.Save(ctx, Lineage{
 		ProviderID: "web-provider", AccountID: "web-account",
-		LocalConversationID: "local-conversation-1",
+		LocalConversationID:    "local-conversation-1",
 		UpstreamConversationID: "upstream-chat-1",
-		ParentMessageID: "parent-2",
+		ParentMessageID:        "parent-2",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +104,7 @@ func TestLineageIsolatedByProviderAndAccountAndRejectsOversizeIDs(t *testing.T) 
 	}
 	if _, err := repo.Save(context.Background(), Lineage{
 		ProviderID: "web-provider", AccountID: "web-account",
-		LocalConversationID: string(make([]byte, maxLineageIDBytes+1)),
+		LocalConversationID:    string(make([]byte, maxLineageIDBytes+1)),
 		UpstreamConversationID: "remote",
 	}); err == nil {
 		t.Fatal("oversized local conversation ID accepted")
