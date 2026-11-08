@@ -2,9 +2,9 @@ package websession
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
-	"database/sql"
 	"testing"
 	"time"
 
