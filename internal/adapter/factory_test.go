@@ -21,6 +21,19 @@ func TestNewDeepSeekUsesOfficialDefaults(t *testing.T) {
 	}
 }
 
+func TestNewOpenAIResponsesUsesDefaultBaseURL(t *testing.T) {
+	upstream, err := New(Config{Kind: KindOpenAIResponses, ID: "responses", Models: []string{"gpt-4.1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if DefaultBaseURL(KindOpenAIResponses) != openairesponses.DefaultBaseURL {
+		t.Fatalf("unexpected Responses default URL: %q", DefaultBaseURL(KindOpenAIResponses))
+	}
+	if _, ok := upstream.(*openairesponses.Provider); !ok {
+		t.Fatalf("unexpected adapter type %T", upstream)
+	}
+}
+
 func TestNewOpenAIResponsesUsesNativeAdapter(t *testing.T) {
 	upstream, err := New(Config{
 		Kind: KindOpenAIResponses, ID: "responses", Name: "Responses",
