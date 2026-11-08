@@ -90,3 +90,60 @@ func TestHTTPCompletionTransportFailsClosedOnPolicyBlock(t *testing.T) {
 		t.Fatalf("expected policy-blocked error, got %v", err)
 	}
 }
+
+func TestHTTPCompletionTransportReusesSessionWithRollingPrompt(t *testing.T) {
+	var completionPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Cookie") != "ds_session_id=authorized-session" {
+			t.Errorf("unexpected cookie header")
+		}
+		switch r.URL.Path {
+		case usersCurrentPath:
+			_, _ = w.Write([]byte(`{"code":0,"data":{"biz_data":{"token":"access-token"}}}`))
+		case createSessionPath:
+			t.Error("existing conversation unexpectedly created a new session")
+		case completionPath:
+			if err := json.NewDecoder(r.Body).Decode(&completionPayload); err != nil {
+				t.Errorf("decode completion request: %v", err)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte("event: ready\ndata: {\"request_message_id\":\"request-2\",\"response_message_id\":\"response-2\"}\n\n"))
+			_, _ = w.Write([]byte("data: {\"p\":\"response/fragments\",\"o\":\"APPEND\",\"v\":[{\"type\":\"RESPONSE\",\"content\":\"second turn\"}]}\n\n"))
+			_, _ = w.Write([]byte("data: {\"p\":\"response/status\",\"v\":\"FINISHED\"}\n\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := websession.NewHTTPClient(server.URL, "/api/v0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := &HTTPCompletionTransport{client: client}
+	result, err := transport.Stream(context.Background(), AuthorizationMaterial{
+		Token: []byte("user-token"), CookieHeader: []byte("ds_session_id=authorized-session"),
+	}, ChatCompletionInput{
+		Model: "deepseek-chat", ModelType: "default",
+		Prompt: "[User]: first turn\n\n[Assistant]: first answer\n\n[User]: second turn",
+		RefFileIDs: []string{},
+	}, websession.Lineage{
+		UpstreamConversationID: "persisted-session",
+		ParentMessageID: "previous-response",
+	}, func(PatchUpdate) error { return nil })
+	if err != nil {
+		t.Fatalf("Stream returned error: %v", err)
+	}
+	if !result.Completed || result.UpstreamConversationID != "persisted-session" {
+		t.Fatalf("unexpected completion result: %#v", result)
+	}
+	if parent, exists := completionPayload["parent_message_id"]; !exists || parent != nil {
+		t.Fatalf("rolling-prompt mode must keep parent_message_id null, got %#v", parent)
+	}
+	if completionPayload["chat_session_id"] != "persisted-session" {
+		t.Fatalf("existing upstream session was not reused: %#v", completionPayload["chat_session_id"])
+	}
+	if completionPayload["prompt"] != "[User]: first turn\n\n[Assistant]: first answer\n\n[User]: second turn" {
+		t.Fatalf("rolling prompt did not preserve prior turns: %#v", completionPayload["prompt"])
+	}
+}
