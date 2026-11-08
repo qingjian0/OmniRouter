@@ -318,7 +318,7 @@ func (p *nativeAnthropicTestProvider) StreamAnthropic(_ context.Context, _ *prov
 }
 
 func TestGatewayUsesNativeAnthropicProviderWhenAvailable(t *testing.T) {
-	p := &nativeAnthropicTestProvider{usageTestProvider: &usageTestProvider{}}
+	p := &nativeAnthropicTestProvider{usageTestProvider: &usageTestProvider{capabilities: []string{"anthropic_messages"}}}
 	registry := provider.NewRegistry()
 	if err := registry.Register(p); err != nil {
 		t.Fatal(err)
@@ -336,7 +336,7 @@ func TestGatewayUsesNativeAnthropicProviderWhenAvailable(t *testing.T) {
 }
 
 func TestGatewayStreamsNativeAnthropicEvents(t *testing.T) {
-	p := &nativeAnthropicTestProvider{usageTestProvider: &usageTestProvider{}}
+	p := &nativeAnthropicTestProvider{usageTestProvider: &usageTestProvider{capabilities: []string{"anthropic_messages", "streaming"}}}
 	registry := provider.NewRegistry()
 	if err := registry.Register(p); err != nil {
 		t.Fatal(err)
