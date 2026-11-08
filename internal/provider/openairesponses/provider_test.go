@@ -189,3 +189,22 @@ func TestStreamRejectsConflictingSSEEventAndPayloadTypes(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestGenerateResponsesRejectsNonJSONContentType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `{"id":"resp_test","status":"completed","output":[]}`)
+	}))
+	defer server.Close()
+
+	p, err := New(Config{ID: "responses", BaseURL: server.URL, Models: []string{"gpt-test"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.GenerateResponses(context.Background(), &provider.Request{
+		Model: "gpt-test", Input: []byte(`{"model":"gpt-test","input":"hello"}`),
+	})
+	if err == nil || !strings.Contains(err.Error(), "unexpected content type") {
+		t.Fatalf("expected non-JSON content type error, got %v", err)
+	}
+}
