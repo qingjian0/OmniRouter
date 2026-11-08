@@ -16,6 +16,8 @@ import (
 	openai "omnirouter/internal/provider/openai"
 )
 
+const DefaultBaseURL = "https://api.openai.com/v1"
+
 const maxResponseBytes = 32 << 20
 const maxErrorBytes = 1 << 20
 const maxSSELineBytes = 4 << 20
@@ -46,7 +48,10 @@ func New(cfg Config) (*Provider, error) {
 	cfg.ID = strings.TrimSpace(cfg.ID)
 	cfg.Name = strings.TrimSpace(cfg.Name)
 	cfg.BaseURL = strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
-	if cfg.ID == "" || cfg.BaseURL == "" {
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = DefaultBaseURL
+	}
+	if cfg.ID == "" {
 		return nil, fmt.Errorf("OpenAI Responses provider ID and base URL are required")
 	}
 	u, err := url.Parse(cfg.BaseURL)
