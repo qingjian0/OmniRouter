@@ -321,9 +321,15 @@ func (s *Scheduler) RemoveProvider(providerID string) {
 
 // AddOrReplaceProvider adds the provider to the configured model routes.
 func (s *Scheduler) AddOrReplaceProvider(p provider.Provider, models []string, priority int, weight uint32, enabled bool) {
-	if p == nil { return }
-	if priority == 0 { priority = 100 }
-	if weight == 0 { weight = 1 }
+	if p == nil {
+		return
+	}
+	if priority == 0 {
+		priority = 100
+	}
+	if weight == 0 {
+		weight = 1
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.health, p.ID())
@@ -341,7 +347,9 @@ func (s *Scheduler) AddOrReplaceProvider(p provider.Provider, models []string, p
 	}
 	for _, modelID := range models {
 		old, found := previous[modelID]
-		if !enabled && !found { continue }
+		if !enabled && !found {
+			continue
+		}
 		candidate := Candidate{Provider: p, Priority: priority, Weight: weight, Enabled: enabled}
 		if found {
 			candidate.Capabilities = append([]string(nil), old.Capabilities...)
@@ -352,7 +360,9 @@ func (s *Scheduler) AddOrReplaceProvider(p provider.Provider, models []string, p
 		}
 		s.candidates[modelID] = append(s.candidates[modelID], candidate)
 		sort.SliceStable(s.candidates[modelID], func(i, j int) bool { return s.candidates[modelID][i].Priority > s.candidates[modelID][j].Priority })
-		if s.cursor[modelID] == nil { s.cursor[modelID] = &atomic.Uint64{} }
+		if s.cursor[modelID] == nil {
+			s.cursor[modelID] = &atomic.Uint64{}
+		}
 	}
 }
 func hasCapabilities(available, required []string) bool {
@@ -371,9 +381,15 @@ func hasCapabilities(available, required []string) bool {
 // AddOrReplaceProviderModels keeps the scheduler's model capability metadata
 // synchronized with the provider registry during runtime administration.
 func (s *Scheduler) AddOrReplaceProviderModels(p provider.Provider, models []provider.Model, priority int, weight uint32, enabled bool) {
-	if p == nil { return }
-	if priority == 0 { priority = 100 }
-	if weight == 0 { weight = 1 }
+	if p == nil {
+		return
+	}
+	if priority == 0 {
+		priority = 100
+	}
+	if weight == 0 {
+		weight = 1
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.health, p.ID())
@@ -391,7 +407,9 @@ func (s *Scheduler) AddOrReplaceProviderModels(p provider.Provider, models []pro
 	}
 	for _, model := range models {
 		previous, found := previousPricing[model.ID]
-		if !enabled && !found { continue }
+		if !enabled && !found {
+			continue
+		}
 		candidate := Candidate{
 			Provider: p, Priority: priority, Weight: weight, Enabled: enabled,
 			Capabilities: append([]string(nil), model.Capabilities...), ContextLimit: model.ContextLimit,
@@ -403,6 +421,8 @@ func (s *Scheduler) AddOrReplaceProviderModels(p provider.Provider, models []pro
 		}
 		s.candidates[model.ID] = append(s.candidates[model.ID], candidate)
 		sort.SliceStable(s.candidates[model.ID], func(i, j int) bool { return s.candidates[model.ID][i].Priority > s.candidates[model.ID][j].Priority })
-		if s.cursor[model.ID] == nil { s.cursor[model.ID] = &atomic.Uint64{} }
+		if s.cursor[model.ID] == nil {
+			s.cursor[model.ID] = &atomic.Uint64{}
+		}
 	}
 }
