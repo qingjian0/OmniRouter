@@ -1216,7 +1216,6 @@ func declaredOutputTokenLimit(body []byte) int64 {
 	walk(value)
 	return maximum
 }
-
 // requiredCapabilities performs conservative structural detection. It does not
 // inspect or transform payload contents; it only prevents routing to adapters
 // that have not declared the requested feature.
