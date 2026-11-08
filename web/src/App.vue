@@ -131,7 +131,8 @@ function applyProviderKindDefaults() {
     deepseek: { id: "deepseek", name: "DeepSeek", base_url: "https://api.deepseek.com", models: "deepseek-flash,deepseek-v4-pro" },
     "openai-responses": { id: "openai-responses", name: "OpenAI Responses", base_url: "https://api.openai.com/v1", models: "gpt-4.1" },
     anthropic: { id: "anthropic", name: "Anthropic", base_url: "https://api.anthropic.com/v1", models: "claude-sonnet-4-5" },
-    gemini: { id: "gemini", name: "Google Gemini", base_url: "https://generativelanguage.googleapis.com/v1beta", models: "gemini-2.5-flash" }
+    gemini: { id: "gemini", name: "Google Gemini", base_url: "https://generativelanguage.googleapis.com/v1beta", models: "gemini-2.5-flash" },
+    "deepseek-web": { id: "deepseek-web", name: "DeepSeek Web（仅会话登记）", base_url: "https://chat.deepseek.com", models: "" }
   };
   const selected = defaults[providerForm.kind] ?? defaults["openai-compatible"];
   const known = Object.values(defaults);
@@ -386,15 +387,15 @@ onMounted(refresh);
           <article class="panel">
             <div class="panel-title"><h2>添加 Provider</h2><span class="muted">官方 API / OpenAI-compatible</span></div>
             <form class="form-grid" @submit.prevent="createProvider">
-              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="anthropic">Anthropic Messages API（原生）</option><option value="gemini">Google Gemini API（原生）</option><option value="deepseek">DeepSeek 官方 API</option></select></label>
+              <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="anthropic">Anthropic Messages API（原生）</option><option value="gemini">Google Gemini API（原生）</option><option value="deepseek">DeepSeek 官方 API</option><option value="deepseek-web">DeepSeek Web（浏览器会话登记，推理暂不可用）</option></select></label>
               <label>ID<input v-model="providerForm.id" required placeholder="deepseek-primary" /></label>
               <label>名称<input v-model="providerForm.name" placeholder="DeepSeek Primary" /></label>
-              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'anthropic' ? 'https://api.anthropic.com/v1' : providerForm.kind === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : providerForm.kind === 'openai-responses' ? 'https://api.openai.com/v1' : 'https://api.example.com/v1'" /></label>
-              <label class="wide">上游 API Key<input v-model="providerForm.api_key" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
-              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :required="providerForm.kind !== 'deepseek'" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : providerForm.kind === 'anthropic' ? 'claude-sonnet-4-5' : providerForm.kind === 'gemini' ? 'gemini-2.5-flash' : providerForm.kind === 'openai-responses' ? 'gpt-4.1' : 'model-a,model-b'" /></label>
+              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'anthropic' ? 'https://api.anthropic.com/v1' : providerForm.kind === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : providerForm.kind === 'openai-responses' ? 'https://api.openai.com/v1' : 'https://api.example.com/v1'" /></label>
+              <label class="wide">上游 API Key<input v-model="providerForm.api_key" :disabled="providerForm.kind === 'deepseek-web'" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
+              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :disabled="providerForm.kind === 'deepseek-web'" :required="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : providerForm.kind === 'anthropic' ? 'claude-sonnet-4-5' : providerForm.kind === 'gemini' ? 'gemini-2.5-flash' : providerForm.kind === 'openai-responses' ? 'gpt-4.1' : 'model-a,model-b'" /></label>
               <label>优先级<input v-model.number="providerForm.priority" type="number" min="0" /></label>
               <label>权重<input v-model.number="providerForm.weight" type="number" min="0" max="1000000" /></label>
-              <label v-if="providerForm.kind !== 'deepseek'" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
+              <label v-if="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
               <label class="check"><input v-model="providerForm.enabled" type="checkbox" />启用</label>
               <div class="form-actions"><button class="primary" type="submit">保存 Provider</button></div>
             </form>
