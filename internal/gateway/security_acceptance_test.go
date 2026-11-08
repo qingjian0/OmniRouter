@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"omnirouter/internal/provider"
+	"omnirouter/internal/scheduler"
 )
 
 type securityTestProvider struct {
@@ -153,5 +155,63 @@ func TestStreamingRequestCancellationPropagatesToProvider(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("handler did not return after stream cancellation")
+	}
+}
+
+type failoverAcceptanceSelector struct {
+	providers []provider.Provider
+	failed    map[string]bool
+}
+
+func (s *failoverAcceptanceSelector) Select(ctx context.Context, model string) (provider.Provider, error) {
+	return s.SelectWithRequirements(ctx, model, nil)
+}
+func (s *failoverAcceptanceSelector) SelectWithRequirements(ctx context.Context, model string, required []string) (provider.Provider, error) {
+	for _, candidate := range s.providers {
+		if s.failed[candidate.ID()] {
+			continue
+		}
+		models, err := candidate.ListModels(ctx)
+		if err != nil {
+			continue
+		}
+		for _, item := range models {
+			if item.ID == model && hasDeclaredCapabilities(item.Capabilities, required) {
+				return candidate, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no eligible provider")
+}
+func (s *failoverAcceptanceSelector) ReportFailure(id string) {
+	if s.failed == nil {
+		s.failed = make(map[string]bool)
+	}
+	s.failed[id] = true
+}
+
+func TestNonStreamingFailureRetriesDistinctEligibleProvider(t *testing.T) {
+	first := &securityTestProvider{id: "first", generate: func(context.Context, *provider.Request) (*provider.Response, error) {
+		return nil, errors.New("simulated upstream failure")
+	}}
+	second := &securityTestProvider{id: "second"}
+	registry := provider.NewRegistry()
+	if err := registry.Register(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Register(second); err != nil {
+		t.Fatal(err)
+	}
+	selector := &failoverAcceptanceSelector{providers: []provider.Provider{first, second}, failed: make(map[string]bool)}
+	h := &Handler{registry: registry, selector: selector}
+	response, selected, err := h.generateWithFallback(context.Background(), first, "model-test", []string{"chat"}, scheduler.AdaptiveProfile{}, []byte(`{"model":"model-test"}`))
+	if err != nil {
+		t.Fatalf("fallback failed: %v", err)
+	}
+	if selected.ID() != "second" || len(response.Output) == 0 {
+		t.Fatalf("selected=%q response=%q; want second provider response", selected.ID(), response.Output)
+	}
+	if !selector.failed["first"] {
+		t.Fatal("first provider failure was not reported to selector")
 	}
 }
