@@ -29,8 +29,8 @@ func TestSQLiteRuntimeMigratesAndPersistsRequestUsage(t *testing.T) {
 	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&migrationCount); err != nil {
 		t.Fatalf("read migration count: %v", err)
 	}
-	if migrationCount != 5 {
-		t.Fatalf("got %d migrations, want 5", migrationCount)
+	if migrationCount != 6 {
+		t.Fatalf("got %d migrations, want 6", migrationCount)
 	}
 
 	repo, err := NewRequestLogRepository(store.DB())
@@ -380,8 +380,8 @@ func TestSQLiteMigrationsSerializeConcurrentStartup(t *testing.T) {
 	if err := stores[0].DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
 		t.Fatalf("read migration count after concurrent startup: %v", err)
 	}
-	if count != 5 {
-		t.Fatalf("got %d migration records after concurrent startup, want 5", count)
+	if count != 6 {
+		t.Fatalf("got %d migration records after concurrent startup, want 6", count)
 	}
 	var lockRows int
 	if err := stores[0].DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migration_lock WHERE id = 1`).Scan(&lockRows); err != nil {
