@@ -15,6 +15,7 @@ type Config struct {
 	Providers               []ProviderConfig
 	GatewayAPIKey           string
 	CredentialEncryptionKey string
+	DeepSeekWebExtensionOrigin string
 }
 
 type ProviderConfig struct {
