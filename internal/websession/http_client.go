@@ -16,9 +16,9 @@ import (
 // explicit set of path prefixes. It deliberately does not follow redirects:
 // credentials must never be forwarded to an unexpected origin.
 type HTTPClient struct {
-	origin  *url.URL
+	origin   *url.URL
 	prefixes []string
-	client  *http.Client
+	client   *http.Client
 }
 
 func NewHTTPClient(origin string, allowedPathPrefixes ...string) (*HTTPClient, error) {
