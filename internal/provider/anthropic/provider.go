@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"mime"
+	"net/http"
 	"net/url"
 	"strings"
 
