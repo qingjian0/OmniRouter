@@ -1,8 +1,8 @@
 package gateway
 
 import (
-	"database/sql"
 	"context"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
