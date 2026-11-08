@@ -43,9 +43,9 @@ func TestClassifyRequestError(t *testing.T) {
 }
 
 type usageTestProvider struct {
-	id string
-	capabilities []string
-	stream func(context.Context, *provider.Request, func(provider.Event) error) error
+	id                 string
+	capabilities       []string
+	stream             func(context.Context, *provider.Request, func(provider.Event) error) error
 	lastConversationID string
 }
 
@@ -198,10 +198,10 @@ func TestGatewayPersistsFinalStreamingUsage(t *testing.T) {
 
 type brokenResponseWriter struct{ header http.Header }
 
-func (w *brokenResponseWriter) Header() http.Header { return w.header }
-func (w *brokenResponseWriter) WriteHeader(int) {}
+func (w *brokenResponseWriter) Header() http.Header       { return w.header }
+func (w *brokenResponseWriter) WriteHeader(int)           {}
 func (w *brokenResponseWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
-func (w *brokenResponseWriter) Flush() {}
+func (w *brokenResponseWriter) Flush()                    {}
 
 func TestGatewayClassifiesDownstreamStreamWriteFailure(t *testing.T) {
 	p := &usageTestProvider{stream: func(_ context.Context, _ *provider.Request, emit func(provider.Event) error) error {
