@@ -1,5 +1,7 @@
 # OmniRouter V1.0.0 release checklist
 
+> **Authoritative status update — 2026-11-08:** This checklist contains historical phase notes below. Where older checkboxes or descriptions conflict with the current integration ledger at the end of this file, the current integration ledger and this note take precedence. The current dev integration commit is `87f16c3e447d0dc29077eb75f8b63f101cac448e`; its full CI run `42455660802` passed. The native outbound adapters and adaptive scheduler are already merged to dev. Live-provider, security, restore, device, and release gates remain open.
+
 This checklist is the release gate for the first stable release. It intentionally
 separates source/CI evidence from live-provider and device acceptance; passing
 one category must not be represented as passing another.
