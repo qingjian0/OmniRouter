@@ -14,12 +14,17 @@ The first supported capability target is text-only Chat Completions:
 
 Responses API, tool-call emulation, search, image/file input, and reasoning-channel parity remain explicitly out of scope until Chat Completions passes its own acceptance suite.
 
-## Existing state on dev
+## Current branch implementation status
 
-- Provider registration, admin pairing tickets, Chromium extension pairing, encrypted token/cookie persistence, restart restore, and account-wide revoke are implemented.
-- `RegistrationProvider` is deliberately inert: it advertises zero models and rejects Generate/Stream. It is not a working web reverse proxy.
-- The pairing boundary currently accepts a user-authorized `userToken` and the `ds_session_id` cookie.
-- Generic upstream API providers and official DeepSeek API are separate and must remain unaffected by web-session failures.
+- Provider registration accepts an explicit model allowlist; an unpaired account remains an inert registration shell.
+- The existing authenticated pairing flow stores the user-authorized `userToken` and `ds_session_id` cookie in the encrypted credential vault.
+- A concrete origin-pinned HTTP transport now implements `/api/v0/users/current`, `/api/v0/chat_session/create`, and `/api/v0/chat/completion`, including bounded JSON reads, SSE parsing, typed HTTP failures, and context cancellation.
+- The application restores a paired account into an `ExecutorProvider` at startup. A successful browser pairing also attempts to activate that provider in the live registry and scheduler without restarting the process.
+- The executor is wired to the existing prompt mapper, SSE patch decoder, OpenAI stream encoder, credential service, and SQLite conversation coordinator.
+- The current transport follows OmniRoute's MIT persistent-session + rolling-prompt strategy: reuse the upstream session ID, send the bounded transcript in `prompt`, and keep `parent_message_id: null`. It does not combine this with explicit parent-message continuation.
+- Local HTTP simulation tests cover authorization exchange, session creation, streaming completion, post-FINISHED metadata draining, and persistent-session reuse. These tests validate OmniRouter's transport behavior against fixtures, not DeepSeek's live endpoint.
+- **Live compatibility is not yet certified.** The upstream may require current client attestation or anti-abuse challenge material not supplied by the ordinary paired token/cookie. The transport does not synthesize or solve those challenges and returns a typed fail-closed error if blocked.
+- Generic upstream API providers and official DeepSeek API remain separate and must be unaffected by web-session failures.
 
 ## Reference-first implementation policy
 
@@ -51,7 +56,7 @@ A further implementation was inspected after the initial source audit:
 - Patch decoding must track the active fragment channel. Content-only append operations inherit the active fragment type; THINK text must never be appended to normal assistant content.
 - Public implementations differ on fragment names: `RESPONSE` and `ANSWER` both appear. Treat them as answer-channel aliases only when covered by tests.
 - Batch updates may carry `accumulated_token_usage` and terminal status. Search fragments/results are preserved on a separate metadata channel; they must not be blindly concatenated into assistant text.
-- In explicit parent-lineage mode, session continuity requires the upstream `response_message_id` from the previous successfully completed turn as the next `parent_message_id`. Do not infer or fabricate this ID. Persistent-session plus rolling-prompt mode is a distinct alternative observed in other implementations; do not combine both strategies or select one until a current two-turn fixture establishes the upstream behavior.
+- Two incompatible continuity strategies appear in public references: explicit parent-message continuation, or persistent upstream session + rolling prompt with `parent_message_id: null`. The current branch selects the latter based on the inspected MIT OmniRoute executor; it reuses the saved chat-session ID and sends the bounded message transcript. This is a source-derived choice, not a live compatibility certification, and must be revisited if current sanitized fixtures contradict it.
 - `update_session` is session metadata, not a completion terminal. The decoder must not commit lineage or signal completion from this event alone.
 - Some references treat an explicit SSE `close` event as terminal. Other dated references report `response/status=FINISHED` or batch quasi-status. EOF or a generic `[DONE]` sentinel alone is not accepted as proof of successful completion until confirmed by current sanitized fixtures.
 - Chat2API is GPL-3.0. Its code is not copied into OmniRouter by default; its current adapter and stream handler are behavioral references only.
@@ -246,3 +251,10 @@ A broader source-level comparison covering NIyueE/ds-free-api, deep-proxy, kitto
 The transport interface is intentionally injectable so mock HTTP/protocol fixtures can exercise the orchestration deterministically. **There is not yet a concrete DeepSeek Web HTTP transport, and `ExecutorProvider` is not yet wired into the runtime provider factory/registry.** The existing `RegistrationProvider` remains inert. The `HealthCheck` method currently validates that local authorization material can be restored; it does not make a network request or prove that DeepSeek accepts the session.
 
 The new executor tests cover successful lineage commit, missing terminal evidence, upstream failure, missing local conversation identity, and non-streaming aggregation. These are mock orchestration tests, not live protocol tests. Current sanitized request/response fixtures are still required before a concrete HTTP transport can be implemented or models can be advertised in production.
+
+
+## Engineering progress (2026-11-08)
+
+The feature branch now contains the HTTP completion transport and runtime provider wiring. The provider is activated after browser pairing when persistent credential encryption and at least one enabled model are configured. On restart, the active account is restored and re-registered. The first implementation deliberately supports text-only Chat Completions; search metadata is drained but not mapped into OpenAI output, and tools, images, and file upload remain unsupported.
+
+The acceptance gate remains a successful live request against a normally authorized DeepSeek Web session, including a streamed answer and a second turn reusing the same upstream chat session. A passing local simulation or CI run is not evidence that DeepSeek currently accepts the request schema or session.
