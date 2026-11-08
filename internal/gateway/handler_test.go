@@ -107,7 +107,6 @@ func newUsageTestHandler(p provider.Provider) (*Handler, http.Handler) {
 	return h, recorder.Middleware(h.mux)
 }
 
-
 func TestGatewayPropagatesExplicitConversationID(t *testing.T) {
 	p := &usageTestProvider{}
 	_, handler := newUsageTestHandler(p)
