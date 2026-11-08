@@ -171,7 +171,9 @@ func TestGenerateAnthropicDoesNotExposeUpstreamErrorBody(t *testing.T) {
 	}))
 	defer server.Close()
 	p, err := New(Config{ID: "anthropic", BaseURL: server.URL})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = p.GenerateAnthropic(context.Background(), &provider.Request{
 		Model: "m", Input: []byte(`{"model":"m","max_tokens":8}`),
 	})
@@ -255,4 +257,3 @@ func TestStreamAnthropicRejectsErrorAndConflictingSSEEvents(t *testing.T) {
 		})
 	}
 }
-
