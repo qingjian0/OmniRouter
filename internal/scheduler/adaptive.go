@@ -231,9 +231,9 @@ func (s *AdaptiveScheduler) ReportOutcome(providerID string, latency time.Durati
 	}
 	s.metricsMu.Lock()
 	stat := s.metrics[providerID]
-	stat.samples++
+	stat.samples = saturatingIncrement(stat.samples)
 	if success {
-		stat.successes++
+		stat.successes = saturatingIncrement(stat.successes)
 	}
 	if latency > 0 {
 		if stat.latencyEMA == 0 {
@@ -244,6 +244,15 @@ func (s *AdaptiveScheduler) ReportOutcome(providerID string, latency time.Durati
 	}
 	s.metrics[providerID] = stat
 	s.metricsMu.Unlock()
+}
+
+// saturatingIncrement prevents long-lived process counters from wrapping
+// around and corrupting reliability estimates after uint64 exhaustion.
+func saturatingIncrement(value uint64) uint64 {
+	if value == ^uint64(0) {
+		return value
+	}
+	return value + 1
 }
 
 // blendLatencyEMA computes (4*previous + next)/5 without converting
