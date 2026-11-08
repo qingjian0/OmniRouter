@@ -141,6 +141,7 @@ function applyProviderKindDefaults() {
   if (!providerForm.base_url || known.some((item) => item.base_url && item.base_url === providerForm.base_url)) providerForm.base_url = selected.base_url;
   if (!providerForm.models || known.some((item) => item.models && item.models === providerForm.models)) providerForm.models = selected.models;
   if (providerForm.kind !== "openai-compatible") providerForm.capabilities = "";
+  if (providerForm.kind === "deepseek-web") providerForm.api_key = "";
 }
 
 async function createProvider() {
@@ -390,7 +391,7 @@ onMounted(refresh);
               <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="anthropic">Anthropic Messages API（原生）</option><option value="gemini">Google Gemini API（原生）</option><option value="deepseek">DeepSeek 官方 API</option><option value="deepseek-web">DeepSeek Web（浏览器会话登记，推理暂不可用）</option></select></label>
               <label>ID<input v-model="providerForm.id" required placeholder="deepseek-primary" /></label>
               <label>名称<input v-model="providerForm.name" placeholder="DeepSeek Primary" /></label>
-              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'anthropic' ? 'https://api.anthropic.com/v1' : providerForm.kind === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : providerForm.kind === 'openai-responses' ? 'https://api.openai.com/v1' : 'https://api.example.com/v1'" /></label>
+              <label class="wide">Base URL<input v-model="providerForm.base_url" :required="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek-web' ? 'https://chat.deepseek.com' : providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'anthropic' ? 'https://api.anthropic.com/v1' : providerForm.kind === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : providerForm.kind === 'openai-responses' ? 'https://api.openai.com/v1' : 'https://api.example.com/v1'" /></label>
               <label class="wide">上游 API Key<input v-model="providerForm.api_key" :disabled="providerForm.kind === 'deepseek-web'" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
               <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :disabled="providerForm.kind === 'deepseek-web'" :required="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : providerForm.kind === 'anthropic' ? 'claude-sonnet-4-5' : providerForm.kind === 'gemini' ? 'gemini-2.5-flash' : providerForm.kind === 'openai-responses' ? 'gpt-4.1' : 'model-a,model-b'" /></label>
               <label>优先级<input v-model.number="providerForm.priority" type="number" min="0" /></label>
@@ -400,6 +401,26 @@ onMounted(refresh);
               <div class="form-actions"><button class="primary" type="submit">保存 Provider</button></div>
             </form>
             <p class="hint">OpenAI Responses、Anthropic Messages、Gemini 均使用各自原生协议，不会伪装成 Chat Completions。配置上游密钥前，必须设置 OMNI_CREDENTIAL_ENCRYPTION_KEY。</p>
+          </article>
+          <article v-if="pairingProviders.length" class="panel">
+            <div class="panel-title"><h2>DeepSeek Web 浏览器授权</h2><span class="muted">仅登记会话，不提供推理</span></div>
+            <form class="form-grid" @submit.prevent="createDeepSeekWebPairing">
+              <label>DeepSeek Web Provider
+                <select v-model="pairingForm.provider_id" required>
+                  <option value="" disabled>选择已登记的 DeepSeek Web Provider</option>
+                  <option v-for="p in pairingProviders" :key="p.id" :value="p.id">{{ p.name || p.id }}</option>
+                </select>
+              </label>
+              <label>账户名称<input v-model="pairingForm.account_name" required maxlength="80" /></label>
+              <div class="form-actions"><button class="primary" type="submit">创建一次性配对码</button></div>
+            </form>
+            <div v-if="pairingTicket?.nonce" class="secret-panel">
+              <strong>一次性配对码（2 分钟有效）</strong>
+              <code>{{ pairingTicket.nonce }}</code>
+              <button class="secondary" @click="copyPairingNonce">复制配对码</button>
+              <p class="hint">在 Chrome / Edge 扩展弹窗中粘贴配对码并明确点击连接。不要将配对码发送给他人。</p>
+            </div>
+            <p class="hint">必须先配置 OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN 并重启网关。当前 DeepSeek Web Provider 只支持浏览器会话加密登记和撤销；推理传输尚未实现，不能作为可用模型调用。</p>
           </article>
           <article class="panel">
             <div class="panel-title"><h2>Provider 列表</h2><span class="muted">{{ providers.length }} 项</span></div>
