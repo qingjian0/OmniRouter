@@ -216,7 +216,7 @@ func messagesToDeepSeekPrompt(messages []chatMessage, historyWindow int) (string
 			parts = append(parts, "[User]: "+turn.text)
 		}
 	}
-	return strings.TrimRight(strings.Join(parts, "\n\n"), "\n"), nil
+	return strings.Join(parts, "\n\n"), nil
 }
 
 func decodeTextContent(raw json.RawMessage) (string, error) {
