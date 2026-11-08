@@ -118,6 +118,8 @@ func Load() (Config, error) {
 			defaultID, defaultName = "anthropic", "Anthropic"
 		} else if strings.EqualFold(cfg.Provider.Kind, "gemini") {
 			defaultID, defaultName = "gemini", "Google Gemini"
+		} else if strings.EqualFold(cfg.Provider.Kind, "deepseek-web") {
+			defaultID, defaultName = "deepseek-web", "DeepSeek Web"
 		}
 		cfg.Provider.ID = env("OMNI_PROVIDER_ID", defaultID)
 		cfg.Provider.Name = env("OMNI_PROVIDER_NAME", defaultName)
@@ -132,6 +134,8 @@ func Load() (Config, error) {
 				cfg.Provider.BaseURL = "https://api.anthropic.com/v1"
 			case "gemini":
 				cfg.Provider.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
+			case "deepseek-web":
+				cfg.Provider.BaseURL = "https://chat.deepseek.com"
 			}
 		}
 		cfg.Provider.APIKey = os.Getenv("OMNI_PROVIDER_API_KEY")
