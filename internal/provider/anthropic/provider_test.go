@@ -162,3 +162,23 @@ func TestGenerateAnthropicRejectsOversizedResponse(t *testing.T) {
 		t.Fatalf("expected oversized response error, got %v", err)
 	}
 }
+
+func TestGenerateAnthropicDoesNotExposeUpstreamErrorBody(t *testing.T) {
+	const privateDetail = "upstream-private-prompt-or-secret"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, privateDetail)
+	}))
+	defer server.Close()
+	p, err := New(Config{ID: "anthropic", BaseURL: server.URL})
+	if err != nil { t.Fatal(err) }
+	_, err = p.GenerateAnthropic(context.Background(), &provider.Request{
+		Model: "m", Input: []byte(`{"model":"m","max_tokens":8}`),
+	})
+	if err == nil || !strings.Contains(err.Error(), "HTTP 401") {
+		t.Fatalf("expected sanitized HTTP status error, got %v", err)
+	}
+	if strings.Contains(err.Error(), privateDetail) {
+		t.Fatal("upstream error body leaked through provider error")
+	}
+}
