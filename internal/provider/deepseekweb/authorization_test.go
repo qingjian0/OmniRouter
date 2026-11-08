@@ -31,7 +31,7 @@ func TestValidateAuthorizationBuildsDeterministicCookieHeader(t *testing.T) {
 func TestValidateAuthorizationRejectsUntrustedInput(t *testing.T) {
 	tests := map[string]func(*AuthorizationInput){
 		"missing token":          func(in *AuthorizationInput) { in.Token = nil },
-		"token newline":          func(in *AuthorizationInput) { in.Token = []byte("token\\r\\nX-Leak: yes") },
+		"token newline":          func(in *AuthorizationInput) { in.Token = []byte("token\r\nX-Leak: yes") },
 		"missing session cookie": func(in *AuthorizationInput) { in.Cookies = in.Cookies[1:] },
 		"foreign domain":         func(in *AuthorizationInput) { in.Cookies[0].Domain = "evil.example" },
 		"insecure cookie":        func(in *AuthorizationInput) { in.Cookies[0].Secure = false },
