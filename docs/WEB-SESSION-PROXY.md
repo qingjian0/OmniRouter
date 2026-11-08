@@ -158,7 +158,7 @@ This decoder remains isolated and is not wired into `RegistrationProvider`. It d
 
 A protocol-neutral mapper now exists in `internal/provider/deepseekweb/request.go`. It is based on the concrete MIT implementations in [deep-proxy translate_request.go](https://github.com/JuanCMPDev/deep-proxy/blob/main/internal/proxy/translate_request.go) and [OmniRoute deepseek-web.ts](https://github.com/cheaper-inference/OmniRoute/blob/release/v3.8.54/open-sse/executors/deepseek-web.ts):
 - Maps system/developer, user, and assistant text to a single role-tagged prompt string.
-- Preserves prior assistant tool-call blocks and tool-result messages as transcript context, including the matching function name where a prior `tool_call_id` is available; historical JSON-string arguments are decoded and validated before prompt serialization.
+- Preserves prior assistant tool-call blocks inside their original assistant turn and tool-result messages as transcript context, including the matching function name where a prior `tool_call_id` is available; historical JSON-string arguments are decoded and validated before prompt serialization.
 - Keeps a bounded rolling window of the latest 20 non-system conversation entries; system/developer instructions remain at the front.
 - Maps model-name hints and explicit thinking/search request aliases into neutral option fields.
 - Rejects a current `tools[]` definition because translating model output back into OpenAI `tool_calls` is not implemented yet. It also rejects unsupported content blocks and malformed historical tool-call payloads.
