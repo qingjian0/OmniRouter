@@ -111,6 +111,15 @@ func (p *Provider) GenerateAnthropic(ctx context.Context, req *provider.Request)
 	if len(data) > 32<<20 {
 		return nil, fmt.Errorf("Anthropic Messages response exceeds 32 MiB")
 	}
+	var envelope struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return nil, fmt.Errorf("Anthropic Messages API returned invalid JSON: %w", err)
+	}
+	if envelope.Type != "message" {
+		return nil, fmt.Errorf("Anthropic Messages API returned unexpected response type %q", envelope.Type)
+	}
 	return &provider.Response{Model: req.Model, Output: data}, nil
 }
 
