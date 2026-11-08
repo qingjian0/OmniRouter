@@ -407,3 +407,21 @@ func TestRemovedProviderCannotPublishStaleHealthAndProbeLockIsRetired(t *testing
 		t.Fatalf("completed probe lock was not retired: %d", len(s.probeLocks))
 	}
 }
+
+
+type nonComparableAdaptiveProvider struct {
+	adaptiveTestProvider
+	labels []string
+}
+
+func TestSameProviderInstanceHandlesNonComparableValueAdapters(t *testing.T) {
+	left := nonComparableAdaptiveProvider{adaptiveTestProvider: adaptiveTestProvider{id: "value"}, labels: []string{"a"}}
+	same := nonComparableAdaptiveProvider{adaptiveTestProvider: adaptiveTestProvider{id: "value"}, labels: []string{"a"}}
+	different := nonComparableAdaptiveProvider{adaptiveTestProvider: adaptiveTestProvider{id: "value"}, labels: []string{"b"}}
+	if !sameProviderInstance(left, same) {
+		t.Fatal("equivalent value adapters should match")
+	}
+	if sameProviderInstance(left, different) {
+		t.Fatal("different value adapters must not match")
+	}
+}
