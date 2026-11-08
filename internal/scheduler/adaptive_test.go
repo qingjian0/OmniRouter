@@ -439,7 +439,7 @@ func TestReplaceInvalidatesHealthForReplacedProviderID(t *testing.T) {
 	if healthy, decided := s.cachedHealth("replace-id", time.Now()); !healthy || !decided {
 		t.Fatal("expected seeded positive health cache")
 	}
-	s.Replace("m", []Candidate{{Provider: oldProvider, Enabled: true, Weight: 1}})
+	s.Replace("m", []Candidate{{Provider: replacement, Enabled: true, Weight: 1}})
 	if _, exists := s.health["replace-id"]; exists {
 		t.Fatal("route replacement retained the previous provider's health cache")
 	}
