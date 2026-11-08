@@ -54,20 +54,19 @@ connectButton.addEventListener("click", async () => {
     token = injected?.[0]?.result || "";
     if (!token) throw new Error("No userToken was found. Sign in to DeepSeek normally, then retry.");
 
-    const browserCookies = await chrome.cookies.getAll({ url: "https://chat.deepseek.com/" });
-    cookies = browserCookies
-      .filter(cookie => {
-        const domain = cookie.domain.replace(/^\./, "").toLowerCase();
-        return domain === "chat.deepseek.com" && cookie.secure &&
-          (cookie.path === "/" || cookie.path === "");
-      })
-      .map(cookie => ({
-        name: cookie.name,
-        value: cookie.value,
-        domain: cookie.domain,
-        path: cookie.path,
-        secure: cookie.secure
-      }));
+    const sessionCookie = await chrome.cookies.get({
+      url: "https://chat.deepseek.com/",
+      name: "ds_session_id"
+    });
+    cookies = sessionCookie?.value && sessionCookie.secure
+      ? [{
+          name: sessionCookie.name,
+          value: sessionCookie.value,
+          domain: sessionCookie.domain,
+          path: sessionCookie.path,
+          secure: sessionCookie.secure
+        }]
+      : [];
     if (!cookies.some(cookie => cookie.name === "ds_session_id" && cookie.value)) {
       throw new Error("The required DeepSeek session cookie was not found. Sign in again and retry.");
     }
