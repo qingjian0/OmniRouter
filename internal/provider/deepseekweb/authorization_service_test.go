@@ -6,7 +6,6 @@ import (
 	"errors"
 	"path/filepath"
 	"runtime"
-	"sync"
 	"testing"
 	"time"
 
@@ -126,7 +125,7 @@ func TestAuthorizationServicePersistsRestoresAndRevokes(t *testing.T) {
 	if _, err := service.LoadAuthorization(ctx, record.AccountID); !errors.Is(err, ErrAuthorizationRequired) {
 		t.Fatalf("revoked authorization must not restore, got %v", err)
 	}
-	owner, err := accountRepo.Get(ctx, record.AccountID)
+	owner, err = accountRepo.Get(ctx, record.AccountID)
 	if err != nil {
 		t.Fatal(err)
 	}
