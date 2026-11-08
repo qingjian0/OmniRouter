@@ -86,6 +86,7 @@ jobs:
         run: |
           ruby -rjson -e 'm=JSON.parse(File.read("browser-extension/manifest.json")); abort "Manifest V3 required" unless m["manifest_version"] == 3; %w[popup.html popup.js popup.css README.md].each { |f| abort "missing extension file: #{f}" unless File.file?("browser-extension/#{f}") }; abort "missing cookies permission" unless m.fetch("permissions", []).include?("cookies"); puts "Chromium extension package OK"'
           node --check browser-extension/popup.js
+          node --test browser-extension/popup.test.js
 
       - name: Check smoke-test script syntax
         run: |
