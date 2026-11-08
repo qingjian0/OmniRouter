@@ -108,7 +108,7 @@ func TestExecutorProviderCommitsOnlyAfterVerifiedTerminal(t *testing.T) {
 func TestExecutorProviderDoesNotCommitWithoutVerifiedTerminal(t *testing.T) {
 	lease := &testConversationLease{}
 	p := newTestExecutor(t, testCompletionTransport{
-		result: CompletionResult{UpstreamConversationID: "remote", ResponseMessageID: "response", Completed: false},
+		result:  CompletionResult{UpstreamConversationID: "remote", ResponseMessageID: "response", Completed: false},
 		updates: []PatchUpdate{{ContentDelta: "partial"}},
 	}, lease)
 	err := p.Stream(context.Background(), testRequest(), func(provider.Event) error { return nil })
@@ -136,7 +136,7 @@ func TestExecutorProviderDoesNotCommitOnTransportError(t *testing.T) {
 func TestExecutorProviderTreatsMissingConversationIDAsOneTurn(t *testing.T) {
 	lease := &testConversationLease{}
 	p := newTestExecutor(t, testCompletionTransport{
-		result: CompletionResult{UpstreamConversationID: "remote", ResponseMessageID: "response", Completed: true},
+		result:  CompletionResult{UpstreamConversationID: "remote", ResponseMessageID: "response", Completed: true},
 		updates: []PatchUpdate{{ContentDelta: "answer"}, {Done: true}},
 	}, lease)
 	req := testRequest()
@@ -152,7 +152,7 @@ func TestExecutorProviderTreatsMissingConversationIDAsOneTurn(t *testing.T) {
 func TestExecutorProviderGenerateReturnsAggregatedCompletion(t *testing.T) {
 	lease := &testConversationLease{}
 	p := newTestExecutor(t, testCompletionTransport{
-		result: CompletionResult{UpstreamConversationID: "remote", ResponseMessageID: "response", Completed: true},
+		result:  CompletionResult{UpstreamConversationID: "remote", ResponseMessageID: "response", Completed: true},
 		updates: []PatchUpdate{{ContentDelta: "hello "}, {ContentDelta: "world"}, {Done: true}},
 	}, lease)
 	response, err := p.Generate(context.Background(), testRequest())
