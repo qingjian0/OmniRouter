@@ -2,6 +2,7 @@ package openairesponses
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
