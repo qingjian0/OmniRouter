@@ -12,15 +12,16 @@ OmniRouter 已完成第一轮核心集成。当前开发基线为 `dev`，稳定
 - 自适应 Provider 调度：能力/健康/启用状态过滤，结合估算价格、延迟、可靠性、优先级和权重评分。
 - SQLite 持久化、迁移、AES-GCM Credential Vault、Provider / Model / Account / Session / API Key 元数据、请求历史与 Token 用量。
 - Vue 3 + TypeScript 管理控制台、Go embed 静态资源、数据库备份/恢复脚本和跨平台发行工作流。
+- DeepSeek Web 浏览器授权登记基础：Chromium MV3 扩展、双端一次性配对、loopback + 精确 Origin 校验、AES-GCM 凭据保存/恢复/撤销；Provider 保持零模型、不可路由。
 - Provider 停用后从调度候选中排除。
 
 **当前验证证据：**
-- dev 集成提交：`87f16c3e447d0dc29077eb75f8b63f101cac448e`。
+- 核心路由/Provider 集成提交：`87f16c3e447d0dc29077eb75f8b63f101cac448e`；DeepSeek Web 配对集成提交：`2c727e7e0e752865fd6cd2218213ffe13f0a89cb`。
 - 完整 CI：Run [42455660802](https://github.com/qingjian0/OmniRouter/actions/runs/42455660802)，7 个作业全部成功；包括 gofmt、Go tests、race、vet、版本构建及 Linux / macOS / Windows 交叉构建。
 - CI 证明确定性测试和构建通过，不等于真实上游密钥联调、生产恢复或 Android/Termux 真机验收。
 
 **仍未完成：**
-- DeepSeek consumer-web：PR #7 / #17 仍为 Draft；浏览器配对与会话凭据框架未进入 dev，真实推理传输、SSE 规范化和多轮 lineage 未完成。
+- DeepSeek consumer-web：配对与授权凭据框架已进入 dev；Chromium 真机配对验收、会话上游有效性/重新授权 UX、脱敏协议 fixtures、真实推理传输、SSE 规范化和多轮 lineage 仍未完成。
 - 真实 OpenAI-compatible / Anthropic / Gemini / DeepSeek 上游密钥验收与多 Provider 流量验证。
 - 管理 API 安全专项验收、真实部署备份恢复、Termux / Android arm64 实机验收。
 - V1.0.0 正式发布。
@@ -28,8 +29,8 @@ OmniRouter 已完成第一轮核心集成。当前开发基线为 `dev`，稳定
 **分支和 PR：**
 - PR #11、#12、#15 已合并到 dev；PR #15 集成提交如上。
 - PR #8、#16 已关闭，相关调度/价格能力已由 PR #15 整合。
-- PR #7、#17 保留 Draft，等待 DeepSeek Web 的独立授权、协议证据和推理验收。
-- dev 当前比 main 超前 102 个提交；不代表 main 已更新。未完成发布门禁前不合并 main、不打 V1.0.0 标签。
+- PR #7 仍为 Draft（后续协议/传输工作）；PR #17 已关闭且未合并；PR #19 为 RFC 状态修正文档 PR，当前仍 Open。配对基础代码已由独立集成提交进入 dev。
+- dev 当前比 main 超前 107 个提交（以 2026-11-08 当前 compare 结果为准）；不代表 main 已更新。未完成发布门禁前不合并 main、不打 V1.0.0 标签。
 
 详细设计与调用链见 [架构与工程规范](docs/ARCHITECTURE.md)、[自适应调度](docs/ADAPTIVE-SCHEDULER.md) 和 [V1 发布清单](docs/V1-RELEASE-CHECKLIST.md)。
 
@@ -78,7 +79,7 @@ export OMNI_PROVIDERS='[
 
 - DeepSeek official API: dedicated `kind: deepseek` adapter, official model discovery, current V4 model metadata, native Chat Completions, Responses API and Anthropic Messages transports, thinking/reasoning field pass-through, and protocol-specific SSE handling. See [DeepSeek adapter guide](docs/DEEPSEEK-ADAPTER.md) and the manual [DeepSeek live acceptance workflow](.github/workflows/deepseek-live-smoke.yml).
 - Generic OpenAI-compatible endpoints remain available as `kind: openai-compatible`.
-- DeepSeek consumer-web session support is a separate Draft-only workstream; it is not merged into dev and is not an inference-capable Provider.
+- DeepSeek consumer-web pairing/session authorization scaffolding is integrated into dev, but remains a separate non-inference-capable workstream. The Provider advertises zero models and fails closed until authorized fixtures, transport, SSE, lineage, and live acceptance are complete.
 
 ### API
 
