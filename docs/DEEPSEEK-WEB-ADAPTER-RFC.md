@@ -93,7 +93,7 @@ extension submits to `POST /internal/deepseek-web/pairings`. Submission
 requires the exact configured extension `Origin`, a loopback peer, JSON content
 type, and a single-use unexpired nonce. The nonce is sent in the `X-Omni-Pairing-Nonce` header, not the URL, so request telemetry cannot persist the bearer nonce. The JSON `token` field is base64-encoded
 so the Go boundary can decode it directly into a byte buffer; `cookies` contains
-only `{name,value,domain,path,secure}` entries. The nonce is consumed before
+only the currently required `ds_session_id` cookie in `{name,value,domain,path,secure}` form. Do not collect all cookies for the site; expand the allowlist only when a sanitized fixture proves an additional cookie is required. The nonce is consumed before
 payload parsing, so malformed attempts cannot be replayed.
 
 The extension must declare the narrowest possible host permissions and show
