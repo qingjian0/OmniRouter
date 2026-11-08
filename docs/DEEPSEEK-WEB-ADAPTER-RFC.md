@@ -1,7 +1,8 @@
 # DeepSeek consumer-web adapter RFC
 
-Status: Draft — authorization, encrypted credential lifecycle, browser pairing, Gateway/App/config/UI wiring are integrated on the feature branch. Browser acceptance and sanitized protocol fixtures remain outstanding; no inference transport is implemented.  
-Target branch: `feature/deepseek-web-pairing-v2` (rebuilt from current `dev`)
+Status: Pairing and authorization scaffold integrated on `dev`; browser acceptance, sanitized protocol fixtures, and inference transport remain outstanding. The Provider is registration-only, advertises zero models, and fails closed.  
+Integration commit: `2c727e7e0e752865fd6cd2218213ffe13f0a89cb`  
+Follow-on protocol/transport work remains separately reviewable; do not duplicate the integrated pairing slice.
 
 ## 1. Scope and trust boundary
 
@@ -204,11 +205,11 @@ All state-changing actions require the existing admin gateway authentication.
 - [x] Implement the authenticated admin pairing endpoint and exact extension-origin allowlist configuration (`OMNI_DEEPSEEK_WEB_EXTENSION_ORIGIN`).
 - [x] Add Chromium Manifest V3 extension source with explicit active-tab consent and minimal session extraction.
 - [x] Connect the loopback-only pairing submission endpoint to the encrypted AuthorizationService.
-- [ ] Validate extension pairing in Chromium on Windows, Linux, and macOS; evaluate Android browser support separately.
-- [ ] Test extension pairing on Windows, Linux, and macOS; evaluate Android browser support separately.
+- [ ] Validate extension pairing in Chromium on at least one supported desktop OS with a user-owned account; record browser version, Gateway version, and sanitized outcome.
+- [ ] Repeat on Windows, Linux, and macOS before claiming cross-platform browser support; evaluate Android browser support separately.
 - No real account credentials in CI.
 
-### Slice C — protocol transport
+### Slice C — protocol transport (not implemented)
 - Capture sanitized fixtures from a user-authorized session.
 - Verify endpoint, request schema, auth, model mapping, SSE event taxonomy.
 - Implement only the protocol behavior observed in fixtures.
