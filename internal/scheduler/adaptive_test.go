@@ -302,3 +302,18 @@ func TestDisablingProviderRetainsAdaptiveMetrics(t *testing.T) {
 	}
 }
 
+func TestBlendLatencyEMAHandlesMaximumDuration(t *testing.T) {
+	maxDuration := time.Duration(1<<63 - 1)
+	got := blendLatencyEMA(maxDuration, maxDuration)
+	if got != maxDuration {
+		t.Fatalf("blend(max,max) = %d, want %d", got, maxDuration)
+	}
+	got = blendLatencyEMA(5*time.Second, 10*time.Second)
+	if got != 6*time.Second {
+		t.Fatalf("blend(5s,10s) = %s, want 6s", got)
+	}
+	if got := blendLatencyEMA(0, 7*time.Second); got != 7*time.Second {
+		t.Fatalf("zero previous latency = %s, want 7s", got)
+	}
+}
+
