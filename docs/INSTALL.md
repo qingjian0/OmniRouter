@@ -50,7 +50,7 @@ fallback catalogue uses `deepseek-flash` and `deepseek-v4-pro`; retired names
 2. Copy `omnirouter.env.example` to `.env`.
 3. Replace the Provider API key and generate both gateway and credential
    encryption keys. Never commit the resulting `.env` file.
-4. Keep `OMNI_ADDR=127.0.0.1:8080` for local-only access by default.
+4. Keep `OMNI_ADDR=127.0.0.1:8080` for local-only access by default. If binding to a LAN, wildcard, or public interface, set `OMNI_GATEWAY_API_KEY`; startup rejects non-loopback binds without it. Reverse proxies and tunnels also require the key even when the process itself listens on loopback.
 
 Generate keys:
 
