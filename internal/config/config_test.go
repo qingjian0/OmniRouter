@@ -108,8 +108,12 @@ func TestLoadAnthropicProviderDefaults(t *testing.T) {
 	t.Setenv("OMNI_PROVIDER_MODEL_CAPABILITIES", "")
 	t.Setenv("OMNI_PROVIDER_MODEL_CONTEXT_LIMITS", "")
 	cfg, err := Load()
-	if err != nil { t.Fatal(err) }
-	if len(cfg.Providers) != 1 { t.Fatalf("providers = %d, want 1", len(cfg.Providers)) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Providers) != 1 {
+		t.Fatalf("providers = %d, want 1", len(cfg.Providers))
+	}
 	got := cfg.Providers[0]
 	if got.Kind != "anthropic" || got.ID != "anthropic" || got.Name != "Anthropic" || got.BaseURL != "https://api.anthropic.com/v1" {
 		t.Fatalf("unexpected Anthropic defaults: %+v", got)
