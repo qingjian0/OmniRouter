@@ -1,6 +1,6 @@
 # OmniRouter V1.0.0 release checklist
 
-> **Authoritative status update — 2026-11-08:** This checklist contains historical phase notes below. Where older checkboxes or descriptions conflict with the current integration ledger at the end of this file, the current integration ledger and this note take precedence. The current dev integration commit is `87f16c3e447d0dc29077eb75f8b63f101cac448e`; its full CI run `42455660802` passed. The native outbound adapters and adaptive scheduler are already merged to dev. Live-provider, security, restore, device, and release gates remain open.
+> **Authoritative status update — 2026-11-08:** This checklist contains historical phase notes below. Where older checkboxes or descriptions conflict with the current integration ledger at the end of this file, the current integration ledger and this note take precedence. The core routing/provider integration commit is `87f16c3e447d0dc29077eb75f8b63f101cac448e`; its full CI run `42455660802` passed. DeepSeek Web pairing scaffold integration commit: `2c727e7e0e752865fd6cd2218213ffe13f0a89cb`; the feature-branch validation evidence is recorded in PR #7 (run `42451245405`), while a separate current-dev CI run for the integration commit has not yet been recorded here. The native outbound adapters, adaptive scheduler, and DeepSeek Web browser-pairing authorization scaffold are integrated on dev. Live-provider, browser, security, restore, device, and release gates remain open.
 
 This checklist is the release gate for the first stable release. It intentionally
 separates source/CI evidence from live-provider and device acceptance; passing
@@ -101,14 +101,18 @@ variables. Never commit credentials, cookies, API keys, or real request payloads
 
 The core integration is now present on dev. PR #12 added native OpenAI
 Responses, Anthropic Messages, and Gemini outbound adapters; PR #15 added the
-adaptive scheduler and model pricing integration. Do not use the older
+adaptive scheduler and model pricing integration. The separate pairing
+integration commit `2c727e7e0e752865fd6cd2218213ffe13f0a89cb` added DeepSeek
+Web authorization storage, one-time pairing, loopback extension submission,
+admin UI, and a fail-closed registration-only Provider. Do not use the older
 historical snapshots above to describe the current dev implementation.
 
 Remaining V1 acceptance gaps are live-provider and operational evidence:
 real-key protocol behavior, multi-provider routing under representative
 traffic, security review of admin operations, production backup/restore, and
-Termux/Android device acceptance. DeepSeek consumer-web remains a separate
-Draft workstream and is not a V1 inference capability.
+Termux/Android device acceptance. DeepSeek consumer-web remains a separate workstream: its pairing scaffold is
+integrated, but browser/live validation and inference transport remain
+incomplete. It is not a V1 inference capability.
 
 ## Publication
 
@@ -138,16 +142,20 @@ all passed.
 | [#15](https://github.com/qingjian0/OmniRouter/pull/15) | Adaptive routing, persistent model pricing, native provider integration | Merged to dev; CI run 42455660802 green | Included |
 | [#8](https://github.com/qingjian0/OmniRouter/pull/8) | Earlier adaptive scheduler implementation | Closed, superseded by #15 | Do not merge separately |
 | [#16](https://github.com/qingjian0/OmniRouter/pull/16) | Earlier combined integration candidate | Closed, superseded by #15 | Do not merge separately |
-| [#7](https://github.com/qingjian0/OmniRouter/pull/7) | DeepSeek Web authorization/session design | Open Draft | Not in dev; pairing/transport acceptance pending |
-| [#17](https://github.com/qingjian0/OmniRouter/pull/17) | DeepSeek Web session registration integration candidate | Open Draft; branch requires reconciliation with current dev | Do not merge; rebase/review/CI required |
+| [#7](https://github.com/qingjian0/OmniRouter/pull/7) | DeepSeek Web authorization/session and follow-on transport work | Open Draft | Pairing scaffold separately integrated to dev; browser acceptance and transport remain pending |
+| [#17](https://github.com/qingjian0/OmniRouter/pull/17) | Earlier DeepSeek Web registration integration candidate | Closed, not merged | Superseded by direct integration commit `2c727e7e0e752865fd6cd2218213ffe13f0a89cb`; do not reopen/merge duplicate work |
 
-PR #7 and #17 must not be described as an inference-capable DeepSeek Web
-Provider. Browser authorization, credential storage, private protocol
-transport, SSE normalization, conversation lineage, and model publication are
-separate gates. A successful pairing test would prove only that the user-owned
-browser session was imported.
+PR #7 must not be described as an inference-capable DeepSeek Web Provider.
+The pairing scaffold is already integrated on dev: browser authorization,
+encrypted credential persistence/restore/revoke, single-use tickets, loopback
+submission, exact extension-origin validation, and an inert registration
+Provider. Remaining gates are real Chromium acceptance, upstream session
+validation/re-authentication UX, sanitized private-protocol fixtures, inference
+transport, SSE normalization, conversation lineage, and model publication. A
+successful pairing test proves only that user-owned authorization material was
+stored locally; it does not prove that DeepSeek accepts the session.
 
-The current dev branch is 102 commits ahead of main; main remains unchanged.
+The current dev branch is 107 commits ahead of main (compare result checked 2026-11-08); main remains unchanged.
 Do not promote to main or publish v1.0.0 until all release gates above are
 closed and a final release candidate has its own green CI and acceptance
 record.
