@@ -77,6 +77,11 @@ jobs:
             exit 1
           fi
 
+      - name: Set up Node for extension validation
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Validate Chromium extension package
         run: |
           ruby -rjson -e 'm=JSON.parse(File.read("browser-extension/manifest.json")); abort "Manifest V3 required" unless m["manifest_version"] == 3; %w[popup.html popup.js popup.css README.md].each { |f| abort "missing extension file: #{f}" unless File.file?("browser-extension/#{f}") }; abort "missing cookies permission" unless m.fetch("permissions", []).include?("cookies"); puts "Chromium extension package OK"'
