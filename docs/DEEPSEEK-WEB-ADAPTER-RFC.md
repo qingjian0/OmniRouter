@@ -1,7 +1,7 @@
 # DeepSeek consumer-web adapter RFC
 
-Status: Slice A security boundary and Slice B pairing path/source implemented / not release-certified  
-Target branch: `feature/deepseek-web-adapter` (stacked on the official API adapter branch)
+Status: Draft — isolated authorization and pairing primitives are present; Gateway/App/config/UI wiring and end-to-end pairing acceptance are not yet integrated. No inference transport is implemented.  
+Target branch: `feature/deepseek-web-pairing-v2` (rebuilt from current `dev`)
 
 ## 1. Scope and trust boundary
 
