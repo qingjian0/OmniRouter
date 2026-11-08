@@ -74,6 +74,12 @@ func ValidateAuthorization(input AuthorizationInput) (AuthorizationMaterial, err
 	seen := make(map[string]struct{}, len(input.Cookies))
 	for _, item := range input.Cookies {
 		domain := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(item.Domain)), ".")
+		// Accept only the one session cookie currently required by the pairing
+		// contract. Expand this allowlist only when a sanitized fixture proves
+		// that another cookie is required for the supported request path.
+		if item.Name != "ds_session_id" {
+			return AuthorizationMaterial{}, ErrAuthorizationRequired
+		}
 		if domain != "chat.deepseek.com" || (item.Path != "" && item.Path != "/") || !item.Secure {
 			return AuthorizationMaterial{}, ErrAuthorizationRequired
 		}
