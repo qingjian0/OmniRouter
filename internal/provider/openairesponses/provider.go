@@ -19,7 +19,6 @@ import (
 const DefaultBaseURL = "https://api.openai.com/v1"
 
 const maxResponseBytes = 32 << 20
-const maxErrorBytes = 1 << 20
 const maxSSELineBytes = 4 << 20
 
 // Config describes an upstream that implements the OpenAI Responses API.
@@ -270,8 +269,9 @@ func (p *Provider) do(ctx context.Context, input []byte, stream bool) (io.ReadCl
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
-		message, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBytes))
-		return nil, fmt.Errorf("OpenAI Responses API returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
+		// Upstream error bodies may echo prompts or credential material. Keep
+		// them out of errors, logs, and persisted request diagnostics.
+		return nil, fmt.Errorf("OpenAI Responses API returned HTTP %d", resp.StatusCode)
 	}
 	mediaType, _, parseErr := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if parseErr != nil {
