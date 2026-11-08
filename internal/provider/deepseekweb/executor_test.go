@@ -19,34 +19,41 @@ func (a testAuthorizationLoader) LoadAuthorization(context.Context, string) (Aut
 }
 
 type testConversationLease struct {
-	lineage websession.Lineage
-	commits int
-	closed bool
+	lineage   websession.Lineage
+	commits   int
+	closed    bool
 	commitErr error
 }
 func (l *testConversationLease) Lineage() websession.Lineage { return l.lineage }
 func (l *testConversationLease) Commit(_ context.Context, conversationID, messageID string) (websession.Lineage, error) {
 	l.commits++
-	if l.commitErr != nil { return websession.Lineage{}, l.commitErr }
+	if l.commitErr != nil {
+		return websession.Lineage{}, l.commitErr
+	}
 	l.lineage.UpstreamConversationID = conversationID
 	l.lineage.ParentMessageID = messageID
 	return l.lineage, nil
 }
 func (l *testConversationLease) Close() { l.closed = true }
 
-type testLeaseManager struct { lease *testConversationLease; err error }
+type testLeaseManager struct {
+	lease *testConversationLease
+	err   error
+}
 func (m testLeaseManager) BeginLease(context.Context, string, string, string) (ConversationLease, error) {
 	return m.lease, m.err
 }
 
 type testCompletionTransport struct {
-	result CompletionResult
-	err error
+	result  CompletionResult
+	err     error
 	updates []PatchUpdate
 }
 func (t testCompletionTransport) Stream(_ context.Context, _ AuthorizationMaterial, _ ChatCompletionInput, _ websession.Lineage, emit func(PatchUpdate) error) (CompletionResult, error) {
 	for _, update := range t.updates {
-		if err := emit(update); err != nil { return CompletionResult{}, err }
+		if err := emit(update); err != nil {
+			return CompletionResult{}, err
+		}
 	}
 	return t.result, t.err
 }
@@ -56,9 +63,11 @@ func newTestExecutor(t *testing.T, transport UpstreamCompletionTransport, lease 
 	p, err := NewExecutorProvider(ExecutorConfig{
 		ID: "deepseek-web", AccountID: "account-1", Models: []string{"deepseek-chat"},
 		Authorization: testAuthorizationLoader{material: AuthorizationMaterial{Token: []byte("token"), CookieHeader: []byte("ds_session_id=session")}},
-		Leases: testLeaseManager{lease: lease}, Transport: transport,
+		Leases:        testLeaseManager{lease: lease}, Transport: transport,
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	return p
 }
 
@@ -97,8 +106,12 @@ func TestExecutorProviderDoesNotCommitWithoutVerifiedTerminal(t *testing.T) {
 		updates: []PatchUpdate{{ContentDelta: "partial"}},
 	}, lease)
 	err := p.Stream(context.Background(), testRequest(), func(provider.Event) error { return nil })
-	if !errors.Is(err, ErrIncompleteCompletion) { t.Fatalf("got %v, want incomplete completion", err) }
-	if lease.commits != 0 || !lease.closed { t.Fatalf("failed turn changed lineage: commits=%d closed=%v", lease.commits, lease.closed) }
+	if !errors.Is(err, ErrIncompleteCompletion) {
+		t.Fatalf("got %v, want incomplete completion", err)
+	}
+	if lease.commits != 0 || !lease.closed {
+		t.Fatalf("failed turn changed lineage: commits=%d closed=%v", lease.commits, lease.closed)
+	}
 }
 
 func TestExecutorProviderDoesNotCommitOnTransportError(t *testing.T) {
@@ -106,8 +119,12 @@ func TestExecutorProviderDoesNotCommitOnTransportError(t *testing.T) {
 	upstreamErr := errors.New("upstream disconnected")
 	p := newTestExecutor(t, testCompletionTransport{err: upstreamErr}, lease)
 	err := p.Stream(context.Background(), testRequest(), func(provider.Event) error { return nil })
-	if !errors.Is(err, upstreamErr) { t.Fatalf("got %v, want transport error", err) }
-	if lease.commits != 0 { t.Fatalf("transport failure committed lineage %d times", lease.commits) }
+	if !errors.Is(err, upstreamErr) {
+		t.Fatalf("got %v, want transport error", err)
+	}
+	if lease.commits != 0 {
+		t.Fatalf("transport failure committed lineage %d times", lease.commits)
+	}
 }
 
 func TestExecutorProviderRejectsMissingConversationID(t *testing.T) {
@@ -118,7 +135,9 @@ func TestExecutorProviderRejectsMissingConversationID(t *testing.T) {
 	if err := p.Stream(context.Background(), req, func(provider.Event) error { return nil }); err == nil {
 		t.Fatal("expected missing conversation ID error")
 	}
-	if lease.commits != 0 { t.Fatal("invalid request committed lineage") }
+	if lease.commits != 0 {
+		t.Fatal("invalid request committed lineage")
+	}
 }
 
 func TestExecutorProviderGenerateReturnsAggregatedCompletion(t *testing.T) {
@@ -132,5 +151,7 @@ func TestExecutorProviderGenerateReturnsAggregatedCompletion(t *testing.T) {
 	if !strings.Contains(string(response.Output), `"content":"hello world"`) {
 		t.Fatalf("unexpected aggregated response: %s", response.Output)
 	}
-	if lease.commits != 1 { t.Fatalf("successful non-streaming request committed %d times", lease.commits) }
+	if lease.commits != 1 {
+		t.Fatalf("successful non-streaming request committed %d times", lease.commits)
+	}
 }
