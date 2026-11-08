@@ -259,3 +259,46 @@ func TestAddOrReplaceProviderModelsPreservesPricingAcrossDisableAndEnable(t *tes
 		t.Fatalf("pricing was lost across disable/enable: %+v", got)
 	}
 }
+
+func TestRemoveProviderClearsAdaptiveMetrics(t *testing.T) {
+	s := NewAdaptive(time.Minute)
+	p := adaptiveTestProvider{id: "remove-me"}
+	s.Replace("m", []Candidate{{Provider: p, Enabled: true, Weight: 1}})
+	s.ReportOutcome(p.ID(), 250*time.Millisecond, true)
+
+	s.metricsMu.RLock()
+	_, recorded := s.metrics[p.ID()]
+	s.metricsMu.RUnlock()
+	if !recorded {
+		t.Fatal("expected outcome metrics before removal")
+	}
+
+	s.RemoveProvider(p.ID())
+
+	s.metricsMu.RLock()
+	_, retained := s.metrics[p.ID()]
+	s.metricsMu.RUnlock()
+	if retained {
+		t.Fatal("removed provider metrics must be cleared")
+	}
+	if _, err := s.Select(context.Background(), "m"); err == nil {
+		t.Fatal("removed provider must no longer be selectable")
+	}
+}
+
+func TestDisablingProviderRetainsAdaptiveMetrics(t *testing.T) {
+	s := NewAdaptive(time.Minute)
+	p := adaptiveTestProvider{id: "disable-me"}
+	models := []provider.Model{{ID: "m", Provider: p.ID(), Capabilities: []string{"chat"}}}
+	s.AddOrReplaceProviderModels(p, models, 100, 1, true)
+	s.ReportOutcome(p.ID(), 250*time.Millisecond, true)
+
+	s.AddOrReplaceProviderModels(p, models, 100, 1, false)
+	s.metricsMu.RLock()
+	_, retained := s.metrics[p.ID()]
+	s.metricsMu.RUnlock()
+	if !retained {
+		t.Fatal("disabling a provider must preserve learned metrics")
+	}
+}
+
