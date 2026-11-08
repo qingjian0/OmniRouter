@@ -21,14 +21,40 @@ Responses API, tool-call emulation, search, image/file input, and reasoning-chan
 - The pairing boundary currently accepts a user-authorized `userToken` and the `ds_session_id` cookie.
 - Generic upstream API providers and official DeepSeek API are separate and must remain unaffected by web-session failures.
 
+## Reference-first implementation policy
+
+This workstream is reference-driven. Before implementing a protocol or adapter feature, inspect mature projects and existing libraries, identify the closest implementation, check its license and maintenance status, and reuse compatible code or port only the minimum required behavior. New code should be limited to OmniRouter-specific integration, security boundaries, and compatibility glue. Every adopted behavior must have a source link and regression test.
+
+Reference projects are not automatically trusted: compare behavior across implementations, reject stale or contradictory assumptions, and do not import unsafe credential handling, browser automation, challenge bypass, or unrelated application code.
+
+### Audited references
+
+| Project | License / stack | Reuse value | Restrictions / decision |
+| --- | --- | --- | --- |
+| [JuanCMPDev/deep-proxy](https://github.com/JuanCMPDev/deep-proxy) | MIT / Go | Closest language match; OpenAI Chat handler, upstream request types, stream translation, usage accounting, and Go test layout | Reuse protocol concepts and compatible isolated code only. Exclude PoW solver, challenge acquisition/retry, Chrome credential interception, and embedded DeepSeek-owned WASM. |
+| [kittors/deepseek-web-api](https://github.com/kittors/deepseek-web-api) | MIT / TypeScript | Strongest architecture reference for SSE event parsing, `ready/title/close`, `THINK/RESPONSE` channel separation, patch append semantics, session lineage, and parent-message persistence | Port behavior to Go behind OmniRouter's existing transport/vault/SQLite abstractions. Exclude PoW/browser worker and login automation. |
+| [xiaoY233/Chat2API](https://github.com/xiaoY233/Chat2API) | GPL-3.0 / TypeScript + Koa/Electron | Broad, actively maintained provider reference; DeepSeek request adapter, model options, `ANSWER/RESPONSE/THINK`, search metadata, non-stream aggregation, and OpenAI-compatible stream conversion | GPL-3.0 code is not copied into this project unless license compatibility is explicitly established. Use as behavioral research and compare semantics. Exclude its challenge solver and any credential practices that log secrets or synthesize browser cookies. |
+| [sums001/Deepseek-API](https://github.com/sums001/Deepseek-API) | License must be re-checked | Additional protocol research lead | No code reuse until license and provenance are verified. Challenge-solving behavior excluded. |
+
+### Cross-reference findings
+
+- SSE framing must be parsed independently of network chunk boundaries and preserve event names; `ready`, `title`, and `close` are distinct event types in the kittors reference.
+- Patch decoding must track the active fragment channel. Content-only append operations inherit the active fragment type; THINK text must never be appended to normal assistant content.
+- Public implementations differ on fragment names: `RESPONSE` and `ANSWER` both appear. Treat them as answer-channel aliases only when covered by tests.
+- Batch updates may carry `accumulated_token_usage` and terminal status. Search results/status are metadata and must not be blindly concatenated into assistant text.
+- Session continuity requires the upstream `response_message_id` from the previous completed turn as the next `parent_message_id`. Do not infer or fabricate this ID.
+- Some references treat an explicit SSE `close` event as terminal. EOF or a generic `[DONE]` sentinel alone is not accepted as proof of successful completion until confirmed by current sanitized fixtures.
+- Chat2API is GPL-3.0. Its code is not copied into OmniRouter by default; its current adapter and stream handler are behavioral references only.
+- Reference projects contain implementation-specific tradeoffs and potential unsafe patterns. In particular, do not copy fake/synthetic cookie generation, raw credential logging, weak random identifiers, or unbounded session assumptions.
+
 ## Observed protocol evidence (not a stable upstream contract)
 
-A public reference implementation currently documents these observed details:
+Public reference implementations currently document these observed details:
 - Origin: `https://chat.deepseek.com`
 - Completion endpoint: `POST /api/v0/chat/completion`
-- Request headers include Bearer authorization, Cookie, JSON content type, SSE accept, and DeepSeek web client metadata.
-- Request JSON includes `chat_session_id`, `parent_message_id`, `model_type`, `prompt`, `ref_file_ids`, `thinking_enabled`, `search_enabled`, `action`, and `preempt`.
-- Stream frames use SSE events such as `ready`, `title`, and `close`; patch payloads carry response fragments including `THINK` and `RESPONSE`, plus request/response message IDs and token usage.
+- Session creation endpoint reported by references: `POST /api/v0/chat_session/create`
+- Request JSON commonly includes `chat_session_id`, `parent_message_id`, `model_type`, `prompt`, `ref_file_ids`, `thinking_enabled`, `search_enabled`, `action`, and `preempt`.
+- Stream frames may use SSE events such as `ready`, `title`, and `close`; patch payloads may carry response fragments including `THINK`, `RESPONSE`, or `ANSWER`, plus request/response message IDs and token usage.
 
 These observations came from third-party source and can become stale. They are research leads only, not sufficient to claim current live compatibility. Exact session creation, auth acceptance, payload fields, model mapping, stream terminal semantics, and account policy responses must be verified against sanitized fixtures from a current user-authorized browser session.
 
@@ -81,14 +107,15 @@ Record browser version, capture date, visible DeepSeek web build/version if avai
 
 ## Implementation slices
 
-1. Finish DeepSeek-only shared runtime foundation: durable lineage, conversation locks, origin-pinned HTTP transport, cancellation and body-size tests.
-2. Verify current session creation and completion schema from sanitized fixtures.
-3. Implement DeepSeek-specific request mapping and session lifecycle without PoW/challenge solving.
-4. Implement DeepSeek SSE event decoding with explicit terminal marker recognition; unknown event/schema must fail closed.
-5. Replace `RegistrationProvider` only when the transport is verified; advertise only text capabilities actually proven by fixtures.
-6. Wire the provider to encrypted authorization state and durable SQLite lineage.
-7. Add authenticated admin UI for session status, re-check, re-authentication, and revoke without ever displaying secrets.
-8. Run mock-server acceptance, SQLite restart, cancellation, malformed/unknown event, expiry, revoke, and a user-operated live smoke test.
+1. Complete DeepSeek-only shared runtime foundation: durable lineage, conversation locks, origin-pinned HTTP transport, cancellation and body-size tests.
+2. Compare reference implementations for session creation, request mapping, SSE parsing, terminal events, and OpenAI conversion; reuse compatible MIT code or port behavior with attribution.
+3. Verify current session creation and completion schema from sanitized fixtures.
+4. Implement DeepSeek-specific request mapping and session lifecycle without PoW/challenge solving.
+5. Implement DeepSeek SSE event decoding with explicit terminal marker recognition; unknown event/schema must fail closed.
+6. Replace `RegistrationProvider` only when the transport is verified; advertise only text capabilities actually proven by fixtures.
+7. Wire the provider to encrypted authorization state and durable SQLite lineage.
+8. Add authenticated admin UI for session status, re-check, re-authentication, and revoke without ever displaying secrets.
+9. Run mock-server acceptance, SQLite restart, cancellation, malformed/unknown event, expiry, revoke, and a user-operated live smoke test.
 
 ## Acceptance gates
 
@@ -104,10 +131,15 @@ Record browser version, capture date, visible DeepSeek web build/version if avai
 - Logs, errors, metrics, request history, and backups contain no credentials.
 - The provider remains unadvertised/unroutable until these gates pass.
 
-## Reference research and reuse audit
+## Current code status
 
-- `JuanCMPDev/deep-proxy` (MIT): Go reference implementation with a DeepSeek JSON-Patch stream parser and OpenAI Chat Completions translation. Its `response/fragments`, `THINK` / `RESPONSE`, `response/status`, `quasi_status`, and `accumulated_token_usage` handling is useful as a provisional parser reference. Its PoW challenge acquisition/solver, browser credential interception, and challenge retry logic are explicitly excluded.
-- `kittors/deepseek-web-api` (MIT): useful protocol and architecture research for observed completion payloads, SSE patch events, session lineage, and OpenAI-compatible mapping. Its PoW worker/solver is explicitly excluded.
-- `sums001/Deepseek-API`: research lead only; review license before reuse. Its challenge-solving implementation is excluded.
+The isolated Go patch decoder now follows cross-checked public reference behavior for:
+- SSE `ready`, `title`, and `close` event decoding.
+- Initial fragments and append patches.
+- `THINK` separated from answer text.
+- `RESPONSE` and `ANSWER` answer aliases.
+- Search metadata suppression from assistant text.
+- Batch token usage and explicit terminal status.
+- Unknown event/patch fail-closed behavior.
 
-The Go patch decoder currently being added is a deliberately isolated, provisional parser derived from documented public behavior of `deep-proxy`; it is not yet wired into `RegistrationProvider`, does not establish current protocol compatibility, and must not enable model advertisement or inference before current sanitized fixtures and acceptance tests pass. Prefer adapting small protocol-specific concepts over copying whole services. Do not copy protocol assumptions blindly. Re-verify current behavior from sanitized, user-authorized traffic and preserve the existing OmniRouter transport, vault, pairing, and SQLite lineage boundaries.
+This decoder remains isolated and is not wired into `RegistrationProvider`. It does not establish current protocol compatibility and must not enable model advertisement or inference before current sanitized fixtures and end-to-end acceptance tests pass.
