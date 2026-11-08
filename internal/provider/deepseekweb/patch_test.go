@@ -7,12 +7,21 @@ import (
 
 func TestPatchDecoderInitialAndAppend(t *testing.T) {
 	decoder := &PatchDecoder{}
-	first, err := decoder.Decode([]byte(`{"v":{"response":{"fragments":[{"type":"RESPONSE","content":"hello"}]}}`))
+	first, err := decoder.Decode([]byte(`{"v":{"response":{"fragments":[{"type":"RESPONSE","content":"hello"}]}}}`))
 	if err != nil { t.Fatal(err) }
 	if first.ContentDelta != "hello" || first.Done { t.Fatalf("unexpected initial update: %+v", first) }
 	next, err := decoder.Decode([]byte(`{"v":" world"}`))
 	if err != nil { t.Fatal(err) }
 	if next.ContentDelta != " world" { t.Fatalf("unexpected append: %+v", next) }
+}
+
+func TestPatchDecoderDefaultsUnclassifiedAppendToReasoning(t *testing.T) {
+	decoder := &PatchDecoder{}
+	update, err := decoder.Decode([]byte(`{"o":"APPEND","v":"thinking text"}`))
+	if err != nil { t.Fatal(err) }
+	if update.ReasoningDelta != "thinking text" || update.ContentDelta != "" {
+		t.Fatalf("default append channel mismatch: %+v", update)
+	}
 }
 
 func TestPatchDecoderTracksReasoningSeparately(t *testing.T) {
@@ -33,6 +42,18 @@ func TestPatchDecoderSupportsAnswerAliasAndAllFragments(t *testing.T) {
 	update, err := decoder.Decode([]byte(`{"p":"response/fragments","o":"APPEND","v":[{"type":"THINK","content":"thought"},{"type":"ANSWER","content":"answer"}]}`))
 	if err != nil { t.Fatal(err) }
 	if update.ReasoningDelta != "thought" || update.ContentDelta != "answer" { t.Fatalf("all fragment channels should be preserved: %+v", update) }
+}
+
+func TestPatchDecoderKeepsSearchChannelSeparate(t *testing.T) {
+	decoder := &PatchDecoder{}
+	update, err := decoder.Decode([]byte(`{"p":"response/fragments","o":"APPEND","v":[{"type":"SEARCH","content":"search metadata"}]}`))
+	if err != nil { t.Fatal(err) }
+	if update.SearchDelta != "search metadata" || update.ContentDelta != "" || update.ReasoningDelta != "" {
+		t.Fatalf("search metadata channel mismatch: %+v", update)
+	}
+	appendUpdate, err := decoder.Decode([]byte(`{"p":"response/fragments/-1/content","o":"APPEND","v":" more search metadata"}`))
+	if err != nil { t.Fatal(err) }
+	if appendUpdate.SearchDelta != " more search metadata" { t.Fatalf("search append channel mismatch: %+v", appendUpdate) }
 }
 
 func TestPatchDecoderRecognizesExplicitTerminal(t *testing.T) {
@@ -69,6 +90,23 @@ func TestPatchDecoderDecodesNumericMessageIDs(t *testing.T) {
 	if ready.RequestMessageID != "123" || ready.ResponseMessageID != "456" { t.Fatalf("numeric IDs not normalized: %+v", ready) }
 }
 
+func TestPatchDecoderDecodesPatchOnOtherNamedSSEEvent(t *testing.T) {
+	decoder := &PatchDecoder{}
+	update, err := decoder.DecodeEvent("message", []byte(`{"p":"response/fragments","o":"APPEND","v":[{"type":"RESPONSE","content":"answer"}]}`))
+	if err != nil { t.Fatal(err) }
+	if update.ContentDelta != "answer" { t.Fatalf("patch was not decoded: %+v", update) }
+}
+
+func TestPatchDecoderDecodesSSEFrame(t *testing.T) {
+	decoder := &PatchDecoder{}
+	update, err := decoder.DecodeFrame(SSEFrame{
+		Event: "message",
+		Data:  `{"p":"response/fragments","o":"APPEND","v":[{"type":"RESPONSE","content":"frame answer"}]}`,
+	})
+	if err != nil { t.Fatal(err) }
+	if update.ContentDelta != "frame answer" { t.Fatalf("frame decode mismatch: %+v", update) }
+}
+
 func TestPatchDecoderDoesNotTreatDoneSentinelAsTerminal(t *testing.T) {
 	decoder := &PatchDecoder{}
 	update, err := decoder.Decode([]byte("[DONE]"))
@@ -76,11 +114,13 @@ func TestPatchDecoderDoesNotTreatDoneSentinelAsTerminal(t *testing.T) {
 	if update.Done { t.Fatal("[DONE] is not a verified DeepSeek terminal event") }
 }
 
-func TestPatchDecoderIgnoresSearchMetadataWithoutLeakingIt(t *testing.T) {
+func TestPatchDecoderPreservesSearchResultsAsMetadata(t *testing.T) {
 	decoder := &PatchDecoder{}
 	update, err := decoder.Decode([]byte(`{"p":"response/search_results","o":"APPEND","v":[{"title":"example","url":"https://example.test"}]}`))
 	if err != nil { t.Fatal(err) }
-	if update.ContentDelta != "" || update.ReasoningDelta != "" { t.Fatalf("search metadata leaked into text: %+v", update) }
+	if update.SearchDelta == "" || update.ContentDelta != "" || update.ReasoningDelta != "" {
+		t.Fatalf("search metadata channel mismatch: %+v", update)
+	}
 }
 
 func TestPatchDecoderFailsClosedOnUnknownPath(t *testing.T) {
@@ -96,9 +136,8 @@ func TestPatchDecoderRejectsMalformedPayload(t *testing.T) {
 	}
 }
 
-func TestPatchDecoderRejectsUnknownSSEEvent(t *testing.T) {
+func TestPatchDecoderRejectsUnknownFragmentType(t *testing.T) {
 	decoder := &PatchDecoder{}
-	if _, err := decoder.DecodeEvent("future-event", []byte(`{}`)); !errors.Is(err, ErrUnsupportedPatch) {
-		t.Fatalf("expected unsupported event, got %v", err)
-	}
+	_, err := decoder.Decode([]byte(`{"p":"response/fragments","o":"APPEND","v":[{"type":"FUTURE_PRIVATE_TYPE","content":"x"}]}`))
+	if !errors.Is(err, ErrUnsupportedPatch) { t.Fatalf("expected unsupported patch, got %v", err) }
 }
