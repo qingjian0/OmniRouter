@@ -153,6 +153,21 @@ The isolated Go patch decoder now follows cross-checked public reference behavio
 
 This decoder remains isolated and is not wired into `RegistrationProvider`. It does not establish current protocol compatibility and must not enable model advertisement or inference before current sanitized fixtures and end-to-end acceptance tests pass.
 
+
+### OpenAI request projection and bounded conversation history
+
+A protocol-neutral mapper now exists in `internal/provider/deepseekweb/request.go`. It is based on the concrete MIT implementations in [deep-proxy translate_request.go](https://github.com/JuanCMPDev/deep-proxy/blob/main/internal/proxy/translate_request.go) and [OmniRoute deepseek-web.ts](https://github.com/cheaper-inference/OmniRoute/blob/release/v3.8.54/open-sse/executors/deepseek-web.ts):
+- Maps system/developer, user, and assistant text to a single role-tagged prompt string.
+- Preserves prior assistant tool-call blocks and tool-result messages as transcript context, including the matching function name where a prior `tool_call_id` is available.
+- Keeps a bounded rolling window of the latest 20 non-system conversation entries; system/developer instructions remain at the front.
+- Maps model-name hints and explicit thinking/search request aliases into neutral option fields.
+- Rejects a current `tools[]` definition because translating model output back into OpenAI `tool_calls` is not implemented yet. It also rejects unsupported content blocks and malformed historical tool-call payloads.
+- Preserves message whitespace, including trailing newlines.
+
+This is request normalization only. It is not yet called by the gateway or provider runtime, does not implement tool execution, does not establish whether DeepSeek currently accepts this prompt convention, and does not imply that session IDs or parent-message IDs are known. The provider remains inert and advertises zero models.
+
+The OmniRoute reference's persistent-session design also demonstrates that session reuse and rolling prompt history are separate controls: its implementation keeps an upstream session cache and separately limits the prompt transcript. OmniRouter will keep its durable per-provider-account lineage model and conversation lock, but will not key sessions by raw tokens or copy the reference's generated-cookie/browser-fingerprint/challenge logic. A verified two-turn fixture must determine whether upstream parent IDs are required and how stale-session responses are represented.
+
 ### Source-level audit notes
 
 The audit is based on concrete implementation files, not README claims alone:
