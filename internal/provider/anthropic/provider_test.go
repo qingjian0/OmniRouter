@@ -194,7 +194,7 @@ func TestStreamAnthropicRejectsConflictingEventAndPayloadTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = p.StreamAnthropic(context.Background(), &provider.Request{
-		Model: "m", Input: []byte(\`{"model":"m","max_tokens":8}\`),
+		Model: "m", Input: []byte(`{"model":"m","max_tokens":8}`),
 	}, func(provider.Event) error { return nil })
 	if err == nil || !strings.Contains(err.Error(), "conflicts with payload type") {
 		t.Fatalf("expected conflicting SSE event and payload types to fail, got %v", err)
@@ -212,7 +212,7 @@ func TestStreamAnthropicRejectsMalformedTerminalPayload(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = p.StreamAnthropic(context.Background(), &provider.Request{
-		Model: "m", Input: []byte(\`{"model":"m","max_tokens":8}\`),
+		Model: "m", Input: []byte(`{"model":"m","max_tokens":8}`),
 	}, func(provider.Event) error { return nil })
 	if err == nil || !strings.Contains(err.Error(), "malformed SSE JSON") {
 		t.Fatalf("expected malformed terminal payload to fail, got %v", err)
