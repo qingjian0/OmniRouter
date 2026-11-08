@@ -2,6 +2,7 @@ package deepseekweb
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -140,4 +141,49 @@ func TestPatchDecoderRejectsUnknownFragmentType(t *testing.T) {
 	decoder := &PatchDecoder{}
 	_, err := decoder.Decode([]byte(`{"p":"response/fragments","o":"APPEND","v":[{"type":"FUTURE_PRIVATE_TYPE","content":"x"}]}`))
 	if !errors.Is(err, ErrUnsupportedPatch) { t.Fatalf("expected unsupported patch, got %v", err) }
+}
+
+
+func TestParseAndDecodeDeepSeekSSELifecycle(t *testing.T) {
+	input := strings.Join([]string{
+		"event: ready",
+		`data: {"request_message_id":"req-1","response_message_id":"resp-1"}`,
+		"",
+		"event: message",
+		`data: {"p":"response/fragments","o":"APPEND","v":[{"type":"THINK","content":"reason"}]}`,
+		"",
+		"event: message",
+		`data: {"p":"response/fragments","o":"APPEND","v":[{"type":"RESPONSE","content":"answer"}]}`,
+		"",
+		"event: close",
+		"data: {}",
+		"",
+	}, "\n")
+	decoder := &PatchDecoder{}
+	var updates []PatchUpdate
+	if err := ParseSSE(strings.NewReader(input), 4096, func(frame SSEFrame) error {
+		update, err := decoder.DecodeFrame(frame)
+		if err != nil {
+			return err
+		}
+		updates = append(updates, update)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(updates) != 4 {
+		t.Fatalf("got %d updates, want 4: %+v", len(updates), updates)
+	}
+	if updates[0].RequestMessageID != "req-1" || updates[0].ResponseMessageID != "resp-1" {
+		t.Fatalf("ready event lineage mismatch: %+v", updates[0])
+	}
+	if updates[1].ReasoningDelta != "reason" || updates[1].ContentDelta != "" {
+		t.Fatalf("reasoning channel mismatch: %+v", updates[1])
+	}
+	if updates[2].ContentDelta != "answer" || updates[2].ReasoningDelta != "" {
+		t.Fatalf("answer channel mismatch: %+v", updates[2])
+	}
+	if !updates[3].Done {
+		t.Fatalf("close event did not terminate stream: %+v", updates[3])
+	}
 }
