@@ -160,6 +160,32 @@ func TestSetModelPricingUpdatesRuntimeAndKeepsExplicitZero(t *testing.T) {
 	}
 }
 
+func TestSetModelPricingRejectsInvalidValues(t *testing.T) {
+	s := NewAdaptive(time.Minute)
+	p := adaptiveTestProvider{id: "p"}
+	s.Replace("m", []Candidate{{Provider: p, Enabled: true, Weight: 1}})
+	for _, tc := range []struct {
+		name string
+		in   float64
+		out  float64
+	}{
+		{name: "negative input", in: -1, out: 1},
+		{name: "negative output", in: 1, out: -1},
+		{name: "nan input", in: math.NaN(), out: 1},
+		{name: "infinite output", in: 1, out: math.Inf(1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if s.SetModelPricing("m", "p", tc.in, tc.out) {
+				t.Fatal("invalid pricing must be rejected")
+			}
+		})
+	}
+	candidate := s.candidates["m"][0]
+	if candidate.PricingKnown {
+		t.Fatalf("rejected pricing must not mutate candidate: %+v", candidate)
+	}
+}
+
 func TestModelRefreshPreservesConfiguredPricing(t *testing.T) {
 	s := NewAdaptive(time.Minute)
 	p := adaptiveTestProvider{id: "p"}
