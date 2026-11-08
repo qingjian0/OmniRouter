@@ -168,8 +168,8 @@ func messagesToDeepSeekPrompt(messages []chatMessage, historyWindow int) (string
 				if strings.TrimSpace(call.ID) == "" || strings.TrimSpace(call.Function.Name) == "" || len(call.Function.Arguments) == 0 {
 					return "", fmt.Errorf("%w: malformed historical tool call in message %d", ErrUnsupportedChatRequest, index)
 				}
-				arguments := compactJSON(call.Function.Arguments)
-				if !json.Valid(arguments) {
+				arguments, err := normalizeToolArguments(call.Function.Arguments)
+				if err != nil {
 					return "", fmt.Errorf("%w: invalid tool arguments in message %d", ErrUnsupportedChatRequest, index)
 				}
 				callNameByID[call.ID] = call.Function.Name
@@ -241,4 +241,23 @@ func compactJSON(raw json.RawMessage) []byte {
 		return raw
 	}
 	return encoded
+}
+
+func normalizeToolArguments(raw json.RawMessage) ([]byte, error) {
+	value := bytes.TrimSpace(raw)
+	if len(value) == 0 || bytes.Equal(value, []byte("null")) {
+		return nil, fmt.Errorf("tool arguments are empty")
+	}
+	var encoded string
+	if err := json.Unmarshal(value, &encoded); err == nil {
+		argumentJSON := []byte(strings.TrimSpace(encoded))
+		if !json.Valid(argumentJSON) {
+			return nil, fmt.Errorf("tool arguments string is not valid JSON")
+		}
+		return compactJSON(argumentJSON), nil
+	}
+	if !json.Valid(value) {
+		return nil, fmt.Errorf("tool arguments are not valid JSON")
+	}
+	return compactJSON(value), nil
 }
