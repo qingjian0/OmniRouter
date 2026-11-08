@@ -36,6 +36,15 @@ Reference projects are not automatically trusted: compare behavior across implem
 | [xiaoY233/Chat2API](https://github.com/xiaoY233/Chat2API) | GPL-3.0 / TypeScript + Koa/Electron | Broad, actively maintained provider reference; DeepSeek request adapter, model options, `ANSWER/RESPONSE/THINK`, search metadata, non-stream aggregation, and OpenAI-compatible stream conversion | GPL-3.0 code is not copied into this project unless license compatibility is explicitly established. Use as behavioral research and compare semantics. Exclude its challenge solver and any credential practices that log secrets or synthesize browser cookies. |
 | [sums001/Deepseek-API](https://github.com/sums001/Deepseek-API) | License must be re-checked | Additional protocol research lead | No code reuse until license and provenance are verified. Challenge-solving behavior excluded. |
 
+### Additional current implementation audit
+
+A further implementation was inspected after the initial source audit:
+- [cheaper-inference/OmniRoute](https://github.com/cheaper-inference/OmniRoute) — MIT / TypeScript. Audited `open-sse/executors/deepseek-web.ts` at `release/v3.8.54` and verified its MIT license. It provides a more recent, concrete implementation reference for session creation response parsing, model-option selection, request payload shape, SSE-to-OpenAI conversion, and session reuse.
+- Its implementation currently creates sessions through `/api/v0/chat_session/create`, extracts `data.biz_data.chat_session.id` (with a `biz_data` fallback), and posts completion payloads containing `chat_session_id`, `parent_message_id`, `model_type`, `prompt`, `ref_file_ids`, `thinking_enabled`, `search_enabled`, and `preempt`.
+- Important divergence: this implementation uses `parent_message_id: null` and a persistent-session/rolling-prompt strategy in the inspected path, while other references describe explicit parent-message continuation. These behaviors are not interchangeable; current sanitized two-turn fixtures must decide which lineage strategy the upstream accepts.
+- **No code is copied from this project in this slice.** Its inspected executor also contains generated synthetic cookies, browser-fingerprint impersonation, and a PoW challenge/solver path. Those mechanisms are explicitly excluded from OmniRouter. The MIT license does not override the project's security/policy boundary.
+- This reference is research evidence only. Its comments mention a captured client build, but that does not prove the same headers, auth behavior, session semantics, or completion schema are valid for the user's current authorized session.
+
 ### Cross-reference findings
 
 - SSE framing must be parsed independently of network chunk boundaries and preserve event names; `ready`, `title`, and `close` are distinct event types in the kittors reference.
