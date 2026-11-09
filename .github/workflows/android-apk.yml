@@ -5,6 +5,7 @@ on:
     branches: [feature/deepseek-v1-android-apk]
     paths:
       - "android/**"
+      - "web/**"
       - "internal/**"
       - "cmd/**"
       - "go.mod"
@@ -32,6 +33,19 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build embedded DeepSeek admin UI
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          test -s ../internal/admin/static/dist/index.html
+          test -n "$(find ../internal/admin/static/dist/assets -type f -print -quit)"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
