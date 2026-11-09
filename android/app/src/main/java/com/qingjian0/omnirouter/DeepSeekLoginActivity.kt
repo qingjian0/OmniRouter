@@ -64,6 +64,10 @@ class DeepSeekLoginActivity : Activity() {
     }
 
     private fun connectCurrentAccount() {
+        if (!webView.url.orEmpty().startsWith("https://chat.deepseek.com/")) {
+            status.text = "当前页面不是 DeepSeek 官方登录域名，请重新打开登录页。"
+            return
+        }
         status.text = "正在检查当前 DeepSeek 登录状态…"
         val cookieHeader = CookieManager.getInstance().getCookie("https://chat.deepseek.com").orEmpty()
         val sessionCookie = cookieHeader.split(";")
@@ -101,7 +105,7 @@ class DeepSeekLoginActivity : Activity() {
                 }
                 runOnUiThread {
                     status.text = if (result == 0) {
-                        "DeepSeek 账号已连接。凭据已加密保存在本机，可以返回管理页使用。"
+                        "DeepSeek 登录态已加密保存在本机。尚未完成真实推理验收；请返回管理页发送一条测试请求。"
                     } else {
                         "连接失败（代码 $result）。请确认本地网关已启动、账号仍有效，然后重试。"
                     }
