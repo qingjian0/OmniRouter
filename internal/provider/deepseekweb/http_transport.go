@@ -25,7 +25,8 @@ const (
 // flow. It obtains a fresh server challenge and solves it with DeepSeek's
 // published frontend WASM algorithm; it never fabricates a challenge response.
 type HTTPCompletionTransport struct {
-	client *websession.HTTPClient
+	client   *websession.HTTPClient
+	powSolver func(context.Context, string, string, float64) (int64, error)
 }
 
 // NewHTTPCompletionTransport creates an origin-pinned transport for the
