@@ -29,7 +29,6 @@ type runtimeState struct {
 
 var startupStage atomic.Int32
 var startupFailedAt atomic.Int32
-var startupFailedAt atomic.Int32
 
 var state struct {
     sync.Mutex
@@ -48,15 +47,6 @@ func startupFail(code int32) C.int {
     return C.int(code)
 }
 
-//export OmnirouterStartupFailedAt
-func OmnirouterStartupFailedAt() C.int { return C.int(startupFailedAt.Load()) }
-
-func startupFail(code int32) C.int {
-    startupFailedAt.Store(startupStage.Load())
-    startupStage.Store(-2)
-    return C.int(code)
-}
-
 //export OmnirouterStart
 func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
     startupFailedAt.Store(0)
@@ -65,7 +55,7 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
 
     state.Lock()
     defer state.Unlock()
-    if state.runtime != nil { startupStage.Store(8); return 0 }
+    if state.runtime != nil { startupStage.Store(9); return 0 }
 
     root := C.GoString(dataDir)
     if root == "" { return startupFail(-11) }
