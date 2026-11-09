@@ -2,12 +2,12 @@ package deepseekweb
 
 import (
 	"context"
+	_ "embed"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 
 	"github.com/tetratelabs/wazero"
@@ -115,6 +115,9 @@ func jsonScalarString(raw json.RawMessage) (string, error) {
 	return number.String(), nil
 }
 
+//go:embed sha3_wasm_bg.wasm
+var deepSeekPoWWASM []byte
+
 func solveDeepSeekHashV1(ctx context.Context, challenge, prefix string, difficulty float64) (int64, error) {
 	if challenge == "" || prefix == "" || math.IsNaN(difficulty) || math.IsInf(difficulty, 0) || difficulty <= 0 {
 		return 0, fmt.Errorf("invalid challenge parameters")
@@ -146,9 +149,9 @@ func solveDeepSeekHashV1(ctx context.Context, challenge, prefix string, difficul
 		return ptr, uint32(len(data)), nil
 	}
 	challengePtr, challengeLen, err := writeString(challenge)
-	if err != nil { return 0, 0, err }
+	if err != nil { return 0, err }
 	prefixPtr, prefixLen, err := writeString(prefix)
-	if err != nil { return 0, 0, err }
+	if err != nil { return 0, err }
 	_, err = solve.Call(ctx, uint64(retptr), uint64(challengePtr), uint64(challengeLen),
 		uint64(prefixPtr), uint64(prefixLen), math.Float64bits(difficulty))
 	if err != nil { return 0, fmt.Errorf("execute DeepSeekHashV1 WASM: %w", err) }
@@ -156,12 +159,9 @@ func solveDeepSeekHashV1(ctx context.Context, challenge, prefix string, difficul
 	if !ok { return 0, fmt.Errorf("read WASM result out of bounds") }
 	status := int32(binary.LittleEndian.Uint32(result[:4]))
 	answer := math.Float64frombits(binary.LittleEndian.Uint64(result[8:16]))
-	if status == 0 || math.IsNaN(answer) || math.IsInf(answer, 0) || answer < 0 || answer > math.MaxInt64 {
+	if status == 0 || math.IsNaN(answer) || math.IsInf(answer, 0) || answer < 0 || answer > float64(1<<63-1) {
 		return 0, fmt.Errorf("DeepSeekHashV1 returned no valid answer")
 	}
 	return int64(answer), nil
 }
 
-// Keep strconv linked as a guard against accidentally changing expiry
-// normalization to a lossy float conversion in future protocol updates.
-var _ = strconv.IntSize

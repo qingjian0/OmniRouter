@@ -22,12 +22,17 @@ func TestHTTPCompletionTransportAuthorizedMultiTurnFlow(t *testing.T) {
 				t.Errorf("users/current did not receive user token")
 			}
 			_, _ = w.Write([]byte(`{"code":0,"data":{"biz_data":{"token":"access-token"}}}`))
+		case powChallengePath:
+			_, _ = w.Write([]byte(`{"code":0,"data":{"biz_code":0,"biz_data":{"challenge":{"algorithm":"DeepSeekHashV1","challenge":"test-challenge","salt":"test-salt","difficulty":1e300,"signature":"test-signature","expire_at":1794240000,"target_path":"/api/v0/chat/completion"}}}}`))
 		case createSessionPath:
 			if r.Header.Get("Authorization") != "Bearer access-token" {
 				t.Errorf("session create did not receive access token")
 			}
 			_, _ = w.Write([]byte(`{"code":0,"data":{"biz_data":{"chat_session":{"id":"upstream-session"}}}}`))
 		case completionPath:
+			if r.Header.Get("X-DS-PoW-Response") == "" {
+				t.Errorf("completion request did not include a PoW response")
+			}
 			if err := json.NewDecoder(r.Body).Decode(&completionPayload); err != nil {
 				t.Errorf("decode completion request: %v", err)
 			}
@@ -100,9 +105,14 @@ func TestHTTPCompletionTransportReusesSessionWithRollingPrompt(t *testing.T) {
 		switch r.URL.Path {
 		case usersCurrentPath:
 			_, _ = w.Write([]byte(`{"code":0,"data":{"biz_data":{"token":"access-token"}}}`))
+		case powChallengePath:
+			_, _ = w.Write([]byte(`{"code":0,"data":{"biz_code":0,"biz_data":{"challenge":{"algorithm":"DeepSeekHashV1","challenge":"test-challenge","salt":"test-salt","difficulty":1e300,"signature":"test-signature","expire_at":1794240000,"target_path":"/api/v0/chat/completion"}}}}`))
 		case createSessionPath:
 			t.Error("existing conversation unexpectedly created a new session")
 		case completionPath:
+			if r.Header.Get("X-DS-PoW-Response") == "" {
+				t.Errorf("completion request did not include a PoW response")
+			}
 			if err := json.NewDecoder(r.Body).Decode(&completionPayload); err != nil {
 				t.Errorf("decode completion request: %v", err)
 			}
