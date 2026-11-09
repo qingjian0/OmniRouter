@@ -28,6 +28,7 @@ type runtimeState struct {
 }
 
 var startupStage atomic.Int32
+var startupFailedAt atomic.Int32
 
 var state struct {
     sync.Mutex
@@ -36,6 +37,15 @@ var state struct {
 
 //export OmnirouterStartupStage
 func OmnirouterStartupStage() C.int { return C.int(startupStage.Load()) }
+
+//export OmnirouterStartupFailedAt
+func OmnirouterStartupFailedAt() C.int { return C.int(startupFailedAt.Load()) }
+
+func startupFail(code int32) C.int {
+    startupFailedAt.Store(startupStage.Load())
+    startupStage.Store(-2)
+    return C.int(code)
+}
 
 //export OmnirouterStart
 func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
@@ -63,7 +73,7 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
         "OMNI_PROVIDER_MODELS": "deepseek-web",
     }
     for key, value := range values {
-        if err := os.Setenv(key, value); err != nil { startupStage.Store(-13); return -13 }
+        if err := os.Setenv(key, value); err != nil { return startupFail(-13) }
     }
 
     startupStage.Store(4)
