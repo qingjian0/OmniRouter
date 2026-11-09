@@ -80,7 +80,7 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
 		"OMNI_PROVIDER_ID":               "deepseek-web",
 		"OMNI_PROVIDER_NAME":             "DeepSeek Web",
 		"OMNI_PROVIDER_BASE_URL":         "https://chat.deepseek.com",
-		"OMNI_PROVIDER_MODELS":           "deepseek-web",
+		"OMNI_PROVIDER_MODELS":           "deepseek-web,deepseek-web-expert",
 	}
 	for key, value := range values {
 		if err := os.Setenv(key, value); err != nil {

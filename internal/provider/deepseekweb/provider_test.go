@@ -22,6 +22,15 @@ func TestRegistrationProviderFailsClosedUntilInferenceTransportExists(t *testing
 		t.Fatalf("registration-only provider advertised routable models: %+v", models)
 	}
 
+	configured := NewRegistrationProvider("deepseek-web", "DeepSeek Web", "deepseek-web", "deepseek-web-expert")
+	configuredModels, err := configured.ListModels(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configuredModels) != 2 || configuredModels[0].Name != "DeepSeek Web · 默认" || configuredModels[1].Name != "DeepSeek Web · 专家" {
+		t.Fatalf("unexpected DeepSeek Web model catalogue: %+v", configuredModels)
+	}
+
 	if _, err := p.Generate(context.Background(), &provider.Request{Model: "deepseek"}); !errors.Is(err, ErrAuthorizationRequired) {
 		t.Fatalf("Generate error = %v, want ErrAuthorizationRequired", err)
 	}

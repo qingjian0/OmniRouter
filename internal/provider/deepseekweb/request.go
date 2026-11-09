@@ -132,7 +132,7 @@ func hasJSONValues(raw json.RawMessage) bool {
 func resolveDeepSeekModelOptions(model string) (modelType string, thinking, search bool) {
 	name := strings.ToLower(strings.TrimSpace(model))
 	modelType = "default"
-	if strings.Contains(name, "pro") || strings.Contains(name, "expert") ||
+	if name == "deepseek-web-expert" || strings.Contains(name, "pro") || strings.Contains(name, "expert") ||
 		name == "deepseek-reasoner" || name == "deepseek-r1" {
 		modelType = "expert"
 	}

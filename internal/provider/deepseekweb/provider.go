@@ -26,6 +26,17 @@ func NewRegistrationProvider(id, name string, models ...string) *RegistrationPro
 func (p *RegistrationProvider) ID() string   { return p.id }
 func (p *RegistrationProvider) Name() string { return p.name }
 
+func modelDisplayName(id string) string {
+	switch id {
+	case "deepseek-web":
+		return "DeepSeek Web · 默认"
+	case "deepseek-web-expert":
+		return "DeepSeek Web · 专家"
+	default:
+		return id
+	}
+}
+
 func (p *RegistrationProvider) ListModels(context.Context) ([]provider.Model, error) {
 	models := make([]provider.Model, 0, len(p.models))
 	for _, id := range p.models {
@@ -33,7 +44,7 @@ func (p *RegistrationProvider) ListModels(context.Context) ([]provider.Model, er
 			continue
 		}
 		models = append(models, provider.Model{
-			ID: id, Name: id, Provider: p.id,
+			ID: id, Name: modelDisplayName(id), Provider: p.id,
 			Capabilities: []string{"chat", "streaming"},
 		})
 	}
