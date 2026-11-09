@@ -13,14 +13,17 @@ import (
     "path/filepath"
     "sync"
     "time"
+    "unsafe"
 
     "omnirouter/internal/app"
     "omnirouter/internal/config"
+    "omnirouter/internal/provider/deepseekweb"
 )
 
 type runtimeState struct {
-    cancel context.CancelFunc
-    done   chan error
+    cancel      context.CancelFunc
+    done        chan error
+    application *app.App
 }
 
 var state struct {
@@ -63,7 +66,7 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
 
     ctx, cancel := context.WithCancel(context.Background())
     done := make(chan error, 1)
-    runtime := &runtimeState{cancel: cancel, done: done}
+    runtime := &runtimeState{cancel: cancel, done: done, application: application}
     state.runtime = runtime
     go func() { done <- application.Run(ctx) }()
 
@@ -92,6 +95,45 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
     }
     state.runtime = nil
     return -23
+}
+
+
+//export OmnirouterPair
+func OmnirouterPair(token *C.char, tokenLen C.int, cookie *C.char, cookieLen C.int) C.int {
+    if token == nil || cookie == nil || tokenLen <= 0 || tokenLen > 16384 || cookieLen <= 0 || cookieLen > 4096 {
+        return -40
+    }
+    tokenBytes := C.GoBytes(unsafe.Pointer(token), tokenLen)
+    cookieBytes := C.GoBytes(unsafe.Pointer(cookie), cookieLen)
+    defer func() {
+        for i := range tokenBytes { tokenBytes[i] = 0 }
+        for i := range cookieBytes { cookieBytes[i] = 0 }
+    }()
+
+    state.Lock()
+    defer state.Unlock()
+    runtime := state.runtime
+    if runtime == nil || runtime.application == nil {
+        return -41
+    }
+    ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+    defer cancel()
+    _, err := runtime.application.AuthorizeDeepSeekWebAccount(
+        ctx,
+        "deepseek-web",
+        "Android WebView",
+        deepseekweb.AuthorizationInput{
+            Token: tokenBytes,
+            Cookies: []deepseekweb.BrowserCookie{{
+                Name: "ds_session_id", Value: string(cookieBytes),
+                Domain: "chat.deepseek.com", Path: "/", Secure: true,
+            }},
+        },
+    )
+    if err != nil {
+        return -42
+    }
+    return 0
 }
 
 //export OmnirouterStop
