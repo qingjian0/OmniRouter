@@ -24,7 +24,7 @@
 1. Kotlin Android 前台服务负责进程生命周期、通知、启动/停止和 Android 后台限制。
 2. Go 后端通过 Android ARM64 `c-shared` / JNI 启动，继续复用现有 Gateway、SQLite、凭据 Vault 和 DeepSeek Web Provider。
 3. 管理 UI 由 APK 内置 WebView 加载 loopback 管理页面；服务默认只绑定 `127.0.0.1`，不默认开放 LAN。
-4. 用户通过 APK 内的专用 WebView 正常访问并登录 `chat.deepseek.com`。只有用户显式点击“连接此账号”后，应用才读取最小必要的登录态（当前 RFC 定义的 access token 与 `ds_session_id`），经一次性、短时、loopback 配对流程交给 Go 后端。禁止读取其他站点、导出浏览器配置文件、收集密码/MFA、自动化挑战或伪造身份。
+4. 用户通过 APK 内的专用 WebView 正常访问并登录 `chat.deepseek.com`。当前分支已实现显式点击“连接此账号”后读取该站点的 `userToken` 与 `ds_session_id`，经 JNI 直接交给 Go 后端的持久加密 Vault；不经过剪贴板、日志或普通 HTTP pairing endpoint。仍需在真实设备验证 DeepSeek 页面当前确实使用这些字段。禁止读取其他站点、导出浏览器配置文件、收集密码/MFA、自动化挑战或伪造身份。
 5. Gateway 主密钥和凭据加密密钥必须由 Android Keystore 保护；不得写入日志、导出备份或明文 SharedPreferences。
 6. APK 使用 GitHub Actions 构建并发布 arm64 APK 与 SHA-256；用户不需要本机安装 Go/Node/Gradle/NDK。
 
@@ -43,7 +43,7 @@
 ## 交付门禁
 
 ### A. 后端真实验收
-- [ ] 用户正常登录后成功连接账号；不上传密码/MFA/挑战证明。
+- [ ] 用户正常登录后成功连接账号；不上传密码/MFA/挑战证明。（Android WebView 显式配对代码已实现，实机待验）
 - [ ] 一次非流式文本请求成功。
 - [ ] 一次 SSE 请求完整收到经验证的终止事件。
 - [ ] 同一 conversation ID 的第二轮正确延续上游会话。
@@ -52,7 +52,7 @@
 - [ ] 所有日志、错误和管理 API 均不泄露 token/cookie/session ID。
 
 ### B. Android APK
-- [ ] Gradle 构建 arm64 APK 成功并可安装。
+- [ ] Gradle 构建 arm64 APK 成功并可安装。（早期 debug 构建已通过；含当前 JNI pairing / UI 改动的最新构建仍在 CI）
 - [ ] Android 设备上 JNI 启停 Go 服务；无 Termux 依赖。
 - [ ] 前台服务通知、停止、进程重启和 Android 16 后台行为通过实机验证。
 - [ ] WebView 只允许 DeepSeek 登录域名和本地管理页面；桥接仅在精确来源启用。
