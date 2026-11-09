@@ -27,7 +27,7 @@ Short desktop checklist:
 7. Open https://chat.deepseek.com and sign in normally.
 8. Create a one-time pairing code through the authenticated admin API:
 
-        curl -X POST http://127.0.0.1:8080/admin/deepseek-web/pairings -H 'Authorization: Bearer $OMNI_GATEWAY_API_KEY' -H 'Content-Type: application/json' -d '{"provider_id":"<deepseek-web-provider-id>","account_name":"Personal DeepSeek Web"}'
+        curl -X POST http://127.0.0.1:8080/admin/deepseek-web/pairings -H "Authorization: Bearer $OMNI_GATEWAY_API_KEY" -H 'Content-Type: application/json' -d '{"provider_id":"<deepseek-web-provider-id>","account_name":"Personal DeepSeek Web"}'
 
 9. Copy the returned nonce into the extension popup, keep the gateway address at http://127.0.0.1:8080, and explicitly click **Connect this DeepSeek tab**.
 
