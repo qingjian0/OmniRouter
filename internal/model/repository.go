@@ -125,6 +125,22 @@ func (r *Repository) SetPricing(ctx context.Context, modelID, providerID string,
 	return err
 }
 
+func (r *Repository) SetDisplayName(ctx context.Context, modelID, providerID, displayName string) error {
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" {
+		return fmt.Errorf("model display name is required")
+	}
+	res, err := r.db.ExecContext(ctx, `UPDATE models SET display_name=?,updated_at=? WHERE id=? AND provider_id=?`, displayName, time.Now().UTC().Format(time.RFC3339Nano), modelID, providerID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err == nil && n == 0 {
+		return sql.ErrNoRows
+	}
+	return err
+}
+
 func (r *Repository) SetEnabled(ctx context.Context, modelID, providerID string, enabled bool) error {
 	res, err := r.db.ExecContext(ctx, `UPDATE models SET enabled=?,updated_at=? WHERE id=? AND provider_id=?`, boolInt(enabled), time.Now().UTC().Format(time.RFC3339Nano), modelID, providerID)
 	if err != nil {
