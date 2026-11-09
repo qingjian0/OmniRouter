@@ -6,41 +6,56 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import java.util.concurrent.Executors
 
 internal class OmniRouterService : Service() {
+    private val worker = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            stopGateway()
-            stopSelf(startId)
+            worker.execute {
+                try { NativeBridge.nativeStop() } catch (_: Throwable) { }
+                mainHandler.post {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf(startId)
+                }
+            }
             return START_NOT_STICKY
         }
+
         startForeground(NOTIFICATION_ID, buildNotification())
-        return try {
-            val secrets = AndroidSecretStore(this).loadOrCreate()
-            val result = NativeBridge.nativeStart(filesDir.absolutePath, secrets.gatewayKey, secrets.credentialEncryptionKey)
-            if (result != 0) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf(startId)
-                START_NOT_STICKY
-            } else START_STICKY
-        } catch (_: Throwable) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf(startId)
-            START_NOT_STICKY
+        worker.execute {
+            try {
+                val secrets = AndroidSecretStore(this).loadOrCreate()
+                val result = NativeBridge.nativeStart(filesDir.absolutePath, secrets.gatewayKey, secrets.credentialEncryptionKey)
+                if (result != 0) {
+                    mainHandler.post {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf(startId)
+                    }
+                }
+            } catch (_: Throwable) {
+                mainHandler.post {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf(startId)
+                }
+            }
         }
+        return START_STICKY
     }
 
     override fun onDestroy() {
-        stopGateway()
+        worker.execute {
+            try { NativeBridge.nativeStop() } catch (_: Throwable) { }
+        }
+        worker.shutdown()
         super.onDestroy()
-    }
-
-    private fun stopGateway() {
-        try { NativeBridge.nativeStop() } catch (_: Throwable) { }
-        stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
     private fun buildNotification(): Notification {
