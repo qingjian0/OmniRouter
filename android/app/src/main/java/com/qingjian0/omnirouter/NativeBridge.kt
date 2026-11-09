@@ -21,4 +21,5 @@ internal object NativeBridge {
     external fun nativePair(token: ByteArray, sessionCookie: ByteArray): Int
     external fun nativeStop(): Int
     external fun nativeGetStartupStage(): Int
+    external fun nativeGetStartupFailedAt(): Int
 }
