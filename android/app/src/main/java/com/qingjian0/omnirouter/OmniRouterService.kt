@@ -39,7 +39,11 @@ internal class OmniRouterService : Service() {
             GatewayStartupStatus.detail = "正在停止本地网关"
             GatewayStartupStatus.phase = -1
             worker.execute {
-                val result = try { NativeBridge.nativeStop() } catch (_: Throwable) { -30 }
+                val result = try {
+                    NativeBridge.loadCoreLibrary()
+                    NativeBridge.loadJniLibrary()
+                    NativeBridge.nativeStop()
+                } catch (_: Throwable) { -30 }
                 mainHandler.post {
                     GatewayStartupStatus.resultCode = result
                     GatewayStartupStatus.phase = if (result == 0) 0 else -2
@@ -126,7 +130,11 @@ internal class OmniRouterService : Service() {
         nativeBridgeReady = false
         mainHandler.removeCallbacks(nativeStatusPoll)
         worker.execute {
-            try { NativeBridge.nativeStop() } catch (_: Throwable) { }
+            try {
+                NativeBridge.loadCoreLibrary()
+                NativeBridge.loadJniLibrary()
+                NativeBridge.nativeStop()
+            } catch (_: Throwable) { }
         }
         worker.shutdown()
         super.onDestroy()
