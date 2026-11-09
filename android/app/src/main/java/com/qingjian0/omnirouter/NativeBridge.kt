@@ -6,5 +6,6 @@ internal object NativeBridge {
         System.loadLibrary("omnirouter_jni")
     }
     external fun nativeStart(dataDir: String, gatewayKey: String, encryptionKey: String): Int
+    external fun nativePair(token: ByteArray, sessionCookie: ByteArray): Int
     external fun nativeStop(): Int
 }
