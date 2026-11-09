@@ -25,6 +25,7 @@ class ChatTestActivity : Activity() {
     private lateinit var output: TextView
     private lateinit var sendButton: Button
     private lateinit var streamButton: Button
+    private lateinit var newSessionButton: Button
     private lateinit var conversationLabel: TextView
     private val history = mutableListOf<ChatTurn>()
     private var conversationId = newConversationId()
@@ -66,7 +67,7 @@ class ChatTestActivity : Activity() {
         buttons.addView(streamButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(buttons)
 
-        root.addView(Button(this).apply {
+        newSessionButton = Button(this).apply {
             text = "新建会话 / 清空上下文"
             setOnClickListener {
                 history.clear()
@@ -74,7 +75,8 @@ class ChatTestActivity : Activity() {
                 updateConversationLabel()
                 output.text = "已创建新会话。"
             }
-        })
+        }
+        root.addView(newSessionButton)
 
         output = TextView(this).apply {
             text = "等待测试。请先完成 DeepSeek 账号连接。"
@@ -101,6 +103,7 @@ class ChatTestActivity : Activity() {
         }
         sendButton.isEnabled = false
         streamButton.isEnabled = false
+        newSessionButton.isEnabled = false
         output.text = if (stream) "正在建立 SSE 流式请求…\n" else "正在发送普通请求…\n"
 
         val requestHistory = history.toList() + ChatTurn("user", message)
@@ -121,6 +124,7 @@ class ChatTestActivity : Activity() {
                 output.text = outcome.displayText
                 sendButton.isEnabled = true
                 streamButton.isEnabled = true
+                newSessionButton.isEnabled = true
             }
         }.start()
     }
