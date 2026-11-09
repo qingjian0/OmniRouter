@@ -2,7 +2,10 @@ module omnirouter
 
 go 1.23.0
 
-require modernc.org/sqlite v1.34.5
+require (
+	github.com/tetratelabs/wazero v1.9.0
+	modernc.org/sqlite v1.34.5
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

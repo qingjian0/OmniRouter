@@ -16,16 +16,17 @@ import (
 const (
 	usersCurrentPath     = "/api/v0/users/current"
 	createSessionPath    = "/api/v0/chat_session/create"
+	powChallengePath     = "/api/v0/chat/create_pow_challenge"
 	completionPath       = "/api/v0/chat/completion"
 	maxJSONResponseBytes = 1 << 20
 )
 
-// HTTPCompletionTransport performs the ordinary, user-authorized DeepSeek Web
-// request flow. It does not synthesize browser fingerprints, cookies, or
-// anti-abuse challenge responses. If the upstream requires such a challenge,
-// the request fails closed with ErrPolicyBlocked.
+// HTTPCompletionTransport performs the user-authorized DeepSeek Web request
+// flow. It obtains a fresh server challenge and solves it with DeepSeek's
+// published frontend WASM algorithm; it never fabricates a challenge response.
 type HTTPCompletionTransport struct {
-	client *websession.HTTPClient
+	client   *websession.HTTPClient
+	powSolver func(context.Context, string, string, float64) (int64, error)
 }
 
 // NewHTTPCompletionTransport creates an origin-pinned transport for the
@@ -94,6 +95,11 @@ func (t *HTTPCompletionTransport) Stream(
 	}
 	defer zeroBytes(accessToken)
 
+	powHeader, err := t.createPoWHeader(ctx, material, accessToken)
+	if err != nil {
+		return CompletionResult{}, err
+	}
+
 	sessionID := strings.TrimSpace(lineage.UpstreamConversationID)
 	if sessionID == "" {
 		sessionID, err = t.createSession(ctx, material, accessToken)
@@ -131,6 +137,7 @@ func (t *HTTPCompletionTransport) Stream(
 	headers := t.headers(accessToken, material.CookieHeader)
 	headers.Set("Content-Type", "application/json")
 	headers.Set("Accept", "text/event-stream")
+	headers.Set("X-DS-PoW-Response", powHeader)
 	response, err := t.client.Do(ctx, http.MethodPost, completionPath, headers, bytes.NewReader(body))
 	if err != nil {
 		return CompletionResult{}, fmt.Errorf("send DeepSeek Web completion request: %w", err)

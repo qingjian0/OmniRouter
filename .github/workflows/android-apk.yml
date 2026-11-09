@@ -1,0 +1,148 @@
+name: DeepSeek Android APK
+
+on:
+  push:
+    branches: [dev, feature/deepseek-v1-android-apk]
+    paths:
+      - "android/**"
+      - "web/**"
+      - "internal/**"
+      - "cmd/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deepseek-android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Build DeepSeek Android arm64 debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build embedded DeepSeek admin UI
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          test -s ../internal/admin/static/dist/index.html
+          test -n "$(find ../internal/admin/static/dist/assets -type f -print -quit)"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android build components
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+
+      - name: Run Go test suite
+        run: go test ./...
+
+      - name: Build Go Android shared library
+        env:
+          GOOS: android
+          GOARCH: arm64
+          CGO_ENABLED: "1"
+        run: |
+          set -euo pipefail
+          export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
+          export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          go build -trimpath -buildmode=c-shared \
+            -ldflags="-s -w -extldflags=-Wl,-soname,libomnirouter.so" \
+            -o android/app/src/main/jniLibs/arm64-v8a/libomnirouter.so \
+            ./android/native/omnirouter
+          readelf -d android/app/src/main/jniLibs/arm64-v8a/libomnirouter.so | grep -F 'Library soname: [libomnirouter.so]'
+
+      - name: Build Android APK
+        working-directory: android
+        run: |
+          set -euo pipefail
+          gradle --no-daemon assembleDebug
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "com.qingjian0.omnirouter.dev"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libomnirouter.so"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libomnirouter_jni.so"
+
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$TMP_DIR"' EXIT
+          unzip -p "$APK" lib/arm64-v8a/libomnirouter_jni.so > "$TMP_DIR/libomnirouter_jni.so"
+          unzip -p "$APK" lib/arm64-v8a/libomnirouter.so > "$TMP_DIR/libomnirouter.so"
+          readelf -d "$TMP_DIR/libomnirouter.so" | grep -F 'Library soname: [libomnirouter.so]'
+          readelf -d "$TMP_DIR/libomnirouter_jni.so" | grep -F 'Shared library: [libomnirouter.so]'
+          if readelf -d "$TMP_DIR/libomnirouter_jni.so" | grep -E 'Shared library: \[/'; then
+            echo "JNI ELF contains an absolute DT_NEEDED dependency"
+            exit 1
+          fi
+
+          DEX_FOUND=0
+          while IFS= read -r dex_entry; do
+            if unzip -p "$APK" "$dex_entry" | strings | grep -Fq 'Lcom/qingjian0/omnirouter/NativeBridge;'; then
+              DEX_FOUND=1
+              break
+            fi
+          done < <(unzip -Z1 "$APK" | grep -E '^classes([0-9]+)?\.dex$')
+          test "$DEX_FOUND" -eq 1 || { echo "NativeBridge class missing from APK DEX"; exit 1; }
+          echo "Verified NativeBridge DEX and ELF dependency names"
+          sha256sum "$APK" > "$APK.sha256"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnirouter-deepseek-android-arm64-debug
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/debug/app-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish rolling development APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: deepseek-android-apk-dev
+          name: DeepSeek Android APK (development preview)
+          body: |
+            Development preview for the DeepSeek-only Android V1.
+
+            This APK is debug-signed and intended for installation/runtime testing only.
+            It is not the final signed V1 release. Real DeepSeek account and OPPO Android 16
+            end-to-end acceptance are still required.
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/debug/app-debug.apk.sha256

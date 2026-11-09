@@ -32,6 +32,9 @@ func TestMapChatCompletionInputModelAliases(t *testing.T) {
 		{"deepseek-v3-pro", "expert", false, false},
 		{"deepseek-chat-think", "default", true, false},
 		{"deepseek-search", "default", false, true},
+		{"deepseek-web", "default", false, false},
+		{"deepseek-web-expert", "expert", false, false},
+		{"deepseek-web-thinking", "default", true, false},
 	}
 	for _, tc := range cases {
 		got, err := MapChatCompletionInput([]byte(`{"model":"` + tc.model + `","messages":[{"role":"user","content":"hello"}]}`))

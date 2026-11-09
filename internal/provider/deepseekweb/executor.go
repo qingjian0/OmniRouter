@@ -117,7 +117,7 @@ func (p *ExecutorProvider) Name() string { return p.name }
 func (p *ExecutorProvider) ListModels(context.Context) ([]provider.Model, error) {
 	models := make([]provider.Model, 0, len(p.models))
 	for _, id := range p.models {
-		models = append(models, provider.Model{ID: id, Name: id, Provider: p.id, Capabilities: []string{"chat", "streaming"}})
+		models = append(models, provider.Model{ID: id, Name: modelDisplayName(id), Provider: p.id, Capabilities: []string{"chat", "streaming"}})
 	}
 	return models, nil
 }
