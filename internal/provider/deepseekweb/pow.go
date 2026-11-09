@@ -8,7 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
 	"strings"
+
+	"omnirouter/internal/websession"
 
 	"github.com/tetratelabs/wazero"
 )
@@ -142,7 +145,7 @@ func solveDeepSeekHashV1(ctx context.Context, challenge, prefix string, difficul
 	if memory == nil || malloc == nil || stack == nil || solve == nil {
 		return 0, fmt.Errorf("embedded DeepSeek WASM exports are incomplete")
 	}
-	stackResult, err := stack.Call(ctx, uint64(uint32(int32(-16))))
+	stackResult, err := stack.Call(ctx, uint64(0xfffffff0))
 	if err != nil {
 		return 0, fmt.Errorf("reserve WASM return slot: %w", err)
 	}
