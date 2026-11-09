@@ -98,7 +98,10 @@ jobs:
               DEX_FOUND=1
               break
             fi
-          done < <(unzip -Z1 "$APK" | grep -E '^classes([0-9]+)?\\.dex
+          done < <(unzip -Z1 "$APK" | grep -E '^classes([0-9]+)?\.dex$')
+          test "$DEX_FOUND" -eq 1 || { echo "NativeBridge class missing from APK DEX"; exit 1; }
+          echo "Verified NativeBridge class descriptor in APK DEX"
+          sha256sum "$APK" > "$APK.sha256"
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
