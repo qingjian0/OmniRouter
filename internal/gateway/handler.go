@@ -127,6 +127,7 @@ func NewHandlerWithDeepSeekWebRegistrar(registry *provider.Registry, apiKey stri
 	h.mux.Handle("DELETE /admin/sessions/{id}", h.protect(http.HandlerFunc(h.deleteSession)))
 	h.mux.Handle("GET /admin/models", h.protect(http.HandlerFunc(h.adminModels)))
 	h.mux.Handle("PATCH /admin/models/{id}/status", h.protect(http.HandlerFunc(h.setModelStatus)))
+	h.mux.Handle("PATCH /admin/models/{id}/display-name", h.protect(http.HandlerFunc(h.setModelDisplayName)))
 	h.mux.Handle("PATCH /admin/models/{id}/pricing", h.protect(http.HandlerFunc(h.setModelPricing)))
 	h.mux.Handle("DELETE /admin/models/{id}", h.protect(http.HandlerFunc(h.deleteModel)))
 	h.mux.Handle("GET /admin/api-keys", h.protect(http.HandlerFunc(h.adminAPIKeys)))
@@ -164,6 +165,11 @@ func (h *Handler) models(w http.ResponseWriter, r *http.Request) {
 	}
 	data := make([]map[string]any, 0, len(items))
 	for _, model := range items {
+		if h.modelRepo != nil {
+			if stored, err := h.modelRepo.Get(r.Context(), model.ID, model.Provider); err == nil && strings.TrimSpace(stored.DisplayName) != "" {
+				model.Name = stored.DisplayName
+			}
+		}
 		data = append(data, map[string]any{"id": model.ID, "object": "model", "owned_by": model.Provider, "name": model.Name, "capabilities": model.Capabilities, "context_limit": model.ContextLimit, "max_output_tokens": model.MaxOutputTokens, "input_modalities": model.InputModalities, "output_modalities": model.OutputModalities, "reasoning_effort": model.ReasoningEffort, "api_capabilities": model.APICapabilities})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"object": "list", "data": data})
@@ -2347,6 +2353,32 @@ func (h *Handler) adminModels(w http.ResponseWriter, r *http.Request) {
 		items = append(items, models...)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": items, "persisted": false})
+}
+
+func (h *Handler) setModelDisplayName(w http.ResponseWriter, r *http.Request) {
+	if h.modelRepo == nil {
+		writeError(w, http.StatusServiceUnavailable, "storage_unavailable", "model repository is unavailable")
+		return
+	}
+	var input struct {
+		ProviderID string `json:"provider_id"`
+		DisplayName string `json:"display_name"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil || strings.TrimSpace(input.ProviderID) == "" || strings.TrimSpace(input.DisplayName) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request_error", "provider_id and non-empty display_name are required")
+		return
+	}
+	if err := h.modelRepo.SetDisplayName(r.Context(), r.PathValue("id"), input.ProviderID, input.DisplayName); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not_found", "model not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "storage_error", "could not update model display name")
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": r.PathValue("id"), "provider_id": input.ProviderID, "display_name": strings.TrimSpace(input.DisplayName), "persisted": true})
 }
 
 func (h *Handler) setModelStatus(w http.ResponseWriter, r *http.Request) {
