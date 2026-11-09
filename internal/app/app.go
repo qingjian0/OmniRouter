@@ -27,9 +27,11 @@ import (
 )
 
 type App struct {
-	server  *http.Server
-	logger  *slog.Logger
-	storage *storage.Runtime
+	server          *http.Server
+	logger          *slog.Logger
+	storage         *storage.Runtime
+	webAuthorization *deepseekweb.AuthorizationService
+	webRegistrar    gateway.DeepSeekWebRegistrar
 }
 
 func New(cfg config.Config, logger *slog.Logger) (*App, error) {
@@ -311,7 +313,10 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		IdleTimeout:  cfg.HTTP.IdleTimeout,
 	}
 	cleanup = false
-	return &App{server: server, logger: logger, storage: dbRuntime}, nil
+	return &App{
+		server: server, logger: logger, storage: dbRuntime,
+		webAuthorization: webAuthorization, webRegistrar: webRegistrar,
+	}, nil
 }
 
 func (a *App) Run(ctx context.Context) error {
