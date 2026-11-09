@@ -128,13 +128,13 @@ class MainActivity : Activity() {
     }
 
     private fun renderGatewayStatus() {
-        val nativeStage = try { NativeBridge.nativeGetStartupStage() } catch (_: Throwable) { 0 }
-        val nativeFailedAt = try { NativeBridge.nativeGetStartupFailedAt() } catch (_: Throwable) { 0 }
+        // UI rendering must never initialize NativeBridge. Library loading belongs
+        // exclusively to the foreground service so its original error is preserved.
         val localPhase = GatewayStartupStatus.phase
-        val current = if (localPhase == -1) -1 else if (nativeStage > 0) nativeStage else localPhase
+        val current = localPhase
         val failed = current == -2
         val stopping = current == -1
-        val failedAt = if (nativeFailedAt > 0) nativeFailedAt else GatewayStartupStatus.failedAt
+        val failedAt = GatewayStartupStatus.failedAt
         val labels = listOf(
             "1. Android Keystore：读取/创建本地密钥",
             "2. ARM64 原生库：加载 Go 与 JNI 运行库",
