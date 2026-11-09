@@ -1,0 +1,89 @@
+name: OmniRouter Android Termux prerelease
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: omnirouter-android-dev-release
+  cancel-in-progress: false
+
+jobs:
+  build-android:
+    name: Build Android arm64 Termux package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build embedded admin UI
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          test -s ../internal/admin/static/dist/index.html
+          test -n "$(find ../internal/admin/static/dist/assets -type f -print -quit)"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+
+      - name: Verify dependencies
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Test source on Linux
+        run: |
+          go test ./...
+          go vet ./...
+
+      - name: Cross-compile Android arm64 binary
+        env:
+          GOOS: android
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          mkdir -p dist/package
+          commit="$(git rev-parse HEAD)"
+          version="dev-$(git rev-parse --short HEAD)"
+          binary="omnirouter-${version}-android-arm64"
+          go build -trimpath -ldflags="-s -w -X omnirouter/internal/version.Version=${version} -X omnirouter/internal/version.Commit=${commit}" -o "dist/package/${binary}" ./cmd/omnirouter
+          chmod 755 "dist/package/${binary}"
+          cp README.md dist/package/README.md
+          cp docs/INSTALL.md dist/package/INSTALL.md
+          cp docs/ANDROID-TERMUX-ACCEPTANCE.md dist/package/ANDROID-TERMUX-ACCEPTANCE.md
+          cp examples/omnirouter.env.example dist/package/omnirouter.env.example
+          mkdir -p dist/package/scripts
+          cp scripts/termux-smoke.sh scripts/backup-sqlite.sh scripts/restore-sqlite.sh dist/package/scripts/
+          tar -C dist/package -czf "dist/${binary}.tar.gz" .
+          sha256sum "dist/${binary}.tar.gz" > "dist/${binary}.tar.gz.sha256"
+          file "dist/package/${binary}"
+          test -s "dist/${binary}.tar.gz"
+
+      - name: Publish rolling Android dev prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-dev
+          name: OmniRouter Android arm64 (dev latest)
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          generate_release_notes: false
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
