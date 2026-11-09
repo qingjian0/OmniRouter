@@ -4,6 +4,7 @@ extern int OmnirouterStart(char *data_dir, char *gateway_key, char *encryption_k
 extern int OmnirouterStop(void);
 extern int OmnirouterPair(char *token, int token_len, char *cookie, int cookie_len);
 extern int OmnirouterStartupStage(void);
+extern int OmnirouterStartupFailedAt(void);
 
 JNIEXPORT jint JNICALL
 Java_com_qingjian0_omnirouter_NativeBridge_nativeStart(
@@ -31,6 +32,13 @@ Java_com_qingjian0_omnirouter_NativeBridge_nativeGetStartupStage(JNIEnv *env, jo
     (void) env;
     (void) thiz;
     return (jint) OmnirouterStartupStage();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_qingjian0_omnirouter_NativeBridge_nativeGetStartupFailedAt(JNIEnv *env, jobject thiz) {
+    (void) env;
+    (void) thiz;
+    return (jint) OmnirouterStartupFailedAt();
 }
 
 JNIEXPORT jint JNICALL
