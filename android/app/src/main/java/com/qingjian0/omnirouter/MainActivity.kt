@@ -53,6 +53,14 @@ class MainActivity : Activity() {
             text = "打开管理页"
             setOnClickListener { webView.loadUrl("http://127.0.0.1:8765/") }
         })
+        controls.addView(Button(this).apply {
+            text = "登录并连接 DeepSeek"
+            setOnClickListener {
+                val serviceIntent = Intent(this@MainActivity, OmniRouterService::class.java).setAction(OmniRouterService.ACTION_START)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent) else startService(serviceIntent)
+                startActivity(Intent(this@MainActivity, DeepSeekLoginActivity::class.java))
+            }
+        })
         root.addView(controls)
 
         webView = WebView(this).apply {
