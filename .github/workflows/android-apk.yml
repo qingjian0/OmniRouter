@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: deepseek-android-apk-${{ github.ref }}
@@ -52,6 +52,9 @@ jobs:
           go-version: "1.23.x"
           cache: true
 
+      - name: Run Go test suite
+        run: go test ./...
+
       - name: Build Go Android shared library
         env:
           GOOS: android
@@ -70,12 +73,38 @@ jobs:
         working-directory: android
         run: |
           gradle --no-daemon assembleDebug
-          test -s app/build/outputs/apk/debug/app-debug.apk
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "com.qingjian0.omnirouter.dev"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libomnirouter.so"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libomnirouter_jni.so"
+          sha256sum "$APK" > "$APK.sha256"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: omnirouter-deepseek-android-arm64-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/debug/app-debug.apk.sha256
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish rolling development APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: deepseek-android-apk-dev
+          name: DeepSeek Android APK (development preview)
+          body: |
+            Development preview for the DeepSeek-only Android V1.
+
+            This APK is debug-signed and intended for installation/runtime testing only.
+            It is not the final signed V1 release. Real DeepSeek account and OPPO Android 16
+            end-to-end acceptance are still required.
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/debug/app-debug.apk.sha256
