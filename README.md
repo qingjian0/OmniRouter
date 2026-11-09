@@ -2,7 +2,7 @@
 
 轻量化、跨平台的统一 AI 接入、反向代理与调度网关。上游分为官方 API Provider 与消费级 Web 登录态 Provider 两条独立通道；当前 Web 反代工作范围仅为 DeepSeek 网页版，将用户正常登录获得的会话转换为本地 OpenAI 兼容 API。官方 API 与网页会话严格隔离。核心采用 Go 模块化单体，优先保持低依赖、低资源占用；管理界面采用 Vue 3 + TypeScript，构建后通过 Go embed 嵌入单一可执行文件；Node.js 仅用于前端构建，运行时不需要 Node.js。
 
-## 当前实现状态（2026-11-08）
+## 当前实现状态（2026-11-09）
 
 OmniRouter 已完成第一轮核心集成。当前开发基线为 `dev`，稳定分支 `main` 未改动。
 
@@ -12,7 +12,7 @@ OmniRouter 已完成第一轮核心集成。当前开发基线为 `dev`，稳定
 - 自适应 Provider 调度：能力/健康/启用状态过滤，结合估算价格、延迟、可靠性、优先级和权重评分。
 - SQLite 持久化、迁移、AES-GCM Credential Vault、Provider / Model / Account / Session / API Key 元数据、请求历史与 Token 用量。
 - Vue 3 + TypeScript 管理控制台、Go embed 静态资源、数据库备份/恢复脚本和跨平台发行工作流。
-- DeepSeek Web 浏览器授权登记基础：Chromium MV3 扩展、双端一次性配对、loopback + 精确 Origin 校验、AES-GCM 凭据保存/恢复/撤销；Provider 保持零模型、不可路由。
+- DeepSeek Web 网页会话反代已合并到 dev：Chromium MV3 扩展、一次性配对、loopback + 精确 Origin 校验、AES-GCM 凭据保存/恢复/撤销、文本 Chat Completions 传输与 SSE/patch 解码、OpenAI 流式输出和运行时 Provider 激活均已接入；真实上游在线兼容性仍待实机验收。
 - Provider 停用后从调度候选中排除。
 
 **当前验证证据：**
@@ -21,7 +21,7 @@ OmniRouter 已完成第一轮核心集成。当前开发基线为 `dev`，稳定
 - CI 证明确定性测试和构建通过，不等于真实上游密钥联调、生产恢复或 Android/Termux 真机验收。
 
 **仍未完成：**
-- DeepSeek consumer-web（本 PR 分支，尚未合并 dev）：已实现 Chromium MV3 配对扩展、一次性授权、加密凭据持久化/启动恢复/撤销、文本 Chat Completions 请求映射、SSE/patch 解码与 OpenAI 流式输出；本地 fixtures 已覆盖主要传输路径。仍待 Chromium 真机配对、当前网页凭据字段兼容性、真实在线流式响应和第二轮会话连续性验收。
+- DeepSeek consumer-web：已合并 PR #21 到 dev（merge commit 6bed98272b565e0079373917ac801bde40bd2469）。实现了 Chromium MV3 配对、加密凭据持久化/启动恢复/撤销、文本 Chat Completions、SSE/patch 解码和 OpenAI 流式输出；合并后 CI run 42511399078 的 7/7 jobs 全部成功。仍待正常用户浏览器配对、真实在线流式响应、第二轮会话连续性、重启恢复及撤销授权的端到端验收。
 - 真实 OpenAI-compatible / Anthropic / Gemini / DeepSeek 上游密钥验收与多 Provider 流量验证。
 - 管理 API 安全专项验收、真实部署备份恢复、Termux / Android arm64 实机验收。
 - V1.0.0 正式发布。
@@ -32,7 +32,7 @@ OmniRouter 已完成第一轮核心集成。当前开发基线为 `dev`，稳定
 - PR #7 仍为 Draft（后续协议/传输工作）；PR #17 已关闭且未合并；PR #19 已关闭；其 RFC 状态修正已直接提交到 dev，未重复合并。配对基础代码已由独立集成提交进入 dev。
 - `dev` 持续领先于 `main`；当前分支差异以 Git compare 为准，`main` 未被本轮修改。未完成发布门禁前不合并 main、不打 V1.0.0 标签。
 
-网页登录态反代的目标范围、协议隔离、账号生命周期、会话连续性和验收门禁见 [DeepSeek 网页版反代设计](docs/WEB-SESSION-PROXY.md)。详细设计与调用链见 [架构与工程规范](docs/ARCHITECTURE.md)、[自适应调度](docs/ADAPTIVE-SCHEDULER.md) 和 [V1 发布清单](docs/V1-RELEASE-CHECKLIST.md)。
+跨平台安装步骤（Windows、Linux、macOS、Android/Termux）见 [安装与部署指南](docs/INSTALL.md)；网页登录态反代的协议边界和验收门禁见 [DeepSeek 网页版反代设计](docs/WEB-SESSION-PROXY.md)。详细设计与调用链见 [架构与工程规范](docs/ARCHITECTURE.md)、[自适应调度](docs/ADAPTIVE-SCHEDULER.md) 和 [V1 发布清单](docs/V1-RELEASE-CHECKLIST.md)。
 
 ## 运行
 
