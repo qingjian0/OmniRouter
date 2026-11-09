@@ -167,9 +167,13 @@ func solveDeepSeekHashV1(ctx context.Context, challenge, prefix string, difficul
 		return ptr, uint32(len(data)), nil
 	}
 	challengePtr, challengeLen, err := writeString(challenge)
-	if err != nil { return 0, err }
+	if err != nil {
+		return 0, err
+	}
 	prefixPtr, prefixLen, err := writeString(prefix)
-	if err != nil { return 0, err }
+	if err != nil {
+		return 0, err
+	}
 	_, err = solve.Call(ctx, uint64(retptr), uint64(challengePtr), uint64(challengeLen),
 		uint64(prefixPtr), uint64(prefixLen), math.Float64bits(difficulty))
 	if err != nil {
