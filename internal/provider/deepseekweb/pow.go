@@ -103,7 +103,9 @@ func (t *HTTPCompletionTransport) createPoWHeader(ctx context.Context, material 
 func jsonScalarString(raw json.RawMessage) (string, error) {
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
-		if text == "" { return "", fmt.Errorf("empty scalar") }
+		if text == "" {
+			return "", fmt.Errorf("empty scalar")
+		}
 		return text, nil
 	}
 	var number json.Number
@@ -125,9 +127,13 @@ func solveDeepSeekHashV1(ctx context.Context, challenge, prefix string, difficul
 	runtime := wazero.NewRuntime(ctx)
 	defer runtime.Close(ctx)
 	compiled, err := runtime.CompileModule(ctx, deepSeekPoWWASM)
-	if err != nil { return 0, fmt.Errorf("compile embedded DeepSeek WASM: %w", err) }
+	if err != nil {
+		return 0, fmt.Errorf("compile embedded DeepSeek WASM: %w", err)
+	}
 	module, err := runtime.InstantiateModule(ctx, compiled, wazero.NewModuleConfig())
-	if err != nil { return 0, fmt.Errorf("instantiate embedded DeepSeek WASM: %w", err) }
+	if err != nil {
+		return 0, fmt.Errorf("instantiate embedded DeepSeek WASM: %w", err)
+	}
 	defer module.Close(ctx)
 	memory := module.Memory()
 	malloc := module.ExportedFunction("__wbindgen_export_0")
@@ -137,15 +143,27 @@ func solveDeepSeekHashV1(ctx context.Context, challenge, prefix string, difficul
 		return 0, fmt.Errorf("embedded DeepSeek WASM exports are incomplete")
 	}
 	stackResult, err := stack.Call(ctx, uint64(uint32(int32(-16))))
-	if err != nil || len(stackResult) == 0 { return 0, fmt.Errorf("reserve WASM return slot: %w", err) }
+	if err != nil {
+		return 0, fmt.Errorf("reserve WASM return slot: %w", err)
+	}
+	if len(stackResult) == 0 {
+		return 0, fmt.Errorf("WASM stack allocator returned no pointer")
+	}
 	retptr := uint32(stackResult[0])
 	defer stack.Call(ctx, uint64(16))
 	writeString := func(value string) (uint32, uint32, error) {
 		data := []byte(value)
 		result, callErr := malloc.Call(ctx, uint64(len(data)), uint64(1))
-		if callErr != nil || len(result) == 0 { return 0, 0, fmt.Errorf("allocate WASM input: %w", callErr) }
+		if callErr != nil {
+			return 0, 0, fmt.Errorf("allocate WASM input: %w", callErr)
+		}
+		if len(result) == 0 {
+			return 0, 0, fmt.Errorf("WASM allocator returned no pointer")
+		}
 		ptr := uint32(result[0])
-		if !memory.Write(ptr, data) { return 0, 0, fmt.Errorf("write WASM input out of bounds") }
+		if !memory.Write(ptr, data) {
+			return 0, 0, fmt.Errorf("write WASM input out of bounds")
+		}
 		return ptr, uint32(len(data)), nil
 	}
 	challengePtr, challengeLen, err := writeString(challenge)
@@ -154,9 +172,13 @@ func solveDeepSeekHashV1(ctx context.Context, challenge, prefix string, difficul
 	if err != nil { return 0, err }
 	_, err = solve.Call(ctx, uint64(retptr), uint64(challengePtr), uint64(challengeLen),
 		uint64(prefixPtr), uint64(prefixLen), math.Float64bits(difficulty))
-	if err != nil { return 0, fmt.Errorf("execute DeepSeekHashV1 WASM: %w", err) }
+	if err != nil {
+		return 0, fmt.Errorf("execute DeepSeekHashV1 WASM: %w", err)
+	}
 	result, ok := memory.Read(retptr, 16)
-	if !ok { return 0, fmt.Errorf("read WASM result out of bounds") }
+	if !ok {
+		return 0, fmt.Errorf("read WASM result out of bounds")
+	}
 	status := int32(binary.LittleEndian.Uint32(result[:4]))
 	answer := math.Float64frombits(binary.LittleEndian.Uint64(result[8:16]))
 	if status == 0 || math.IsNaN(answer) || math.IsInf(answer, 0) || answer < 0 || answer > float64(1<<63-1) {
