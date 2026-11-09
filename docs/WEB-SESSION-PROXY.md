@@ -269,3 +269,16 @@ The new executor tests cover successful lineage commit, missing terminal evidenc
 The feature branch now contains the HTTP completion transport and runtime provider wiring. The provider is activated after browser pairing when persistent credential encryption and at least one enabled model are configured. On restart, the active account is restored and re-registered. The first implementation deliberately supports text-only Chat Completions; search metadata is drained but not mapped into OpenAI output, and tools, images, and file upload remain unsupported.
 
 The acceptance gate remains a successful live request against a normally authorized DeepSeek Web session, including a streamed answer and a second turn reusing the same upstream chat session. A passing local simulation or CI run is not evidence that DeepSeek currently accepts the request schema or session.
+
+---
+
+## Current integrated status — 2026-11-09
+
+PR #21 has been merged into the dev branch. Merge commit:
+6bed98272b565e0079373917ac801bde40bd2469.
+
+The post-merge CI run [42511399078](https://github.com/qingjian0/OmniRouter/actions/runs/42511399078) completed successfully with all 7 jobs passing, including Go validation, Chromium extension validation, and Linux / Windows / macOS cross-builds.
+
+The implementation is integrated, but the live acceptance gate remains open: normal user-initiated Chromium pairing, one real streamed completion, a second turn proving continuity, restart restoration, and authorization revocation. The live-provider smoke workflow run after merge did not provide job records, so it is not evidence of either success or a specific adapter failure.
+
+For device-specific setup, see [docs/INSTALL.md](INSTALL.md). Supported pairing requires desktop Chromium on the same computer as the loopback OmniRouter gateway. Android/Termux is an experimental gateway runtime path; Android browser extension pairing is not supported.
