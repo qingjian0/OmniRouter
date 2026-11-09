@@ -4,9 +4,11 @@ import { computed, onMounted, reactive, ref } from "vue";
 type Row = Record<string, any>;
 type ListRef = { value: Row[] };
 
+const androidDeepSeekOnly = new URLSearchParams(window.location.search).get("android") === "1";
+
 const tabs = [
   { id: "overview", label: "总览", icon: "◫" },
-  { id: "providers", label: "Provider", icon: "⇄" },
+  { id: "providers", label: androidDeepSeekOnly ? "DeepSeek" : "Provider", icon: "⇄" },
   { id: "models", label: "模型", icon: "◇" },
   { id: "accounts", label: "账户", icon: "◎" },
   { id: "sessions", label: "会话", icon: "◷" },
@@ -37,7 +39,7 @@ const pairingTicket = ref<Row | null>(null);
 const pairingProviders = computed(() => providers.value.filter((item) => item.kind === "deepseek-web"));
 
 const providerForm = reactive({
-  kind: "openai-compatible", id: "", name: "", base_url: "", api_key: "", models: "",
+  kind: androidDeepSeekOnly ? "deepseek-web" : "openai-compatible", id: "", name: "", base_url: "", api_key: "", models: "",
   priority: 100, weight: 1, enabled: true,
   capabilities: ""
 });
@@ -329,7 +331,7 @@ onMounted(refresh);
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark">O</div>
-        <div><strong>OmniRouter</strong><small>统一 AI 接入与调度网关</small></div>
+        <div><strong>OmniRouter</strong><small>{{ androidDeepSeekOnly ? "DeepSeek 网页会话专用网关" : "统一 AI 接入与调度网关" }}</small></div>
       </div>
       <div class="connection">
         <span class="health" :class="{ down: health !== '运行正常' }">{{ health }}</span>
@@ -381,7 +383,7 @@ onMounted(refresh);
         </section>
 
         <section v-else-if="activeTab === 'providers'" class="stack">
-          <article class="panel">
+          <article v-if="!androidDeepSeekOnly" class="panel">
             <div class="panel-title"><h2>添加 Provider</h2><span class="muted">官方 API / OpenAI-compatible</span></div>
             <form class="form-grid" @submit.prevent="createProvider">
               <label>适配器类型<select v-model="providerForm.kind" @change="applyProviderKindDefaults"><option value="openai-compatible">OpenAI-compatible（Chat Completions）</option><option value="openai-responses">OpenAI Responses API（原生）</option><option value="anthropic">Anthropic Messages API（原生）</option><option value="gemini">Google Gemini API（原生）</option><option value="deepseek">DeepSeek 官方 API</option><option value="deepseek-web">DeepSeek Web（浏览器授权；文本推理需在线验收）</option></select></label>
@@ -398,7 +400,7 @@ onMounted(refresh);
             </form>
             <p class="hint">OpenAI Responses、Anthropic Messages、Gemini 均使用各自原生协议，不会伪装成 Chat Completions。配置上游密钥前，必须设置 OMNI_CREDENTIAL_ENCRYPTION_KEY。</p>
           </article>
-          <article v-if="pairingProviders.length" class="panel">
+          <article v-if="!androidDeepSeekOnly && pairingProviders.length" class="panel">
             <div class="panel-title"><h2>DeepSeek Web 浏览器授权</h2><span class="muted">浏览器授权 · 文本 Chat Completions</span></div>
             <form class="form-grid" @submit.prevent="createDeepSeekWebPairing">
               <label>DeepSeek Web Provider
@@ -421,7 +423,7 @@ onMounted(refresh);
           <article class="panel">
             <div class="panel-title"><h2>Provider 列表</h2><span class="muted">{{ providers.length }} 项</span></div>
             <div class="table-wrap"><table><thead><tr><th>Provider</th><th>适配器</th><th>Base URL</th><th>启用</th><th>优先级</th><th>权重</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="p in providers" :key="p.id"><td><b>{{ p.name || p.id }}</b><small>{{ p.id }}</small></td><td>{{ p.kind || "openai-compatible" }}</td><td class="url">{{ p.base_url || "—" }}</td><td><input v-model="p.enabled" type="checkbox" /></td><td><input v-model.number="p.priority" class="small-input" type="number" min="0" /></td><td><input v-model.number="p.weight" class="small-input" type="number" min="0" /></td><td class="actions"><button v-if="p.kind === 'deepseek'" class="secondary" @click="refreshProviderModels(p)">刷新模型</button><button class="secondary" @click="saveProviderPolicy(p)">保存策略</button><button class="danger" @click="removeProvider(p)">删除</button></td></tr><tr v-if="!providers.length"><td colspan="7" class="empty">暂无 Provider</td></tr></tbody>
+              <tbody><tr v-for="p in providers" :key="p.id"><td><b>{{ p.name || p.id }}</b><small>{{ p.id }}</small></td><td>{{ p.kind || "openai-compatible" }}</td><td class="url">{{ p.base_url || "—" }}</td><td><input v-model="p.enabled" type="checkbox" /></td><td><input v-model.number="p.priority" class="small-input" type="number" min="0" /></td><td><input v-model.number="p.weight" class="small-input" type="number" min="0" /></td><td class="actions"><button v-if="p.kind === 'deepseek'" class="secondary" @click="refreshProviderModels(p)">刷新模型</button><button class="secondary" @click="saveProviderPolicy(p)">保存策略</button><button v-if="!androidDeepSeekOnly" class="danger" @click="removeProvider(p)">删除</button></td></tr><tr v-if="!providers.length"><td colspan="7" class="empty">暂无 Provider</td></tr></tbody>
             </table></div>
           </article>
         </section>
@@ -515,7 +517,7 @@ onMounted(refresh);
           <p class="hint">{{ usage.token_usage_note || "缺少上游 usage 时不会推算 Token 用量。" }}</p>
         </section>
 
-        <footer class="footer">OmniRouter · V1 Admin · 管理操作由同源 /admin API 提供</footer>
+        <footer class="footer">{{ androidDeepSeekOnly ? "DeepSeek Android V1 · 本机回环管理" : "OmniRouter · V1 Admin · 管理操作由同源 /admin API 提供" }}</footer>
       </main>
     </div>
   </div>
