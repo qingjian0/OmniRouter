@@ -105,7 +105,7 @@ class DeepSeekLoginActivity : Activity() {
                 }
                 runOnUiThread {
                     status.text = if (result == 0) {
-                        "DeepSeek 登录态已加密保存在本机。尚未完成真实推理验收；请返回管理页发送一条测试请求。"
+                        "DeepSeek 登录态已加密保存在本机。请返回主界面，打开“测试对话”验证普通请求与 SSE 流式请求。"
                     } else {
                         "连接失败（代码 $result）。请确认本地网关已启动、账号仍有效，然后重试。"
                     }
