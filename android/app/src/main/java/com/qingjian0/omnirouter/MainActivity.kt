@@ -67,6 +67,17 @@ class MainActivity : Activity() {
             }
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         controls.addView(actionRow)
+
+        val testRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        testRow.addView(Button(this).apply {
+            text = "测试对话（普通 / SSE）"
+            setOnClickListener {
+                val serviceIntent = Intent(this@MainActivity, OmniRouterService::class.java).setAction(OmniRouterService.ACTION_START)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent) else startService(serviceIntent)
+                startActivity(Intent(this@MainActivity, ChatTestActivity::class.java))
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        controls.addView(testRow)
         root.addView(controls, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         webView = WebView(this).apply {
