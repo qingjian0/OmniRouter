@@ -30,6 +30,7 @@ class ChatTestActivity : Activity() {
     private lateinit var prompt: EditText
     private lateinit var temperature: EditText
     private lateinit var maxTokens: EditText
+    private lateinit var timeoutSeconds: EditText
     private lateinit var output: TextView
     private lateinit var sendButton: Button
     private lateinit var streamButton: Button
@@ -63,6 +64,7 @@ class ChatTestActivity : Activity() {
         apiKey = field(config, "API Key（留空时本机网关自动读取应用密钥）", "", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         temperature = field(config, "Temperature", "0.7", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
         maxTokens = field(config, "Max tokens", "2048", InputType.TYPE_CLASS_NUMBER)
+        timeoutSeconds = field(config, "超时时间（秒）", "180", InputType.TYPE_CLASS_NUMBER)
         loadConfig()
 
         val saveRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -80,6 +82,7 @@ class ChatTestActivity : Activity() {
                 apiKey.setText("")
                 temperature.setText("0.7")
                 maxTokens.setText("2048")
+                timeoutSeconds.setText("180")
                 saveConfig()
                 output.text = "已恢复默认测试配置。"
             }
@@ -150,6 +153,7 @@ class ChatTestActivity : Activity() {
         modelName.setText(prefs.getString("model_name", "DeepSeek Web · 默认"))
         temperature.setText(prefs.getString("temperature", "0.7"))
         maxTokens.setText(prefs.getString("max_tokens", "2048"))
+        timeoutSeconds.setText(prefs.getString("timeout_seconds", "180"))
     }
 
     private fun saveConfig() {
@@ -160,6 +164,7 @@ class ChatTestActivity : Activity() {
             .putString("model_name", modelName.text.toString().trim())
             .putString("temperature", temperature.text.toString().trim())
             .putString("max_tokens", maxTokens.text.toString().trim())
+            .putString("timeout_seconds", timeoutSeconds.text.toString().trim())
             .apply()
     }
 
@@ -173,7 +178,8 @@ class ChatTestActivity : Activity() {
         val model = modelId.text.toString().trim()
         val temp = temperature.text.toString().trim().toDoubleOrNull()
         val tokens = maxTokens.text.toString().trim().toIntOrNull()
-        if (message.isEmpty() || base.isEmpty() || model.isEmpty() || temp == null || tokens == null || tokens < 1) {
+        val timeout = timeoutSeconds.text.toString().trim().toIntOrNull()
+        if (message.isEmpty() || base.isEmpty() || model.isEmpty() || temp == null || tokens == null || tokens < 1 || timeout == null || timeout !in 5..900) {
             output.text = "配置错误：请填写提示词、API Base URL、模型 ID，并输入有效的 Temperature 和 Max tokens。"
             return
         }
@@ -196,7 +202,7 @@ class ChatTestActivity : Activity() {
                 val key = configuredKey.ifBlank {
                     if (local) AndroidSecretStore(this).loadOrCreate().gatewayKey else ""
                 }
-                requestCompletion(target, model, requestHistory, requestConversationId, key, stream, temp, tokens)
+                requestCompletion(target, model, requestHistory, requestConversationId, key, stream, temp, tokens, timeout)
             } catch (error: Throwable) {
                 ChatOutcome("请求失败：${error.message ?: error.javaClass.simpleName}", null, false)
             }
@@ -216,12 +222,12 @@ class ChatTestActivity : Activity() {
 
     private fun requestCompletion(
         target: URL, model: String, messages: List<ChatTurn>, conversationId: String,
-        apiKey: String, stream: Boolean, temperature: Double, maxTokens: Int
+        apiKey: String, stream: Boolean, temperature: Double, maxTokens: Int, timeoutSeconds: Int
     ): ChatOutcome {
         val connection = (target.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
-            connectTimeout = 15_000
-            readTimeout = 180_000
+            connectTimeout = timeoutSeconds * 1000
+            readTimeout = timeoutSeconds * 1000
             doOutput = true
             if (apiKey.isNotBlank()) setRequestProperty("Authorization", "Bearer $apiKey")
             setRequestProperty("X-OmniRouter-Conversation-ID", conversationId)
