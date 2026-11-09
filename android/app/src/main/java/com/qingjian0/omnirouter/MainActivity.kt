@@ -14,6 +14,7 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import org.json.JSONObject
 
 class MainActivity : Activity() {
     private lateinit var status: TextView
@@ -51,7 +52,7 @@ class MainActivity : Activity() {
         })
         controls.addView(Button(this).apply {
             text = "打开管理页"
-            setOnClickListener { webView.loadUrl("http://127.0.0.1:8765/") }
+            setOnClickListener { webView.loadUrl("http://127.0.0.1:8765/?android=1") }
         })
         controls.addView(Button(this).apply {
             text = "登录并连接 DeepSeek"
@@ -75,10 +76,29 @@ class MainActivity : Activity() {
                     val uri = request.url
                     return !(uri.scheme == "http" && uri.host == "127.0.0.1" && uri.port == 8765)
                 }
+
+                override fun onPageFinished(view: WebView, url: String) {
+                    if (url.startsWith("http://127.0.0.1:8765/")) injectGatewayKey(view)
+                }
             }
         }
         root.addView(webView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
+    }
+
+    private fun injectGatewayKey(view: WebView) {
+        val key = try { AndroidSecretStore(this).loadOrCreate().gatewayKey } catch (_: Throwable) { return }
+        val quoted = JSONObject.quote(key)
+        val script = """(function(){
+            const input = document.querySelector('input[aria-label="Gateway API Key"]');
+            if (!input) return;
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+            setter.call(input, $quoted);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            const button = Array.from(document.querySelectorAll('button')).find(b => (b.textContent || '').includes('连接 / 刷新'));
+            if (button) button.click();
+        })();"""
+        view.evaluateJavascript(script, null)
     }
 
     private fun requestNotificationPermission() {
