@@ -130,7 +130,7 @@ func TestHTTPCompletionTransportReusesSessionWithRollingPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	transport := &HTTPCompletionTransport{client: client}
+	transport := &HTTPCompletionTransport{client: client, powSolver: func(context.Context, string, string, float64) (int64, error) { return 42, nil }}
 	result, err := transport.Stream(context.Background(), AuthorizationMaterial{
 		Token: []byte("user-token"), CookieHeader: []byte("ds_session_id=authorized-session"),
 	}, ChatCompletionInput{
