@@ -3,11 +3,13 @@ package com.qingjian0.omnirouter
 internal object GatewayStartupStatus {
     @Volatile var phase: Int = 0
     @Volatile var resultCode: Int? = null
+    @Volatile var failedAt: Int = 0
     @Volatile var detail: String = "尚未启动"
 
     fun reset() {
         phase = 1
         resultCode = null
+        failedAt = 0
         detail = "正在准备启动"
     }
 }
