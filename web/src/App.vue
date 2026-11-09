@@ -279,6 +279,18 @@ function setModelEnabled(m: Row, enabled: boolean) {
   }, "模型状态已更新");
 }
 
+function saveModelDisplayName(m: Row) {
+  const displayName = String(m.display_name || "").trim();
+  if (!displayName) {
+    error.value = "模型显示名称不能为空";
+    return;
+  }
+  return mutate(`/admin/models/${encodeURIComponent(m.id)}/display-name`, "PATCH", {
+    provider_id: m.provider_id,
+    display_name: displayName
+  }, "模型显示名称已保存");
+}
+
 function saveModelPricing(m: Row) {
   if (m.input_cost_per_million_usd === undefined || m.input_cost_per_million_usd === null || m.input_cost_per_million_usd === "" ||
       m.output_cost_per_million_usd === undefined || m.output_cost_per_million_usd === null || m.output_cost_per_million_usd === "") {
@@ -389,7 +401,7 @@ onMounted(refresh);
               <label>名称<input v-model="providerForm.name" placeholder="DeepSeek Primary" /></label>
               <label class="wide">Base URL<input v-model="providerForm.base_url" :required="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek-web' ? 'https://chat.deepseek.com' : providerForm.kind === 'deepseek' ? 'https://api.deepseek.com' : providerForm.kind === 'anthropic' ? 'https://api.anthropic.com/v1' : providerForm.kind === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : providerForm.kind === 'openai-responses' ? 'https://api.openai.com/v1' : 'https://api.example.com/v1'" /></label>
               <label class="wide">上游 API Key<input v-model="providerForm.api_key" :disabled="providerForm.kind === 'deepseek-web'" type="password" autocomplete="new-password" placeholder="仅在提交时发送，服务端加密保存" /></label>
-              <label class="wide">模型 ID（逗号分隔）<input v-model="providerForm.models" :disabled="providerForm.kind === 'deepseek-web'" :required="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : providerForm.kind === 'anthropic' ? 'claude-sonnet-4-5' : providerForm.kind === 'gemini' ? 'gemini-2.5-flash' : providerForm.kind === 'openai-responses' ? 'gpt-4.1' : 'model-a,model-b'" /></label>
+              <label class="wide">模型 ID（逗号分隔；DeepSeek Web 需填写你要启用的模型 ID）<input v-model="providerForm.models" :required="! ['deepseek'].includes(providerForm.kind)" :placeholder="providerForm.kind === 'deepseek' ? '留空自动发现；离线回退 deepseek-flash,deepseek-v4-pro' : providerForm.kind === 'anthropic' ? 'claude-sonnet-4-5' : providerForm.kind === 'gemini' ? 'gemini-2.5-flash' : providerForm.kind === 'openai-responses' ? 'gpt-4.1' : 'model-a,model-b'" /></label>
               <label>优先级<input v-model.number="providerForm.priority" type="number" min="0" /></label>
               <label>权重<input v-model.number="providerForm.weight" type="number" min="0" max="1000000" /></label>
               <label v-if="! ['deepseek', 'deepseek-web'].includes(providerForm.kind)" class="wide">模型能力 JSON（可选）<textarea v-model="providerForm.capabilities" rows="2" spellcheck="false"></textarea></label>
@@ -429,7 +441,7 @@ onMounted(refresh);
         <section v-else-if="activeTab === 'models'" class="stack">
           <article class="panel"><div class="panel-title"><h2>模型路由</h2><span class="muted">{{ models.length }} 项</span></div>
             <div class="table-wrap"><table><thead><tr><th>模型</th><th>Provider</th><th>能力</th><th>上下文</th><th>输入价格 USD/1M</th><th>输出价格 USD/1M</th><th>启用</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="m in models" :key="m.provider_id + ':' + m.id"><td><b>{{ m.display_name || m.id }}</b><small>{{ m.id }}</small></td><td>{{ m.provider_id }}</td><td>{{ (m.capabilities || []).join(", ") || "—" }}</td><td>{{ m.context_limit || "—" }}</td><td><input v-model.number="m.input_cost_per_million_usd" class="small-input" type="number" min="0" step="any" placeholder="未知" /></td><td><input v-model.number="m.output_cost_per_million_usd" class="small-input" type="number" min="0" step="any" placeholder="未知" /></td><td>{{ m.enabled ? "是" : "否" }}</td><td class="actions"><button class="secondary" @click="saveModelPricing(m)">保存价格</button><button class="secondary" @click="setModelEnabled(m, !m.enabled)">{{ m.enabled ? "停用" : "启用" }}</button><button class="danger" @click="removeModel(m)">删除路由</button></td></tr><tr v-if="!models.length"><td colspan="8" class="empty">暂无模型</td></tr></tbody>
+              <tbody><tr v-for="m in models" :key="m.provider_id + ':' + m.id"><td><input v-model="m.display_name" class="small-input" :aria-label="`模型 ${m.id} 显示名称`" /><small>{{ m.id }}</small></td><td>{{ m.provider_id }}</td><td>{{ (m.capabilities || []).join(", ") || "—" }}</td><td>{{ m.context_limit || "—" }}</td><td><input v-model.number="m.input_cost_per_million_usd" class="small-input" type="number" min="0" step="any" placeholder="未知" /></td><td><input v-model.number="m.output_cost_per_million_usd" class="small-input" type="number" min="0" step="any" placeholder="未知" /></td><td>{{ m.enabled ? "是" : "否" }}</td><td class="actions"><button class="secondary" @click="saveModelDisplayName(m)">保存名称</button><button class="secondary" @click="saveModelPricing(m)">保存价格</button><button class="secondary" @click="setModelEnabled(m, !m.enabled)">{{ m.enabled ? "停用" : "启用" }}</button><button class="danger" @click="removeModel(m)">删除路由</button></td></tr><tr v-if="!models.length"><td colspan="8" class="empty">暂无模型</td></tr></tbody>
             </table></div>
             <p class="hint">价格单位为 USD / 1M tokens。空值代表未知价格；输入 0 代表该项免费。修改后即时影响调度，不作为实际账单。</p>
           </article>

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"omnirouter/internal/storage"
+	"strings"
 	"time"
 )
 
@@ -115,6 +116,22 @@ func (r *Repository) SetPricing(ctx context.Context, modelID, providerID string,
 		return fmt.Errorf("model token prices must be finite non-negative numbers")
 	}
 	res, err := r.db.ExecContext(ctx, `UPDATE models SET input_cost_per_million_usd=?,output_cost_per_million_usd=?,updated_at=? WHERE id=? AND provider_id=?`, inputCost, outputCost, time.Now().UTC().Format(time.RFC3339Nano), modelID, providerID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err == nil && n == 0 {
+		return sql.ErrNoRows
+	}
+	return err
+}
+
+func (r *Repository) SetDisplayName(ctx context.Context, modelID, providerID, displayName string) error {
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" {
+		return fmt.Errorf("model display name is required")
+	}
+	res, err := r.db.ExecContext(ctx, `UPDATE models SET display_name=?,updated_at=? WHERE id=? AND provider_id=?`, displayName, time.Now().UTC().Format(time.RFC3339Nano), modelID, providerID)
 	if err != nil {
 		return err
 	}
