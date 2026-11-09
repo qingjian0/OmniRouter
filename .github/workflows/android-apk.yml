@@ -1,0 +1,79 @@
+name: DeepSeek Android APK
+
+on:
+  push:
+    branches: [feature/deepseek-v1-android-apk]
+    paths:
+      - "android/**"
+      - "internal/**"
+      - "cmd/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deepseek-android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Build DeepSeek Android arm64 debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build components
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+
+      - name: Build Go Android shared library
+        env:
+          GOOS: android
+          GOARCH: arm64
+          CGO_ENABLED: "1"
+        run: |
+          set -euo pipefail
+          export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
+          export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          go build -trimpath -buildmode=c-shared -ldflags="-s -w" \
+            -o android/app/src/main/jniLibs/arm64-v8a/libomnirouter.so \
+            ./android/native/omnirouter
+
+      - name: Build Android APK
+        working-directory: android
+        run: |
+          gradle --no-daemon assembleDebug
+          test -s app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnirouter-deepseek-android-arm64-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
