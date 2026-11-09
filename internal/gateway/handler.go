@@ -2361,7 +2361,7 @@ func (h *Handler) setModelDisplayName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		ProviderID string `json:"provider_id"`
+		ProviderID  string `json:"provider_id"`
 		DisplayName string `json:"display_name"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
