@@ -12,6 +12,7 @@ import (
     "os"
     "path/filepath"
     "sync"
+    "sync/atomic"
     "time"
     "unsafe"
 
@@ -26,23 +27,30 @@ type runtimeState struct {
     application *app.App
 }
 
+var startupStage atomic.Int32
+
 var state struct {
     sync.Mutex
     runtime *runtimeState
 }
 
+//export OmnirouterStartupStage
+func OmnirouterStartupStage() C.int { return C.int(startupStage.Load()) }
+
 //export OmnirouterStart
 func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
-    if dataDir == nil || gatewayKey == nil || encryptionKey == nil { return -10 }
+    startupStage.Store(1)
+    if dataDir == nil || gatewayKey == nil || encryptionKey == nil { startupStage.Store(-10); return -10 }
 
     state.Lock()
     defer state.Unlock()
-    if state.runtime != nil { return 0 }
+    if state.runtime != nil { startupStage.Store(8); return 0 }
 
     root := C.GoString(dataDir)
-    if root == "" { return -11 }
-    if err := os.MkdirAll(root, 0700); err != nil { return -12 }
+    if root == "" { startupStage.Store(-11); return -11 }
+    if err := os.MkdirAll(root, 0700); err != nil { startupStage.Store(-12); return -12 }
 
+    startupStage.Store(3)
     values := map[string]string{
         "OMNI_ADDR": "127.0.0.1:8765",
         "OMNI_DATABASE_PATH": filepath.Join(root, "omnirouter.db"),
@@ -55,21 +63,26 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
         "OMNI_PROVIDER_MODELS": "deepseek-web",
     }
     for key, value := range values {
-        if err := os.Setenv(key, value); err != nil { return -13 }
+        if err := os.Setenv(key, value); err != nil { startupStage.Store(-13); return -13 }
     }
 
+    startupStage.Store(4)
     cfg, err := config.Load()
-    if err != nil { return -20 }
+    if err != nil { startupStage.Store(-20); return -20 }
     logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+    startupStage.Store(5)
     application, err := app.New(cfg, logger)
-    if err != nil { return -21 }
+    if err != nil { startupStage.Store(-21); return -21 }
 
     ctx, cancel := context.WithCancel(context.Background())
     done := make(chan error, 1)
     runtime := &runtimeState{cancel: cancel, done: done, application: application}
     state.runtime = runtime
+    startupStage.Store(6)
     go func() { done <- application.Run(ctx) }()
 
+    startupStage.Store(7)
     deadline := time.Now().Add(10 * time.Second)
     client := &http.Client{Timeout: 500 * time.Millisecond}
     for time.Now().Before(deadline) {
@@ -77,13 +90,17 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
         case <-done:
             cancel()
             state.runtime = nil
+            startupStage.Store(-22)
             return -22
         default:
         }
         response, requestErr := client.Get("http://127.0.0.1:8765/healthz")
         if requestErr == nil {
             _ = response.Body.Close()
-            if response.StatusCode >= 200 && response.StatusCode < 300 { return 0 }
+            if response.StatusCode >= 200 && response.StatusCode < 300 {
+                startupStage.Store(8)
+                return 0
+            }
         }
         time.Sleep(100 * time.Millisecond)
     }
@@ -94,9 +111,9 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
     case <-time.After(6 * time.Second):
     }
     state.runtime = nil
+    startupStage.Store(-23)
     return -23
 }
-
 
 //export OmnirouterPair
 func OmnirouterPair(token *C.char, tokenLen C.int, cookie *C.char, cookieLen C.int) C.int {
@@ -130,9 +147,7 @@ func OmnirouterPair(token *C.char, tokenLen C.int, cookie *C.char, cookieLen C.i
             }},
         },
     )
-    if err != nil {
-        return -42
-    }
+    if err != nil { return -42 }
     return 0
 }
 
@@ -142,6 +157,7 @@ func OmnirouterStop() C.int {
     runtime := state.runtime
     if runtime == nil {
         state.Unlock()
+        startupStage.Store(0)
         return 0
     }
     state.runtime = nil
@@ -150,8 +166,10 @@ func OmnirouterStop() C.int {
 
     select {
     case <-runtime.done:
+        startupStage.Store(0)
         return 0
     case <-time.After(6 * time.Second):
+        startupStage.Store(-30)
         return -30
     }
 }
