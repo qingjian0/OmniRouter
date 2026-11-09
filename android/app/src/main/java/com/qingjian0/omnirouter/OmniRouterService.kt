@@ -49,8 +49,12 @@ internal class OmniRouterService : Service() {
                 GatewayStartupStatus.resultCode = result
                 if (result != 0) GatewayStartupStatus.failedAt = try { NativeBridge.nativeGetStartupFailedAt() } catch (_: Throwable) { GatewayStartupStatus.phase }
                 if (result == 0) {
-                    GatewayStartupStatus.phase = 8
-                    GatewayStartupStatus.detail = "健康检查通过：127.0.0.1:8765/healthz"
+                    // nativeStart returns 0 only after /healthz has returned 2xx and
+                    // the Go runtime has advanced its native stage to 9 (READY).
+                    // Keep the Kotlin-side state in sync so the UI cannot remain at
+                    // stage 8 if native stage polling is temporarily unavailable.
+                    GatewayStartupStatus.phase = 9
+                    GatewayStartupStatus.detail = "启动完成：HTTP 监听正常，/healthz 返回 2xx，网关已就绪"
                     mainHandler.post { updateNotification("DeepSeek 本地网关运行正常") }
                 } else {
                     GatewayStartupStatus.phase = -2
