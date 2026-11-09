@@ -14,6 +14,23 @@ import java.util.concurrent.Executors
 internal class OmniRouterService : Service() {
     private val worker = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile private var nativeBridgeReady = false
+    private val nativeStatusPoll = object : Runnable {
+        override fun run() {
+            if (!nativeBridgeReady) return
+            try {
+                val stage = NativeBridge.nativeGetStartupStage()
+                val failedAt = NativeBridge.nativeGetStartupFailedAt()
+                if (stage > 0 && GatewayStartupStatus.phase !in setOf(-1, -2, 9)) {
+                    GatewayStartupStatus.phase = stage
+                }
+                if (failedAt > 0) GatewayStartupStatus.failedAt = failedAt
+            } catch (error: Throwable) {
+                GatewayStartupStatus.detail = "读取原生启动进度失败：${error.javaClass.simpleName}: ${error.message ?: "无详细信息"}"
+            }
+            mainHandler.postDelayed(this, 250)
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -43,9 +60,21 @@ internal class OmniRouterService : Service() {
                 val secrets = AndroidSecretStore(this).loadOrCreate()
 
                 GatewayStartupStatus.phase = 2
-                GatewayStartupStatus.detail = "加载 ARM64 原生运行库"
-                // Touch NativeBridge on this worker so library loading failures are captured here.
+                GatewayStartupStatus.detail = "2.1 检查 NativeBridge 类是否可解析"
+                Class.forName("com.qingjian0.omnirouter.NativeBridge", false, classLoader)
+
+                GatewayStartupStatus.detail = "2.2 加载 Go 核心库 libomnirouter.so"
+                NativeBridge.loadCoreLibrary()
+
+                GatewayStartupStatus.detail = "2.3 加载 JNI 桥接库 libomnirouter_jni.so"
+                NativeBridge.loadJniLibrary()
+
+                GatewayStartupStatus.detail = "2.4 调用 JNI nativeStart，初始化 Go 运行时"
+                nativeBridgeReady = true
+                mainHandler.post(nativeStatusPoll)
                 val result = NativeBridge.nativeStart(filesDir.absolutePath, secrets.gatewayKey, secrets.credentialEncryptionKey)
+                nativeBridgeReady = false
+                mainHandler.removeCallbacks(nativeStatusPoll)
                 GatewayStartupStatus.resultCode = result
                 if (result != 0) GatewayStartupStatus.failedAt = try { NativeBridge.nativeGetStartupFailedAt() } catch (_: Throwable) { GatewayStartupStatus.phase }
                 if (result == 0) {
@@ -66,9 +95,11 @@ internal class OmniRouterService : Service() {
                     }
                 }
             } catch (error: Throwable) {
+                nativeBridgeReady = false
+                mainHandler.removeCallbacks(nativeStatusPoll)
                 GatewayStartupStatus.failedAt = GatewayStartupStatus.phase
                 GatewayStartupStatus.phase = -2
-                GatewayStartupStatus.detail = "启动异常：${error.javaClass.simpleName}: ${error.message ?: "无详细信息"}"
+                GatewayStartupStatus.detail = "启动异常：${error.javaClass.name}: ${error.message ?: "无详细信息"}\\n${error.stackTraceToString().take(4000)}"
                 mainHandler.post {
                     updateNotification("网关启动异常，请查看状态详情")
                     stopForeground(STOP_FOREGROUND_REMOVE)
@@ -92,6 +123,8 @@ internal class OmniRouterService : Service() {
     }
 
     override fun onDestroy() {
+        nativeBridgeReady = false
+        mainHandler.removeCallbacks(nativeStatusPoll)
         worker.execute {
             try { NativeBridge.nativeStop() } catch (_: Throwable) { }
         }
