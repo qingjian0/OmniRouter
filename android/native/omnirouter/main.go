@@ -29,6 +29,7 @@ type runtimeState struct {
 
 var startupStage atomic.Int32
 var startupFailedAt atomic.Int32
+var startupFailedAt atomic.Int32
 
 var state struct {
     sync.Mutex
@@ -47,20 +48,30 @@ func startupFail(code int32) C.int {
     return C.int(code)
 }
 
+//export OmnirouterStartupFailedAt
+func OmnirouterStartupFailedAt() C.int { return C.int(startupFailedAt.Load()) }
+
+func startupFail(code int32) C.int {
+    startupFailedAt.Store(startupStage.Load())
+    startupStage.Store(-2)
+    return C.int(code)
+}
+
 //export OmnirouterStart
 func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
-    startupStage.Store(1)
-    if dataDir == nil || gatewayKey == nil || encryptionKey == nil { startupStage.Store(-10); return -10 }
+    startupFailedAt.Store(0)
+    startupStage.Store(3)
+    if dataDir == nil || gatewayKey == nil || encryptionKey == nil { return startupFail(-10) }
 
     state.Lock()
     defer state.Unlock()
     if state.runtime != nil { startupStage.Store(8); return 0 }
 
     root := C.GoString(dataDir)
-    if root == "" { startupStage.Store(-11); return -11 }
-    if err := os.MkdirAll(root, 0700); err != nil { startupStage.Store(-12); return -12 }
+    if root == "" { return startupFail(-11) }
+    if err := os.MkdirAll(root, 0700); err != nil { return startupFail(-12) }
 
-    startupStage.Store(3)
+    startupStage.Store(4)
     values := map[string]string{
         "OMNI_ADDR": "127.0.0.1:8765",
         "OMNI_DATABASE_PATH": filepath.Join(root, "omnirouter.db"),
@@ -76,23 +87,23 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
         if err := os.Setenv(key, value); err != nil { return startupFail(-13) }
     }
 
-    startupStage.Store(4)
+    startupStage.Store(5)
     cfg, err := config.Load()
-    if err != nil { startupStage.Store(-20); return -20 }
+    if err != nil { return startupFail(-20) }
     logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-    startupStage.Store(5)
+    startupStage.Store(6)
     application, err := app.New(cfg, logger)
-    if err != nil { startupStage.Store(-21); return -21 }
+    if err != nil { return startupFail(-21) }
 
     ctx, cancel := context.WithCancel(context.Background())
     done := make(chan error, 1)
     runtime := &runtimeState{cancel: cancel, done: done, application: application}
     state.runtime = runtime
-    startupStage.Store(6)
+    startupStage.Store(7)
     go func() { done <- application.Run(ctx) }()
 
-    startupStage.Store(7)
+    startupStage.Store(8)
     deadline := time.Now().Add(10 * time.Second)
     client := &http.Client{Timeout: 500 * time.Millisecond}
     for time.Now().Before(deadline) {
@@ -100,15 +111,14 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
         case <-done:
             cancel()
             state.runtime = nil
-            startupStage.Store(-22)
-            return -22
+            return startupFail(-22)
         default:
         }
         response, requestErr := client.Get("http://127.0.0.1:8765/healthz")
         if requestErr == nil {
             _ = response.Body.Close()
             if response.StatusCode >= 200 && response.StatusCode < 300 {
-                startupStage.Store(8)
+                startupStage.Store(9)
                 return 0
             }
         }
@@ -121,8 +131,7 @@ func OmnirouterStart(dataDir, gatewayKey, encryptionKey *C.char) C.int {
     case <-time.After(6 * time.Second):
     }
     state.runtime = nil
-    startupStage.Store(-23)
-    return -23
+    return startupFail(-23)
 }
 
 //export OmnirouterPair
