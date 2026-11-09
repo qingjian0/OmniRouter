@@ -26,7 +26,7 @@ class MainActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
+            setPadding(16, 16, 16, 16)
         }
         status = TextView(this).apply {
             text = "DeepSeek 专用本地网关\n默认地址：http://127.0.0.1:8765"
@@ -34,35 +34,40 @@ class MainActivity : Activity() {
         }
         root.addView(status, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        controls.addView(Button(this).apply {
+        val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val serviceRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        serviceRow.addView(Button(this).apply {
             text = "启动服务"
             setOnClickListener {
                 val serviceIntent = Intent(this@MainActivity, OmniRouterService::class.java).setAction(OmniRouterService.ACTION_START)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent) else startService(serviceIntent)
                 status.text = "正在启动 DeepSeek 本地网关…"
             }
-        })
-        controls.addView(Button(this).apply {
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        serviceRow.addView(Button(this).apply {
             text = "停止服务"
             setOnClickListener {
                 startService(Intent(this@MainActivity, OmniRouterService::class.java).setAction(OmniRouterService.ACTION_STOP))
                 status.text = "已请求停止服务"
             }
-        })
-        controls.addView(Button(this).apply {
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        controls.addView(serviceRow)
+
+        val actionRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        actionRow.addView(Button(this).apply {
             text = "打开管理页"
             setOnClickListener { webView.loadUrl("http://127.0.0.1:8765/?android=1") }
-        })
-        controls.addView(Button(this).apply {
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        actionRow.addView(Button(this).apply {
             text = "登录并连接 DeepSeek"
             setOnClickListener {
                 val serviceIntent = Intent(this@MainActivity, OmniRouterService::class.java).setAction(OmniRouterService.ACTION_START)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent) else startService(serviceIntent)
                 startActivity(Intent(this@MainActivity, DeepSeekLoginActivity::class.java))
             }
-        })
-        root.addView(controls)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        controls.addView(actionRow)
+        root.addView(controls, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -70,6 +75,7 @@ class MainActivity : Activity() {
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.safeBrowsingEnabled = true
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
