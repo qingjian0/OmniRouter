@@ -164,7 +164,24 @@ class MainActivity : Activity() {
         val success = current == 9 && !failed
         status.text = "DeepSeek 本地网关：${if (success) "运行正常" else if (failed) "启动失败" else if (stopping) "正在停止" else if (current == 0) "未启动" else "正在启动"}\n地址：http://127.0.0.1:8765"
         val error = GatewayStartupStatus.detail
-        detail.text = "当前阶段：${labels.getOrNull((if (failed) failedAt else current) - 1) ?: "等待服务状态"}\n结果：${if (success) "成功" else if (failed) "异常" else if (stopping) "停止中" else if (current == 0) "尚未启动" else "进行中"}\n错误/说明：$error\n返回码：${GatewayStartupStatus.resultCode ?: "—"}"
+        val activeStep = if (failed) failedAt else current
+        val stageDetails = mapOf(
+            1 to "读取或创建 Android Keystore 密钥",
+            2 to "加载 libomnirouter.so 与 JNI 桥接库",
+            3 to "检查并创建应用私有数据目录",
+            4 to "设置 DeepSeek-only 运行环境变量",
+            5 to "解析并校验运行配置",
+            6 to "初始化后端应用、数据库及 Provider",
+            7 to "启动 HTTP 服务并绑定 127.0.0.1:8765",
+            8 to "轮询 /healthz，等待 HTTP 2xx（最多约 10 秒）",
+            9 to "健康检查通过，网关已就绪"
+        )
+        val explanation = when {
+            failed -> error
+            activeStep in 3..9 -> stageDetails[activeStep] ?: error
+            else -> error
+        }
+        detail.text = "当前阶段：${labels.getOrNull(activeStep - 1) ?: "等待服务状态"}\n结果：${if (success) "成功" else if (failed) "异常" else if (stopping) "停止中" else if (current == 0) "尚未启动" else "进行中"}\n阶段说明：$explanation\n错误详情：${if (failed) error else "无"}\n返回码：${GatewayStartupStatus.resultCode ?: "—"}"
         stepsView.text = lines.joinToString("\n")
     }
 
