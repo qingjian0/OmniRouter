@@ -79,19 +79,34 @@ jobs:
           export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
           export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          go build -trimpath -buildmode=c-shared -ldflags="-s -w" \
+          go build -trimpath -buildmode=c-shared \
+            -ldflags="-s -w -extldflags=-Wl,-soname,libomnirouter.so" \
             -o android/app/src/main/jniLibs/arm64-v8a/libomnirouter.so \
             ./android/native/omnirouter
+          readelf -d android/app/src/main/jniLibs/arm64-v8a/libomnirouter.so | grep -F 'Library soname: [libomnirouter.so]'
 
       - name: Build Android APK
         working-directory: android
         run: |
+          set -euo pipefail
           gradle --no-daemon assembleDebug
           APK="app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
           "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "com.qingjian0.omnirouter.dev"
           unzip -l "$APK" | grep -q "lib/arm64-v8a/libomnirouter.so"
           unzip -l "$APK" | grep -q "lib/arm64-v8a/libomnirouter_jni.so"
+
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$TMP_DIR"' EXIT
+          unzip -p "$APK" lib/arm64-v8a/libomnirouter_jni.so > "$TMP_DIR/libomnirouter_jni.so"
+          unzip -p "$APK" lib/arm64-v8a/libomnirouter.so > "$TMP_DIR/libomnirouter.so"
+          readelf -d "$TMP_DIR/libomnirouter.so" | grep -F 'Library soname: [libomnirouter.so]'
+          readelf -d "$TMP_DIR/libomnirouter_jni.so" | grep -F 'Shared library: [libomnirouter.so]'
+          if readelf -d "$TMP_DIR/libomnirouter_jni.so" | grep -E 'Shared library: \[/'; then
+            echo "JNI ELF contains an absolute DT_NEEDED dependency"
+            exit 1
+          fi
+
           DEX_FOUND=0
           while IFS= read -r dex_entry; do
             if unzip -p "$APK" "$dex_entry" | strings | grep -Fq 'Lcom/qingjian0/omnirouter/NativeBridge;'; then
@@ -100,8 +115,9 @@ jobs:
             fi
           done < <(unzip -Z1 "$APK" | grep -E '^classes([0-9]+)?\.dex$')
           test "$DEX_FOUND" -eq 1 || { echo "NativeBridge class missing from APK DEX"; exit 1; }
-          echo "Verified NativeBridge class descriptor in APK DEX"
+          echo "Verified NativeBridge DEX and ELF dependency names"
           sha256sum "$APK" > "$APK.sha256"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
