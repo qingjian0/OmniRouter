@@ -13,8 +13,24 @@ import (
 
 	"omnirouter/internal/observability"
 	"omnirouter/internal/provider"
+	"omnirouter/internal/provider/deepseekweb"
 	"omnirouter/internal/scheduler"
 )
+
+func TestWriteUpstreamErrorPreservesDeepSeekRateLimit(t *testing.T) {
+	response := httptest.NewRecorder()
+	writeUpstreamError(response, deepseekweb.ErrRateLimited)
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("status=%d, want %d", response.Code, http.StatusTooManyRequests)
+	}
+	if !strings.Contains(response.Body.String(), "rate_limit_exceeded") {
+		t.Fatalf("rate-limit error code missing: %s", response.Body.String())
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	if got := classifyRequestError(request, deepseekweb.ErrRateLimited, false); got != "upstream_rate_limited" {
+		t.Fatalf("request error class=%q, want upstream_rate_limited", got)
+	}
+}
 
 func TestClassifyRequestError(t *testing.T) {
 	t.Run("downstream write failure is client disconnect", func(t *testing.T) {
