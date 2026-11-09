@@ -418,7 +418,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		setRequestRoute(r, p, request.Model)
 		setRequestError(r, classifyRequestError(r, err, false))
-		writeError(w, http.StatusBadGateway, "upstream_error", err.Error())
+		writeUpstreamError(w, err)
 		return
 	}
 	setRequestRoute(r, p, request.Model)
@@ -1034,6 +1034,25 @@ func (e downstreamWriteError) Error() string {
 }
 func (e downstreamWriteError) Unwrap() error { return e.err }
 
+func writeUpstreamError(w http.ResponseWriter, err error) {
+	status := http.StatusBadGateway
+	code := "upstream_error"
+	message := err.Error()
+	switch {
+	case errors.Is(err, deepseekweb.ErrRateLimited):
+		status, code, message = http.StatusTooManyRequests, "rate_limit_exceeded", "upstream provider rate limited the request"
+	case errors.Is(err, deepseekweb.ErrSessionExpired):
+		code, message = "upstream_session_expired", "DeepSeek Web authorization expired; pair the account again"
+	case errors.Is(err, deepseekweb.ErrAuthorizationRequired):
+		code, message = "upstream_authorization_required", "DeepSeek Web authorization is required"
+	case errors.Is(err, deepseekweb.ErrPolicyBlocked):
+		code, message = "upstream_policy_blocked", "DeepSeek Web rejected the request under an upstream policy"
+	case errors.Is(err, deepseekweb.ErrUpstreamChanged):
+		code, message = "upstream_protocol_changed", "DeepSeek Web response did not match the supported protocol"
+	}
+	writeError(w, status, code, message)
+}
+
 func classifyRequestError(r *http.Request, err error, streaming bool) string {
 	var downstreamErr downstreamWriteError
 	if errors.As(err, &downstreamErr) {
@@ -1044,6 +1063,18 @@ func classifyRequestError(r *http.Request, err error, streaming bool) string {
 	}
 	if errors.Is(r.Context().Err(), context.Canceled) {
 		return "client_disconnected"
+	}
+	if errors.Is(err, deepseekweb.ErrRateLimited) {
+		return "upstream_rate_limited"
+	}
+	if errors.Is(err, deepseekweb.ErrSessionExpired) {
+		return "upstream_session_expired"
+	}
+	if errors.Is(err, deepseekweb.ErrPolicyBlocked) {
+		return "upstream_policy_blocked"
+	}
+	if errors.Is(err, deepseekweb.ErrUpstreamChanged) {
+		return "upstream_protocol_changed"
 	}
 	if streaming {
 		return "upstream_stream_error"
