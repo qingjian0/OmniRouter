@@ -47,6 +47,7 @@ internal class OmniRouterService : Service() {
                 // Touch NativeBridge on this worker so library loading failures are captured here.
                 val result = NativeBridge.nativeStart(filesDir.absolutePath, secrets.gatewayKey, secrets.credentialEncryptionKey)
                 GatewayStartupStatus.resultCode = result
+                if (result != 0) GatewayStartupStatus.failedAt = try { NativeBridge.nativeGetStartupFailedAt() } catch (_: Throwable) { GatewayStartupStatus.phase }
                 if (result == 0) {
                     GatewayStartupStatus.phase = 8
                     GatewayStartupStatus.detail = "健康检查通过：127.0.0.1:8765/healthz"
@@ -61,6 +62,7 @@ internal class OmniRouterService : Service() {
                     }
                 }
             } catch (error: Throwable) {
+                GatewayStartupStatus.failedAt = GatewayStartupStatus.phase
                 GatewayStartupStatus.phase = -2
                 GatewayStartupStatus.detail = "启动异常：${error.javaClass.simpleName}: ${error.message ?: "无详细信息"}"
                 mainHandler.post {
