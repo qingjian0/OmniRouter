@@ -27,11 +27,11 @@ import (
 )
 
 type App struct {
-	server          *http.Server
-	logger          *slog.Logger
-	storage         *storage.Runtime
+	server           *http.Server
+	logger           *slog.Logger
+	storage          *storage.Runtime
 	webAuthorization *deepseekweb.AuthorizationService
-	webRegistrar    gateway.DeepSeekWebRegistrar
+	webRegistrar     gateway.DeepSeekWebRegistrar
 }
 
 func New(cfg config.Config, logger *slog.Logger) (*App, error) {
