@@ -190,4 +190,3 @@ func solveDeepSeekHashV1(ctx context.Context, challenge, prefix string, difficul
 	}
 	return int64(answer), nil
 }
-
