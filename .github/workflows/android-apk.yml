@@ -2,7 +2,7 @@ name: DeepSeek Android APK
 
 on:
   push:
-    branches: [feature/deepseek-v1-android-apk]
+    branches: [dev, feature/deepseek-v1-android-apk]
     paths:
       - "android/**"
       - "web/**"
