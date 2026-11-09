@@ -131,8 +131,9 @@ class MainActivity : Activity() {
         val nativeStage = try { NativeBridge.nativeGetStartupStage() } catch (_: Throwable) { 0 }
         val nativeFailedAt = try { NativeBridge.nativeGetStartupFailedAt() } catch (_: Throwable) { 0 }
         val localPhase = GatewayStartupStatus.phase
-        val current = if (nativeStage > 0) nativeStage else localPhase
+        val current = if (localPhase == -1) -1 else if (nativeStage > 0) nativeStage else localPhase
         val failed = current == -2
+        val stopping = current == -1
         val failedAt = if (nativeFailedAt > 0) nativeFailedAt else GatewayStartupStatus.failedAt
         val labels = listOf(
             "1. Android Keystore：读取/创建本地密钥",
@@ -161,9 +162,9 @@ class MainActivity : Activity() {
             "$label  [$state]"
         }
         val success = current == 9 && !failed
-        status.text = "DeepSeek 本地网关：${if (success) "运行正常" else if (failed) "启动失败" else if (current == 0) "未启动" else "正在启动"}\n地址：http://127.0.0.1:8765"
+        status.text = "DeepSeek 本地网关：${if (success) "运行正常" else if (failed) "启动失败" else if (stopping) "正在停止" else if (current == 0) "未启动" else "正在启动"}\n地址：http://127.0.0.1:8765"
         val error = GatewayStartupStatus.detail
-        detail.text = "当前阶段：${labels.getOrNull((if (failed) failedAt else current) - 1) ?: "等待服务状态"}\n结果：${if (success) "成功" else if (failed) "异常" else if (current == 0) "尚未启动" else "进行中"}\n错误/说明：$error\n返回码：${GatewayStartupStatus.resultCode ?: "—"}"
+        detail.text = "当前阶段：${labels.getOrNull((if (failed) failedAt else current) - 1) ?: "等待服务状态"}\n结果：${if (success) "成功" else if (failed) "异常" else if (stopping) "停止中" else if (current == 0) "尚未启动" else "进行中"}\n错误/说明：$error\n返回码：${GatewayStartupStatus.resultCode ?: "—"}"
         stepsView.text = lines.joinToString("\n")
     }
 
