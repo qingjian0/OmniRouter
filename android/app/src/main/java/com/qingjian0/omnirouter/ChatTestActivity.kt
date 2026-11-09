@@ -137,12 +137,16 @@ class ChatTestActivity : Activity() {
 
     private fun readSSE(connection: HttpURLConnection): String {
         val result = StringBuilder()
+        var sawDone = false
         BufferedReader(InputStreamReader(connection.inputStream, StandardCharsets.UTF_8)).use { reader ->
             while (true) {
                 val line = reader.readLine() ?: break
                 if (!line.startsWith("data:")) continue
                 val data = line.substringAfter("data:").trim()
-                if (data == "[DONE]") break
+                if (data == "[DONE]") {
+                    sawDone = true
+                    break
+                }
                 try {
                     val choice = JSONObject(data).optJSONArray("choices")?.optJSONObject(0) ?: continue
                     val delta = choice.optJSONObject("delta") ?: continue
@@ -157,6 +161,7 @@ class ChatTestActivity : Activity() {
                 }
             }
         }
-        return result.toString().ifBlank { "SSE 已结束，但没有收到文本增量。" }
+        val text = result.toString().ifBlank { "没有收到文本增量。" }
+        return if (sawDone) "$text\n\n[SSE DONE] 已收到终止标记。" else "$text\n\n[警告] 连接结束前未收到 [DONE]，本次流式结果不能视为完整成功。"
     }
 }
